@@ -342,7 +342,7 @@ export async function registerServiceWorker(): Promise<void> {
 
 // Periodic Sync API for web platforms
 export async function requestPeriodicSync(): Promise<void> {
-  if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
     try {
       const registration = await navigator.serviceWorker.ready;
       

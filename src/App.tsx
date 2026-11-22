@@ -9,6 +9,7 @@ import BottomNav from "@/components/BottomNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { notificationManager } from "@/lib/notification-manager";
 import { serviceWorkerManager } from "@/lib/service-worker-registration";
+import { normalizeAppRoute } from "@/lib/route-utils";
 
 import { islamicEventsService } from "@/lib/islamic-events-service";
 import { LayoutManager } from "@/components/LayoutManager";
@@ -78,27 +79,8 @@ function DeepLinkListener() {
       if (lastHandledUrlRef.current === rawUrl) return;
       lastHandledUrlRef.current = rawUrl;
 
-      // Normalize "siraj://app/<path>" and bare "/<path>"
-      let path = rawUrl.replace(/^noorconnect:\/\/app/, '').replace(/^https?:\/\/[^/]+/, '');
-      if (!path.startsWith('/')) {
-        path = '/' + path;
-      }
-
-      // Map widget paths to canonical verified routes
-      const pathname = path.split('?')[0].toLowerCase();
-      let targetPath = path;
-
-      if (pathname === '/prayers' || pathname === '/dashboard' || pathname === '') {
-        targetPath = '/';
-      } else if (pathname === '/quran/reading') {
-        targetPath = '/quran-progress';
-      } else if (pathname.startsWith('/hadith')) {
-        targetPath = '/hadith';
-      } else if (pathname.startsWith('/quran')) {
-        targetPath = '/quran';
-      } else if (pathname.startsWith('/tasbeeh') || pathname.startsWith('/tasbih')) {
-        targetPath = '/tasbeeh';
-      }
+      // Normalize deep-link URL (strips siraj://app, noorconnect://app, https://localhost, collapses //)
+      const targetPath = normalizeAppRoute(rawUrl);
 
       // If already at target path, do not navigate again
       const currentFull = location.pathname + location.search;
@@ -112,6 +94,16 @@ function DeepLinkListener() {
         console.warn('DeepLinkListener: could not navigate to', targetPath, e);
       }
     };
+
+    // Clean up window.location.pathname if it contains embedded scheme fragments on initial load
+    if (typeof window !== 'undefined' && window.location.pathname) {
+      if (/siraj|noorconnect|\/\//i.test(window.location.pathname)) {
+        const cleanBootRoute = normalizeAppRoute(window.location.pathname + window.location.search);
+        if (cleanBootRoute !== window.location.pathname) {
+          navigate(cleanBootRoute, { replace: true });
+        }
+      }
+    }
 
     // Warm start: subsequent URL opens while app is running
     const cleanupPromise = CapacitorApp.addListener('appUrlOpen', ({ url }) => {
@@ -598,10 +590,23 @@ function AppShell() {
       console.warn('Startup: islamicEventsService failed', e);
     }
 
-    // 5. Service worker registration (PWA - web production only)
+    // 5. Service worker handling (PWA - web production only; native platforms strictly unregister)
     markStartupStep('service-worker-init');
     try {
-      if (!Capacitor.isNativePlatform() && import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.serviceWorker.controller) {
+      if (Capacitor.isNativePlatform()) {
+        // Native Capacitor Android/iOS: actively clean up legacy SW registrations & stale Workbox caches
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations()
+            .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+            .catch(() => {});
+        }
+        if (typeof window !== 'undefined' && 'caches' in window) {
+          caches.keys()
+            .then((keys) => Promise.all(keys.filter((k) => /workbox|precache|vite-pwa/i.test(k)).map((k) => caches.delete(k))))
+            .catch(() => {});
+        }
+        completeStartupStep('service-worker-init');
+      } else if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.serviceWorker.controller) {
         serviceWorkerManager.register()
           .catch((err) => {
             // Handled service worker registration error

@@ -127,8 +127,22 @@ try {
   console.warn("isLowEndDevice failed:", e);
 }
 
-// Service worker is web-only. On native platforms, completely skip.
-if (!Capacitor.isNativePlatform() && import.meta.env.DEV && 'serviceWorker' in navigator) {
+// Service worker handling:
+// On native platforms (Capacitor), service workers MUST NEVER be used because Capacitor
+// serves all bundled assets locally from the APK with instant zero-latency offline access.
+// Stale SW precache manifests intercept newly-hashed APK module chunks when offline.
+if (Capacitor.isNativePlatform()) {
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .catch((err) => console.debug('[SW] Native cleanup skipped:', err));
+  }
+  if (typeof window !== 'undefined' && 'caches' in window) {
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => /workbox|precache|vite-pwa/i.test(k)).map((k) => caches.delete(k))))
+      .catch((err) => console.debug('[SW] Cache cleanup skipped:', err));
+  }
+} else if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   (async () => {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();

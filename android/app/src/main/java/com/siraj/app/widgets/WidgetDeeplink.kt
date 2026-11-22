@@ -7,7 +7,7 @@ import android.net.Uri
 /**
  * Builds and parses deep-link URIs for the Siraj app.
  *
- * URI scheme: `noorconnect://app/<route>?<query>`
+ * URI scheme: `siraj://app/<route>?<query>`
  *
  * Routes:
  *  - /prayers?focus=next

@@ -493,7 +493,7 @@ export function openExternalBrowserFallback(url?: string): void {
  * Fetch latest release from GitHub Releases API.
  * Returns null immediately on rate limit (HTTP 403 / 429) or non-200 to allow seamless fallback.
  */
-async function fetchFromGitHubReleasesApi(signal: AbortSignal): Promise<NightlyReleaseInfo | null> {
+async function fetchFromGitHubReleasesApi(signal: AbortSignal, isManualCheck = false): Promise<NightlyReleaseInfo | null> {
   try {
     const requestUrl = `${NIGHTLY_API_URL}?t=${Date.now()}`;
     const res = await fetch(requestUrl, {
@@ -506,10 +506,18 @@ async function fetchFromGitHubReleasesApi(signal: AbortSignal): Promise<NightlyR
 
     if (!res.ok) {
       if (res.status === 403 || res.status === 429) {
-        console.warn(`[UpdateChecker] GitHub API rate limit hit (HTTP ${res.status}). Switching to rate-limit-proof fallbacks.`);
+        if (isManualCheck) {
+          console.warn(`[UpdateChecker] GitHub API rate limit hit (HTTP ${res.status}). Switching to rate-limit-proof fallbacks.`);
+        } else {
+          console.debug(`[UpdateChecker] GitHub API rate limit hit (HTTP ${res.status}). Switching to rate-limit-proof fallbacks.`);
+        }
         return null;
       }
-      console.warn(`[UpdateChecker] GitHub API returned HTTP ${res.status}. Falling back.`);
+      if (isManualCheck) {
+        console.warn(`[UpdateChecker] GitHub API returned HTTP ${res.status}. Falling back.`);
+      } else {
+        console.debug(`[UpdateChecker] GitHub API returned HTTP ${res.status}. Falling back.`);
+      }
       return null;
     }
 
@@ -591,7 +599,13 @@ async function fetchFromGitHubReleasesApi(signal: AbortSignal): Promise<NightlyR
     };
   } catch (err: unknown) {
     if ((err as { name?: string })?.name === 'AbortError') throw err;
-    console.warn('[UpdateChecker] GitHub Releases API fetch failed:', err);
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
+    if (!isManualCheck && (isOffline || isNetworkErr)) {
+      console.debug('[UpdateChecker] GitHub Releases API offline/unreachable (background check):', err);
+    } else {
+      console.warn('[UpdateChecker] GitHub Releases API fetch failed:', err);
+    }
     return null;
   }
 }
@@ -600,7 +614,7 @@ async function fetchFromGitHubReleasesApi(signal: AbortSignal): Promise<NightlyR
  * Fallback A: Fetch latest commit SHA & timestamp from GitHub Atom Feed.
  * Zero authentication required and zero rate limit restrictions.
  */
-async function fetchCommitFromAtomFeed(signal: AbortSignal): Promise<NightlyReleaseInfo | null> {
+async function fetchCommitFromAtomFeed(signal: AbortSignal, isManualCheck = false): Promise<NightlyReleaseInfo | null> {
   const atomUrls = [
     `https://github.com/${GITHUB_REPO}/commits/main.atom?t=${Date.now()}`,
   ];
@@ -641,7 +655,13 @@ async function fetchCommitFromAtomFeed(signal: AbortSignal): Promise<NightlyRele
       }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'AbortError') throw err;
-      console.warn(`[UpdateChecker] Atom feed fetch failed for ${url}:`, err);
+      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
+      if (!isManualCheck && (isOffline || isNetworkErr)) {
+        console.debug(`[UpdateChecker] Atom feed offline/unreachable for ${url}:`, err);
+      } else {
+        console.warn(`[UpdateChecker] Atom feed fetch failed for ${url}:`, err);
+      }
     }
   }
 
@@ -652,7 +672,7 @@ async function fetchCommitFromAtomFeed(signal: AbortSignal): Promise<NightlyRele
  * Fallback B: Fetch latest commit & metadata from published version manifest.
  * Zero rate limit via raw.githubusercontent.com, jsDelivr CDN, or release assets.
  */
-async function fetchCommitFromVersionManifest(signal: AbortSignal): Promise<NightlyReleaseInfo | null> {
+async function fetchCommitFromVersionManifest(signal: AbortSignal, isManualCheck = false): Promise<NightlyReleaseInfo | null> {
   const manifestUrls = [
     `https://raw.githubusercontent.com/${GITHUB_REPO}/main/public/version.json?t=${Date.now()}`,
     `https://cdn.jsdelivr.net/gh/${GITHUB_REPO}@main/public/version.json?t=${Date.now()}`,
@@ -692,7 +712,13 @@ async function fetchCommitFromVersionManifest(signal: AbortSignal): Promise<Nigh
       }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'AbortError') throw err;
-      console.warn(`[UpdateChecker] Version manifest fetch failed for ${url}:`, err);
+      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
+      if (!isManualCheck && (isOffline || isNetworkErr)) {
+        console.debug(`[UpdateChecker] Version manifest offline/unreachable for ${url}:`, err);
+      } else {
+        console.warn(`[UpdateChecker] Version manifest fetch failed for ${url}:`, err);
+      }
     }
   }
 
@@ -728,7 +754,23 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
       // Handled storage clear fallback
     }
   } else {
-    // 2. Check smart cache first for passive checks (10-minute TTL)
+    // 2. Check offline status first for background checks: skip network fetch silently
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (isOffline) {
+      console.debug('[UpdateChecker] Offline: skipping background auto-check silently');
+      return {
+        hasUpdate: false,
+        status: 'Up to date',
+        installedCommit: currentBuildCommit,
+        installedBuildTime: currentBuildTime,
+        currentBuildTime,
+        currentBuildCommit,
+        lastChecked: Date.now(),
+        fromCache: true,
+      };
+    }
+
+    // 3. Check smart cache first for passive checks (10-minute TTL)
     const cached = readCache();
     if (cached && typeof cached.lastChecked === 'number') {
       const age = Date.now() - cached.lastChecked;
@@ -757,7 +799,7 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
     }
   }
 
-  // 3. Fetch fresh release metadata with 8-second timeout via AbortController
+  // 4. Fetch fresh release metadata with 8-second timeout via AbortController
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -766,7 +808,7 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
 
     // Primary: GitHub Releases API
     try {
-      releaseInfo = await fetchFromGitHubReleasesApi(controller.signal);
+      releaseInfo = await fetchFromGitHubReleasesApi(controller.signal, force);
     } catch (e: unknown) {
       if ((e as { name?: string })?.name === 'AbortError') throw e;
     }
@@ -775,7 +817,7 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
     if (!releaseInfo) {
       try {
         console.log('[UpdateChecker] Primary API unavailable; attempting Fallback A (GitHub Atom feed)...');
-        releaseInfo = await fetchCommitFromAtomFeed(controller.signal);
+        releaseInfo = await fetchCommitFromAtomFeed(controller.signal, force);
       } catch (e: unknown) {
         if ((e as { name?: string })?.name === 'AbortError') throw e;
       }
@@ -785,7 +827,7 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
     if (!releaseInfo) {
       try {
         console.log('[UpdateChecker] Fallback A unavailable; attempting Fallback B (Published version manifest)...');
-        releaseInfo = await fetchCommitFromVersionManifest(controller.signal);
+        releaseInfo = await fetchCommitFromVersionManifest(controller.signal, force);
       } catch (e: unknown) {
         if ((e as { name?: string })?.name === 'AbortError') throw e;
       }
@@ -833,7 +875,17 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
 
     return checkResult;
   } catch (err: unknown) {
-    const message = formatUpdateError(err);
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
+    if (!force && (isOffline || isNetworkErr)) {
+      console.debug('[UpdateChecker] Background check aborted silently (offline or network error):', err);
+    } else {
+      console.warn('[UpdateChecker] Check failed:', err);
+    }
+
+    const message = (isOffline || isNetworkErr)
+      ? 'You are offline. Connect to internet to check for updates.'
+      : formatUpdateError(err);
 
     logOtaEvent('check', 'error', {
       errorCode: 'E_CHECK_FAILED',
