@@ -1,3 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@mipmap/ic_launcher_ed3_foreground" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Decorative Ring -->
+    <path
+        android:pathData="M54,54m-33,0a33,33 0 1,1 66,0a33,33 0 1,1 -66,0"
+        android:strokeColor="#80D4AF37"
+        android:strokeWidth="0.8" />
+
+    <!-- 16-Point Interlocking Mamluk Starburst -->
+    <!-- Square 0 -->
+    <path
+        android:pathData="M33,33h42v42h-42z"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.2" />
+    <!-- Square 45 -->
+    <group android:pivotX="54" android:pivotY="54" android:rotation="45">
+        <path android:pathData="M33,33h42v42h-42z" android:strokeColor="#D4AF37" android:strokeWidth="1.2" />
+    </group>
+    <!-- Square 22.5 -->
+    <group android:pivotX="54" android:pivotY="54" android:rotation="22.5">
+        <path android:pathData="M33,33h42v42h-42z" android:strokeColor="#80D4AF37" android:strokeWidth="0.8" />
+    </group>
+    <!-- Square 67.5 -->
+    <group android:pivotX="54" android:pivotY="54" android:rotation="67.5">
+        <path android:pathData="M33,33h42v42h-42z" android:strokeColor="#80D4AF37" android:strokeWidth="0.8" />
+    </group>
+
+    <!-- Sanctuary Arch Backdrop -->
+    <path
+        android:pathData="M42,70L42,54C42,44 54,37 54,37C54,37 66,44 66,54L66,70Z"
+        android:fillColor="#22050B18"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.2" />
+
+    <!-- Central Kaaba Cube in Center Niche -->
+    <path
+        android:pathData="M54,46L63,51L54,56L45,51Z"
+        android:fillColor="#2D3748"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="0.6" />
+    <path
+        android:pathData="M45,51L54,56L54,68L45,63Z"
+        android:fillColor="#1A202C"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="0.6" />
+    <path
+        android:pathData="M54,56L63,51L63,63L54,68Z"
+        android:fillColor="#111827"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="0.6" />
+    <path
+        android:pathData="M45,53L54,58L54,59.5L45,54.5Z"
+        android:fillColor="#D4AF37" />
+    <path
+        android:pathData="M54,58L63,53L63,54.5L54,59.5Z"
+        android:fillColor="#D4AF37" />
+</vector>

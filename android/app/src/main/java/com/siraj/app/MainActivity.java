@@ -118,6 +118,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeAdhanPlugin.class);
         registerPlugin(BatteryOptimizationPlugin.class);
         registerPlugin(NoorMediaBridgePlugin.class);
+        registerPlugin(LauncherAliasPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Consume deep-link data after bridge initialization to prevent redundant re-deliveries on resume
@@ -729,14 +730,13 @@ public class MainActivity extends BridgeActivity {
                         try {
                             final int target = (editionIndex >= 0 && editionIndex <= 4) ? editionIndex : 0;
                             android.content.SharedPreferences prefs = getSharedPreferences("noor_connect_prefs", MODE_PRIVATE);
-                            int current = prefs.getInt("selected_logo_edition", -1);
-                            if (current == target) return;
                             prefs.edit().putInt("selected_logo_edition", target).apply();
 
                             android.content.pm.PackageManager pm = getPackageManager();
                             String pkg = getPackageName();
-                            for (int i = 0; i <= 4; i++) {
-                                android.content.ComponentName cn = new android.content.ComponentName(pkg, pkg + ".LauncherAlias" + i);
+                            String[] aliasNames = LauncherAliasPlugin.ALIAS_NAMES;
+                            for (int i = 0; i < aliasNames.length; i++) {
+                                android.content.ComponentName cn = new android.content.ComponentName(pkg, aliasNames[i]);
                                 int newState = (i == target)
                                     ? android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                                     : android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
@@ -852,8 +852,9 @@ public class MainActivity extends BridgeActivity {
 
             android.content.pm.PackageManager pm = getPackageManager();
             String pkg = getPackageName();
-            for (int i = 0; i <= 4; i++) {
-                android.content.ComponentName cn = new android.content.ComponentName(pkg, pkg + ".LauncherAlias" + i);
+            String[] aliasNames = LauncherAliasPlugin.ALIAS_NAMES;
+            for (int i = 0; i < aliasNames.length; i++) {
+                android.content.ComponentName cn = new android.content.ComponentName(pkg, aliasNames[i]);
                 int desired = (i == target)
                     ? android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                     : android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;

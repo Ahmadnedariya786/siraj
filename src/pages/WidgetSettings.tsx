@@ -661,7 +661,7 @@ export const WidgetSettings: React.FC = () => {
                 </div>
 
                 <div className="text-[11px] font-medium text-center" style={{ color: activePreset.subHex }}>
-                  2×2 / 3×2 Kashkol Dial • Live Progress-Arc & TextClock
+                  2×2 / 3×2 Siraj Celestial Dial • Live Progress-Arc & Makruh Alert
                 </div>
               </div>
             )}

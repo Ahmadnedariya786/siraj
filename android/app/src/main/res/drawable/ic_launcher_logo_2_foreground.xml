@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Radiant Ring -->
+    <path
+        android:pathData="M54,54m-33,0a33,33 0 1,1 66,0a33,33 0 1,1 -66,0"
+        android:strokeColor="#80D4AF37"
+        android:strokeWidth="0.8" />
+
+    <!-- Tilted Tawaf Orbital Ellipse -->
+    <group
+        android:pivotX="54"
+        android:pivotY="57"
+        android:rotation="-15">
+        <path
+            android:pathData="M54,57m-31,0a31,13 0 1,0 62,0a31,13 0 1,0 -62,0"
+            android:strokeColor="#D4AF37"
+            android:strokeWidth="1.6" />
+    </group>
+
+    <!-- Isometric Kaaba Cube -->
+    <!-- Top Face -->
+    <path
+        android:pathData="M54,42L66,48L54,54L42,48Z"
+        android:fillColor="#2D3748"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="0.8" />
+    <!-- Left Face -->
+    <path
+        android:pathData="M42,48L54,54L54,70L42,64Z"
+        android:fillColor="#1A202C"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="0.8" />
+    <!-- Right Face -->
+    <path
+        android:pathData="M54,54L66,48L66,64L54,70Z"
+        android:fillColor="#111827"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="0.8" />
+
+    <!-- Golden Kiswah Belt -->
+    <path
+        android:pathData="M42,51L54,57L54,59L42,53Z"
+        android:fillColor="#D4AF37" />
+    <path
+        android:pathData="M54,57L66,51L66,53L54,59Z"
+        android:fillColor="#D4AF37" />
+
+    <!-- 3 Tawaf Light Orbs -->
+    <path
+        android:pathData="M27,61m-2.5,0a2.5,2.5 0 1,1 5,0a2.5,2.5 0 1,1 -5,0"
+        android:fillColor="#FFFDF0" />
+    <path
+        android:pathData="M81,53m-2.5,0a2.5,2.5 0 1,1 5,0a2.5,2.5 0 1,1 -5,0"
+        android:fillColor="#FFFDF0" />
+    <path
+        android:pathData="M58,72m-2,0a2,2 0 1,1 4,0a2,2 0 1,1 -4,0"
+        android:fillColor="#FFFDF0" />
+</vector>

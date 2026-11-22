@@ -43,6 +43,7 @@ import {
   fetchLiveMetalRates,
   getSavedCurrency,
   saveCurrency,
+  getCurrencyConfig,
   setPriceOverride,
   clearPriceOverride,
   getPriceOverride,
@@ -121,6 +122,7 @@ export default function ZakatCalculator({ isEmbedded = false, onBack }: ZakatCal
 
   // Currency
   const [activeCurrency, setActiveCurrency] = useState<string>(() => getSavedCurrency());
+  const activeCurrencySymbol = useMemo(() => getCurrencyConfig(activeCurrency).symbol, [activeCurrency]);
 
   // Live Metal Rates State
   const [rates, setRates] = useState<LiveMetalRates | null>(null);
@@ -1809,7 +1811,18 @@ export default function ZakatCalculator({ isEmbedded = false, onBack }: ZakatCal
                   className="flex items-center gap-1.5 min-w-0"
                   style={{ flex: 1, minWidth: 0, lineHeight: isUrdu ? 1.85 : 1.5 }}
                 >
-                  <Receipt className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                  <span
+                    className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border"
+                    style={{
+                      background: 'var(--accent-soft)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--accent-text)',
+                      lineHeight: 1,
+                    }}
+                    aria-label={`Currency ${activeCurrency}`}
+                  >
+                    {activeCurrencySymbol}
+                  </span>
                   <span
                     className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]"
                     style={{

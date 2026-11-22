@@ -269,7 +269,7 @@ class NextPrayerWidget : AppWidgetProvider() {
                         (name.equals("Dhuhr", ignoreCase = true) &&
                          (entry.name.contains("jumu", ignoreCase = true) || entry.name.contains("juma", ignoreCase = true)))
                     }
-                    return match?.formattedTime ?: "--:--"
+                    return toCompactTime(match?.formattedTime ?: "--:--")
                 }
 
                 val isFriday = payload.gregorianDate.startsWith("Fri", ignoreCase = true)
@@ -305,6 +305,10 @@ class NextPrayerWidget : AppWidgetProvider() {
             } catch (t: Throwable) {
                 Log.w(TAG, "Error updating five prayer strip", t)
             }
+        }
+
+        private fun toCompactTime(timeStr: String): String {
+            return timeStr.replace(Regex("(?i)\\s*[AP]M"), "").trim()
         }
 
         private fun formatCountdown(remainingMs: Long): String {

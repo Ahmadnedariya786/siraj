@@ -14,6 +14,7 @@ import {
   syncDailyContent,
 } from './widgetBridge';
 import { computeFullPrayerSchedule, getCalculationMethod } from './prayer-times';
+import { evaluateMakruhState } from './makruh-times';
 import { getMadhab, get24HourTime } from './storage';
 import { isNativePlatform } from './capacitor-utils';
 import { getDailyHadith } from './daily-content';
@@ -199,6 +200,33 @@ export function buildPrayerPayload(
     const activePreset = ACCENT_PRESETS[styleConfig.accentPreset] || ACCENT_PRESETS.ivory;
     const themeHex = getActiveThemeHex();
 
+        // Real-Time Makruh Windows Evaluation
+    const makruhState = evaluateMakruhState(
+      {
+        Sunrise: schedule.sunrise,
+        Dhuhr: dhuhrItem?.startTime,
+        Maghrib: maghribItem?.startTime,
+      },
+      now,
+      is24h ? '24h' : '12h'
+    );
+    const tuluWin = makruhState.allWindows.find((w) => w.id === 'tulu');
+    const zawalWin = makruhState.allWindows.find((w) => w.id === 'zawal');
+    const ghurubWin = makruhState.allWindows.find((w) => w.id === 'ghurub');
+
+    const makruhSunriseStartMs = tuluWin?.start.getTime() || sunriseTime;
+    const makruhSunriseEndMs = tuluWin?.end.getTime() || (sunriseTime + 20 * 60 * 1000);
+    const makruhSunriseEndFormatted = tuluWin?.endFormatted || schedule.sunriseFormatted;
+
+    const makruhZawaalStartMs = zawalWin?.start.getTime() || ((dhuhrItem?.startTime.getTime() || nowMs) - 5 * 60 * 1000);
+    const makruhZawaalEndMs = zawalWin?.end.getTime() || (dhuhrItem?.startTime.getTime() || nowMs);
+    const makruhZawaalEndFormatted = zawalWin?.endFormatted || dhuhrItem?.startTimeFormatted || '';
+
+    const sunsetTimeMs = schedule.sunnahTimes.sunset.getTime();
+    const makruhSunsetStartMs = ghurubWin?.start.getTime() || (sunsetTimeMs - 15 * 60 * 1000);
+    const makruhSunsetEndMs = ghurubWin?.end.getTime() || sunsetTimeMs;
+    const makruhSunsetEndFormatted = ghurubWin?.endFormatted || sunsetFormatted;
+
     return {
       prayers: entries,
       nextPrayerIndex,
@@ -217,6 +245,17 @@ export function buildPrayerPayload(
       maghribEndFormatted: maghribItem?.endTimeFormatted || ishaItem?.startTimeFormatted,
       ishaEndFormatted: ishaItem?.endTimeFormatted,
       showQazaEndTime: styleConfig.showQazaEndTime ?? true,
+
+      // Makruh (Prohibited) Windows Sync
+      makruhSunriseStartMs,
+      makruhSunriseEndMs,
+      makruhSunriseEndFormatted,
+      makruhZawaalStartMs,
+      makruhZawaalEndMs,
+      makruhZawaalEndFormatted,
+      makruhSunsetStartMs,
+      makruhSunsetEndMs,
+      makruhSunsetEndFormatted,
 
       // Visual styling sync
       surfaceStyle: styleConfig.surfaceStyle,

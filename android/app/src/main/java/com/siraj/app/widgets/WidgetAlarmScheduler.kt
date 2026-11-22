@@ -33,16 +33,22 @@ object WidgetAlarmScheduler {
             val prayers = payload.prayers
             if (prayers.isEmpty()) return
 
-            // Find the next prayer whose time is > now
-            var triggerAtMs = -1L
+            // Candidate timestamps: Prayer transitions + Makruh Start/End boundaries
+            val candidateTimestamps = mutableListOf<Long>()
             for (p in prayers) {
-                if (p.time > now) {
-                    triggerAtMs = p.time
-                    break
-                }
+                if (p.time > now) candidateTimestamps.add(p.time)
             }
+            if (payload.makruhSunriseStartMs > now) candidateTimestamps.add(payload.makruhSunriseStartMs)
+            if (payload.makruhSunriseEndMs > now) candidateTimestamps.add(payload.makruhSunriseEndMs)
+            if (payload.makruhZawaalStartMs > now) candidateTimestamps.add(payload.makruhZawaalStartMs)
+            if (payload.makruhZawaalEndMs > now) candidateTimestamps.add(payload.makruhZawaalEndMs)
+            if (payload.makruhSunsetStartMs > now) candidateTimestamps.add(payload.makruhSunsetStartMs)
+            if (payload.makruhSunsetEndMs > now) candidateTimestamps.add(payload.makruhSunsetEndMs)
 
-            // If all prayers have passed today, schedule for the first prayer tomorrow (+24h)
+            candidateTimestamps.sort()
+            var triggerAtMs = candidateTimestamps.firstOrNull { it > now } ?: -1L
+
+            // If all triggers passed today, schedule for first prayer tomorrow (+24h)
             if (triggerAtMs == -1L) {
                 triggerAtMs = prayers.first().time + 86_400_000L
             }

@@ -37,6 +37,15 @@ data class PrayerPayload(
     val maghribEndFormatted: String = "",
     val ishaEndFormatted: String = "",
     val showQazaEndTime: Boolean = true,
+    val makruhSunriseStartMs: Long = 0L,
+    val makruhSunriseEndMs: Long = 0L,
+    val makruhSunriseEndFormatted: String = "",
+    val makruhZawaalStartMs: Long = 0L,
+    val makruhZawaalEndMs: Long = 0L,
+    val makruhZawaalEndFormatted: String = "",
+    val makruhSunsetStartMs: Long = 0L,
+    val makruhSunsetEndMs: Long = 0L,
+    val makruhSunsetEndFormatted: String = "",
     val surfaceStyle: String = "theme",
     val opacity: Int = 85,
     val accentColorHex: String = "#D4AF37",
@@ -65,6 +74,15 @@ data class PrayerPayload(
         put("maghribEndFormatted", maghribEndFormatted)
         put("ishaEndFormatted", ishaEndFormatted)
         put("showQazaEndTime", showQazaEndTime)
+        put("makruhSunriseStartMs", makruhSunriseStartMs)
+        put("makruhSunriseEndMs", makruhSunriseEndMs)
+        put("makruhSunriseEndFormatted", makruhSunriseEndFormatted)
+        put("makruhZawaalStartMs", makruhZawaalStartMs)
+        put("makruhZawaalEndMs", makruhZawaalEndMs)
+        put("makruhZawaalEndFormatted", makruhZawaalEndFormatted)
+        put("makruhSunsetStartMs", makruhSunsetStartMs)
+        put("makruhSunsetEndMs", makruhSunsetEndMs)
+        put("makruhSunsetEndFormatted", makruhSunsetEndFormatted)
         put("surfaceStyle", surfaceStyle)
         put("opacity", opacity)
         put("accentColorHex", accentColorHex)

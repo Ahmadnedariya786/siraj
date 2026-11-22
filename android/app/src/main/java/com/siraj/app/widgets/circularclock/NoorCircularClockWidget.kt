@@ -94,23 +94,70 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                 val nextIdx = payload.nextPrayerIndex.coerceIn(0, prayers.size - 1)
                 val nextPrayer = prayers.getOrNull(nextIdx) ?: prayers[0]
 
-                // Compute progress arc percentage (between previous prayer and next prayer)
-                val prevTime = if (nextIdx > 0) {
-                    prayers[nextIdx - 1].time
-                } else {
-                    nextPrayer.time - (3 * 3600 * 1000L)
+                // ─── Real-Time Makruh Waqt Check ───
+                val isSunriseMakruh = payload.makruhSunriseStartMs > 0L && now in payload.makruhSunriseStartMs until payload.makruhSunriseEndMs
+                val isZawaalMakruh = payload.makruhZawaalStartMs > 0L && now in payload.makruhZawaalStartMs until payload.makruhZawaalEndMs
+                val isSunsetMakruh = payload.makruhSunsetStartMs > 0L && now in payload.makruhSunsetStartMs until payload.makruhSunsetEndMs
+                val isMakruh = isSunriseMakruh || isZawaalMakruh || isSunsetMakruh
+
+                val makruhWindowLabel = when {
+                    isSunriseMakruh -> "Sunrise"
+                    isZawaalMakruh -> "Zawaal"
+                    isSunsetMakruh -> "Sunset"
+                    else -> ""
                 }
-                val totalDuration = (nextPrayer.time - prevTime).toFloat()
-                val progressPercent = if (totalDuration > 0) {
-                    ((now - prevTime).toFloat() / totalDuration).coerceIn(0.05f, 1f)
-                } else 0.5f
+
+                val makruhEndFormatted = when {
+                    isSunriseMakruh -> payload.makruhSunriseEndFormatted
+                    isZawaalMakruh -> payload.makruhZawaalEndFormatted
+                    isSunsetMakruh -> payload.makruhSunsetEndFormatted
+                    else -> ""
+                }
+
+                val makruhStartMs = when {
+                    isSunriseMakruh -> payload.makruhSunriseStartMs
+                    isZawaalMakruh -> payload.makruhZawaalStartMs
+                    isSunsetMakruh -> payload.makruhSunsetStartMs
+                    else -> 0L
+                }
+
+                val makruhEndMs = when {
+                    isSunriseMakruh -> payload.makruhSunriseEndMs
+                    isZawaalMakruh -> payload.makruhZawaalEndMs
+                    isSunsetMakruh -> payload.makruhSunsetEndMs
+                    else -> 0L
+                }
+
+                // Compute progress arc percentage
+                val progressPercent: Float
+                val activeAccentHex: String
+
+                if (isMakruh) {
+                    // DURING MAKRUH WAQT: Switch Progress Arc to Makruh Crimson Red (#EF4444)
+                    activeAccentHex = "#EF4444"
+                    val duration = (makruhEndMs - makruhStartMs).toFloat()
+                    val elapsed = (now - makruhStartMs).toFloat()
+                    progressPercent = if (duration > 0f) (elapsed / duration).coerceIn(0.08f, 1f) else 1f
+                } else {
+                    // NORMAL WAQT: Revert cleanly to user selected theme accent color
+                    activeAccentHex = style.accentHex
+                    val prevTime = if (nextIdx > 0) {
+                        prayers[nextIdx - 1].time
+                    } else {
+                        nextPrayer.time - (3 * 3600 * 1000L)
+                    }
+                    val totalDuration = (nextPrayer.time - prevTime).toFloat()
+                    progressPercent = if (totalDuration > 0) {
+                        ((now - prevTime).toFloat() / totalDuration).coerceIn(0.05f, 1f)
+                    } else 0.5f
+                }
 
                 // 1. Render Circular Progress-Arc Bitmap via Android Canvas
                 val dialBitmap = WidgetStyleHelper.renderCircularDialBitmap(
                     surfaceStyle = style.surfaceStyle,
                     themeHex = style.themeHex,
                     opacityPercent = style.opacity,
-                    accentHex = style.accentHex,
+                    accentHex = activeAccentHex,
                     progressPercent = progressPercent
                 )
                 views.setImageViewBitmap(R.id.widget_bg_image, dialBitmap)
@@ -124,42 +171,49 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                 val hijriDisplay = WidgetStyleHelper.formatHijriDate(candidateHijri)
                 views.setTextViewText(R.id.widget_hijri_date, hijriDisplay)
 
-                // 3. Next Prayer Pill
-                val prayerPillText = "${nextPrayer.name} • ${nextPrayer.formattedTime}"
-                views.setTextViewText(R.id.widget_prayer_pill, prayerPillText)
-
-                // 4. Subline (Countdown or Qaza End Time)
-                val remainingMs = nextPrayer.time - now
-                val countdownText = formatCountdown(remainingMs)
-
-                val qazaEndTime = if (nextPrayer.formattedEndTime.isNotBlank()) {
-                    nextPrayer.formattedEndTime
-                } else when (nextPrayer.name.lowercase()) {
-                    "fajr" -> payload.fajrEndFormatted
-                    "dhuhr", "jumu'ah" -> payload.dhuhrEndFormatted
-                    "asr" -> payload.asrEndFormatted
-                    "maghrib" -> payload.maghribEndFormatted
-                    "isha" -> payload.ishaEndFormatted
-                    else -> ""
-                }
-
-                val sublineText = if (style.showQazaEndTime && qazaEndTime.isNotBlank()) {
-                    "Ends $qazaEndTime"
+                // 3. Center Pill & Subline
+                if (isMakruh) {
+                    views.setTextViewText(R.id.widget_prayer_pill, "● MAKRUH • $makruhWindowLabel")
+                    views.setTextViewText(R.id.widget_subline, "Ends $makruhEndFormatted")
                 } else {
-                    countdownText
-                }
-                views.setTextViewText(R.id.widget_subline, sublineText)
+                    val prayerPillText = "${nextPrayer.name} • ${nextPrayer.formattedTime}"
+                    views.setTextViewText(R.id.widget_prayer_pill, prayerPillText)
 
-                // 5. Colors & Swatches
+                    val remainingMs = nextPrayer.time - now
+                    val countdownText = formatCountdown(remainingMs)
+                    val qazaEndTime = if (nextPrayer.formattedEndTime.isNotBlank()) {
+                        nextPrayer.formattedEndTime
+                    } else when (nextPrayer.name.lowercase()) {
+                        "fajr" -> payload.fajrEndFormatted
+                        "dhuhr", "jumu'ah" -> payload.dhuhrEndFormatted
+                        "asr" -> payload.asrEndFormatted
+                        "maghrib" -> payload.maghribEndFormatted
+                        "isha" -> payload.ishaEndFormatted
+                        else -> ""
+                    }
+
+                    val sublineText = if (style.showQazaEndTime && qazaEndTime.isNotBlank()) {
+                        "Ends $qazaEndTime"
+                    } else {
+                        countdownText
+                    }
+                    views.setTextViewText(R.id.widget_subline, sublineText)
+                }
+
+                // 4. Colors & Swatches
                 try {
-                    val accentCol = Color.parseColor(style.accentHex)
+                    val accentCol = Color.parseColor(activeAccentHex)
                     val textCol = Color.parseColor(style.textHex)
-                    val subCol = Color.parseColor(style.subHex)
 
                     views.setTextColor(R.id.widget_hijri_date, accentCol)
                     views.setTextColor(R.id.widget_clock, textCol)
-                    views.setTextColor(R.id.widget_prayer_pill, textCol)
-                    views.setTextColor(R.id.widget_subline, if (style.showQazaEndTime) accentCol else Color.parseColor("#10B981"))
+                    views.setTextColor(R.id.widget_prayer_pill, if (isMakruh) Color.parseColor("#EF4444") else textCol)
+                    views.setTextColor(
+                        R.id.widget_subline,
+                        if (isMakruh) Color.parseColor("#EF4444")
+                        else if (style.showQazaEndTime) accentCol
+                        else Color.parseColor("#10B981")
+                    )
                     views.setTextColor(R.id.widget_btn_refresh, accentCol)
                 } catch (t: Throwable) {
                     Log.w(TAG, "Color parsing error", t)

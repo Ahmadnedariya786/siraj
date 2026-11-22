@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Decorative Ring -->
+    <path
+        android:pathData="M54,54m-33,0a33,33 0 1,1 66,0a33,33 0 1,1 -66,0"
+        android:strokeColor="#80D4AF37"
+        android:strokeWidth="0.8" />
+
+    <!-- 8-Point Rub el Hizb Outer Star -->
+    <path
+        android:pathData="M34,34h40v40h-40z"
+        android:fillColor="#220B132B"
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.4" />
+    <group android:pivotX="54" android:pivotY="54" android:rotation="45">
+        <path
+            android:pathData="M34,34h40v40h-40z"
+            android:fillColor="#220B132B"
+            android:strokeColor="#D4AF37"
+            android:strokeWidth="1.4" />
+    </group>
+
+    <!-- Inner Filigree Star -->
+    <path
+        android:pathData="M39,39h30v30h-30z"
+        android:strokeColor="#FDE08A"
+        android:strokeWidth="0.8" />
+    <group android:pivotX="54" android:pivotY="54" android:rotation="45">
+        <path
+            android:pathData="M39,39h30v30h-30z"
+            android:strokeColor="#FDE08A"
+            android:strokeWidth="0.8" />
+    </group>
+
+    <!-- Central Radiant Siraj Star & Lamp Core -->
+    <path
+        android:pathData="M54,54m-8,0a8,8 0 1,1 16,0a8,8 0 1,1 -16,0"
+        android:fillColor="#33D4AF37" />
+
+    <!-- Traditional Siraj Fanous Lamp Motif -->
+    <path
+        android:pathData="M50,51L58,51L56,60L52,60Z"
+        android:fillColor="#D4AF37"
+        android:strokeColor="#FFFDF0"
+        android:strokeWidth="0.8" />
+    <path
+        android:pathData="M54,53C52.5,55 52.5,57 54,58C55.5,57 55.5,55 54,53Z"
+        android:fillColor="#FFFDF0" />
+</vector>

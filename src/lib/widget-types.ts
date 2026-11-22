@@ -40,6 +40,17 @@ export interface PrayerPayload {
   ishaEndFormatted?: string;
   showQazaEndTime?: boolean;
 
+  // Real-Time Makruh (Prohibited) Windows Sync
+  makruhSunriseStartMs?: number;
+  makruhSunriseEndMs?: number;
+  makruhSunriseEndFormatted?: string;
+  makruhZawaalStartMs?: number;
+  makruhZawaalEndMs?: number;
+  makruhZawaalEndFormatted?: string;
+  makruhSunsetStartMs?: number;
+  makruhSunsetEndMs?: number;
+  makruhSunsetEndFormatted?: string;
+
   // Widget visual settings cache
   surfaceStyle?: string;
   opacity?: number;
