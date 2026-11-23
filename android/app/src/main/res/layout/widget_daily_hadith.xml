@@ -105,11 +105,18 @@
                 android:textSize="10sp"
                 android:textStyle="bold"
                 android:singleLine="true" />
-                android:paddingBottom="3dp"
-                android:text="@string/widget_hadith_source_default"
+
+            <!-- 1-Tap ↻ Refresh / Cycle Hadith Button -->
+            <TextView
+                android:id="@+id/widget_btn_refresh"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↻"
                 android:textColor="@color/widget_accent_gold"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:paddingStart="6dp"
+                android:paddingEnd="2dp" />
         </LinearLayout>
 
         <!-- ══════ ARABIC HADITH — hero ══════ -->

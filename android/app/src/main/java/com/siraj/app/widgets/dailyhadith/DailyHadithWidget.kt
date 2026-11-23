@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.util.Log
 import android.util.TypedValue
@@ -33,6 +34,44 @@ class DailyHadithWidget : AppWidgetProvider() {
 
     companion object {
         private const val TAG = "DailyHadithWidget"
+        const val ACTION_CYCLE_HADITH = "com.siraj.app.widgets.CYCLE_HADITH"
+
+        fun cycleNextHadith(context: Context) {
+            try {
+                val list = HadithBundle.loadAll(context)
+                if (list.isEmpty()) return
+                val currentIdx = WidgetPrefs.getHadithIndex(context)
+                val baseIdx = if (currentIdx >= 0) currentIdx else (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR) % list.size)
+                val nextIdx = (baseIdx + 1) % list.size
+                WidgetPrefs.saveHadithIndex(context, nextIdx)
+
+                val nextHadith = list[nextIdx]
+                val oldPayload = WidgetPrefs.getDailyContent(context)
+                val newPayload = if (oldPayload != null) {
+                    oldPayload.copy(hadith = nextHadith)
+                } else {
+                    com.siraj.app.widgets.DailyContentPayload(
+                        ayah = com.siraj.app.widgets.AyahContent(
+                            arabic = "فَإِنَّ مَعَ الْعُسْرِ يُسْرًا • إِنَّ مَعَ الْعُسْرِ يُسْرًا",
+                            translation = "For indeed, with hardship [will be] ease. Indeed, with hardship [will be] ease.",
+                            transliteration = "",
+                            reference = "Al-Inshirah 94:5-6",
+                            surahNumber = 94,
+                            ayahNumber = 5
+                        ),
+                        hadith = nextHadith,
+                        locale = "en"
+                    )
+                }
+                WidgetPrefs.saveDailyContent(context, newPayload)
+
+                val mgr = AppWidgetManager.getInstance(context)
+                val ids = mgr.getAppWidgetIds(android.content.ComponentName(context, DailyHadithWidget::class.java))
+                ids.forEach { updateWidget(context, mgr, it) }
+            } catch (t: Throwable) {
+                Log.e(TAG, "cycleNextHadith error", t)
+            }
+        }
 
         fun updateWidget(context: Context, mgr: AppWidgetManager, appWidgetId: Int) {
             try {
@@ -103,6 +142,19 @@ class DailyHadithWidget : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(R.id.widget_root, pi)
 
+                // ─── 6. 1-Tap ↻ Refresh / Cycle Hadith Button ───
+                val cycleIntent = Intent(context, DailyHadithWidget::class.java).apply {
+                    action = ACTION_CYCLE_HADITH
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
+                }
+                val cyclePi = PendingIntent.getBroadcast(
+                    context,
+                    appWidgetId * 10 + 4,
+                    cycleIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                views.setOnClickPendingIntent(R.id.widget_btn_refresh, cyclePi)
+
                 mgr.updateAppWidget(appWidgetId, views)
             } catch (t: Throwable) {
                 Log.e(TAG, "Critical error updating DailyHadithWidget $appWidgetId", t)
@@ -121,6 +173,13 @@ class DailyHadithWidget : AppWidgetProvider() {
             } catch (t: Throwable) {
                 Log.w(TAG, "Failed to apply grade color", t)
             }
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_CYCLE_HADITH) {
+            cycleNextHadith(context)
         }
     }
 

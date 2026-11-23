@@ -8,9 +8,11 @@ import {
   MapPin,
   Check,
   Sun,
+  Moon,
   Smartphone,
   AlertTriangle,
 } from 'lucide-react';
+import hapticService from '@/lib/haptic-service';
 import { GeolocationService, type LocationCoordinates } from '@/lib/geolocation-service';
 import {
   KAABA_LAT,
@@ -500,22 +502,18 @@ export const QiblaCompassModern = () => {
   }, [deviceHeading, qiblaAngle]);
 
   const isAligned = isLiveCompass && offsetResult.isAligned;
+  const isWithinExact2Deg = isLiveCompass && Math.abs(offsetResult.delta) <= 2.0;
+  const isExitedHysteresis = !isLiveCompass || Math.abs(offsetResult.delta) > 5.0;
 
-  // ── Debounced 1-Shot Haptic Feedback ───────────────────────────
+  // ── Debounced 1-Shot Haptic Feedback with Hysteresis (fires ONCE per alignment) ──
   useEffect(() => {
-    if (isAligned && !hapticFiredRef.current) {
+    if (isWithinExact2Deg && !hapticFiredRef.current) {
       hapticFiredRef.current = true;
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        try {
-          navigator.vibrate([60]);
-        } catch {
-          // Vibration failed or unsupported - safe silent fallback
-        }
-      }
-    } else if (!isAligned) {
+      void hapticService.trigger('light');
+    } else if (isExitedHysteresis) {
       hapticFiredRef.current = false;
     }
-  }, [isAligned]);
+  }, [isWithinExact2Deg, isExitedHysteresis]);
 
   // ── Dial & Rose Rotation ─────────────────────────────────────
   const roseRotation = deviceHeading !== null ? -deviceHeading : 0;
@@ -855,29 +853,28 @@ export const QiblaCompassModern = () => {
                 W
               </text>
 
-              {/* ── DAYTIME & CELESTIAL SUN AZIMUTH MARKER (Astronomical Alignment) ── */}
-              <g
-                transform={`rotate(${solarPos.azimuthDeg} 140 140)`}
-                opacity={solarPos.isDaytime ? "1" : "0.4"}
-              >
-                <circle
-                  cx="140"
-                  cy="14"
-                  r="8.5"
-                  fill={solarPos.isDaytime ? "rgba(245, 158, 11, 0.22)" : "rgba(148, 163, 184, 0.15)"}
-                  stroke={solarPos.isDaytime ? "#f59e0b" : "var(--border)"}
-                  strokeWidth="1.2"
-                />
-                <text
-                  x="140"
-                  y="14"
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fontSize="9"
-                >
-                  ☀️
-                </text>
-              </g>
+              {/* ── DAYTIME CELESTIAL SUN AZIMUTH MARKER (Active during daytime only) ── */}
+              {solarPos.isDaytime && (
+                <g transform={`rotate(${solarPos.azimuthDeg} 140 140)`}>
+                  <circle
+                    cx="140"
+                    cy="14"
+                    r="8.5"
+                    fill="rgba(245, 158, 11, 0.22)"
+                    stroke="#f59e0b"
+                    strokeWidth="1.2"
+                  />
+                  <text
+                    x="140"
+                    y="14"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize="9"
+                  >
+                    ☀️
+                  </text>
+                </g>
+              )}
 
               {/* ── GOLDEN QIBLA POINTER NEEDLE & KAABA CREST (Locked at qiblaAngle) ── */}
               <g transform={`rotate(${qiblaAngle} 140 140)`}>
@@ -1038,20 +1035,23 @@ export const QiblaCompassModern = () => {
           </button>
         </div>
 
-        {/* Daytime / Celestial Sun Azimuth Astronomical Hint */}
+        {/* Astronomical Alignment Hint (Day: Sun Azimuth, Night: Polaris North Star) */}
         <div className="flex items-center justify-center gap-1.5 text-[11px] text-[var(--text-secondary)] font-medium text-center px-2">
-          <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <span>
-            {solarPos.isDaytime ? (
-              <>
+          {solarPos.isDaytime ? (
+            <>
+              <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>
                 Sun at <strong className="text-[var(--text-primary)]">{Math.round(solarPos.azimuthDeg)}°</strong> ({getCardinalDirection(solarPos.azimuthDeg)}). Point phone at the Sun to verify North.
-              </>
-            ) : (
-              <>
-                Sun below horizon ({Math.round(solarPos.azimuthDeg)}° {getCardinalDirection(solarPos.azimuthDeg)}). Astronomical Sun marker active during daytime.
-              </>
-            )}
-          </span>
+              </span>
+            </>
+          ) : (
+            <>
+              <Moon className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <span>
+                Night: verify North via Polaris (North Star) &amp; Big Dipper pointer stars
+              </span>
+            </>
+          )}
         </div>
       </div>
 

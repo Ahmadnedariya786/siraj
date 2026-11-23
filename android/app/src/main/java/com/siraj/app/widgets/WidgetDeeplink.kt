@@ -52,12 +52,16 @@ object WidgetDeeplink {
             .appendPath("quran-progress")
             .build()
 
-    fun buildTasbeeh(): Uri =
-        Uri.Builder()
+    fun buildTasbeeh(dhikrId: String? = null): Uri {
+        val builder = Uri.Builder()
             .scheme(SCHEME)
             .authority(HOST)
             .appendPath("tasbeeh")
-            .build()
+        if (!dhikrId.isNullOrBlank()) {
+            builder.appendQueryParameter("dhikr", dhikrId)
+        }
+        return builder.build()
+    }
 
     /**
      * Build a launcher Intent that opens MainActivity with the deep-link URI.

@@ -1023,10 +1023,10 @@ function QuizMenu({
             <Button 
               onClick={onOpenMysteryBox} 
               variant="outline" 
-              className={`w-full ${canClaimMysteryBox ? 'animate-pulse bg-gradient-to-r from-purple-50 to-pink-50' : ''}`}
+              className={`w-full ${canClaimMysteryBox ? 'animate-pulse bg-[var(--accent-soft)] border-[var(--accent)]/40 text-[var(--accent-text)]' : ''}`}
             >
-              <GiftIcon className={`w-4 h-4 mr-1 ${canClaimMysteryBox ? 'text-purple-500' : ''}`} />
-              <span className={canClaimMysteryBox ? 'text-purple-700 font-semibold text-xs' : 'text-xs'}>
+              <GiftIcon className={`w-4 h-4 mr-1 ${canClaimMysteryBox ? 'text-[var(--accent-text)]' : ''}`} />
+              <span className={canClaimMysteryBox ? 'text-[var(--accent-text)] font-semibold text-xs' : 'text-xs'}>
                 {canClaimMysteryBox ? 'Box!' : 'Box'}
               </span>
             </Button>

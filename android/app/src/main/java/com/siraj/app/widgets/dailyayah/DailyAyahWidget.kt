@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.util.Log
 import android.util.TypedValue
@@ -31,6 +32,110 @@ class DailyAyahWidget : AppWidgetProvider() {
 
     companion object {
         private const val TAG = "DailyAyahWidget"
+        const val ACTION_CYCLE_AYAH = "com.siraj.app.widgets.CYCLE_AYAH"
+
+        private val CURATED_AYAHS = listOf(
+            com.siraj.app.widgets.AyahContent(
+                arabic = "فَإِنَّ مَعَ الْعُسْرِ يُسْرًا • إِنَّ مَعَ الْعُسْرِ يُسْرًا",
+                translation = "For indeed, with hardship [will be] ease. Indeed, with hardship [will be] ease.",
+                transliteration = "",
+                reference = "Al-Inshirah 94:5-6",
+                surahNumber = 94,
+                ayahNumber = 5
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "لَا يُكَلِّفُ اللَّهُ نَفْسًا إِلَّا وُسْعَهَا",
+                translation = "Allah does not burden a soul beyond that it can bear.",
+                transliteration = "",
+                reference = "Al-Baqarah 2:286",
+                surahNumber = 2,
+                ayahNumber = 286
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ",
+                translation = "So remember Me; I will remember you. And be grateful to Me and do not deny Me.",
+                transliteration = "",
+                reference = "Al-Baqarah 2:152",
+                surahNumber = 2,
+                ayahNumber = 152
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "قُلْ يَا عِبَادِيَ الَّذِينَ أَسْرَفُوا عَلَىٰ أَنفُسِهِمْ لَا تَقْنَطُوا مِن رَّحْمَةِ اللَّهِ",
+                translation = "Say, O My servants who have transgressed against themselves, do not despair of the mercy of Allah.",
+                transliteration = "",
+                reference = "Az-Zumar 39:53",
+                surahNumber = 39,
+                ayahNumber = 53
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "وَمَن يَتَوَكَّلْ عَلَى اللَّهِ فَهُوَ حَسْبُهُ",
+                translation = "And whoever relies upon Allah - then He is sufficient for him.",
+                transliteration = "",
+                reference = "At-Talaq 65:3",
+                surahNumber = 65,
+                ayahNumber = 3
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ",
+                translation = "And when My servants ask you concerning Me, indeed I am near.",
+                transliteration = "",
+                reference = "Al-Baqarah 2:186",
+                surahNumber = 2,
+                ayahNumber = 186
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ",
+                translation = "Unquestionably, by the remembrance of Allah hearts are assured.",
+                transliteration = "",
+                reference = "Ar-Ra'd 13:28",
+                surahNumber = 13,
+                ayahNumber = 28
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "لَّا إِلَٰهَ إِلَّا أَنتَ سُبْحَانَكَ إِنِّي كُنتُ مِنَ الظَّالِمِينَ",
+                translation = "There is no deity except You; exalted are You. Indeed, I have been of the wrongdoers.",
+                transliteration = "",
+                reference = "Al-Anbiya 21:87",
+                surahNumber = 21,
+                ayahNumber = 87
+            ),
+            com.siraj.app.widgets.AyahContent(
+                arabic = "لَئِن شَكَرْتُمْ لَأَزِيدَنَّكُمْ",
+                translation = "If you are grateful, I will surely increase you [in favor].",
+                transliteration = "",
+                reference = "Ibrahim 14:7",
+                surahNumber = 14,
+                ayahNumber = 7
+            )
+        )
+
+        fun cycleNextAyah(context: Context) {
+            try {
+                val currentIdx = WidgetPrefs.getAyahIndex(context)
+                val baseIdx = if (currentIdx >= 0) currentIdx else (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR) % CURATED_AYAHS.size)
+                val nextIdx = (baseIdx + 1) % CURATED_AYAHS.size
+                WidgetPrefs.saveAyahIndex(context, nextIdx)
+
+                val nextAyah = CURATED_AYAHS[nextIdx]
+                val oldPayload = WidgetPrefs.getDailyContent(context)
+                val newPayload = if (oldPayload != null) {
+                    oldPayload.copy(ayah = nextAyah)
+                } else {
+                    com.siraj.app.widgets.DailyContentPayload(
+                        ayah = nextAyah,
+                        hadith = com.siraj.app.widgets.dailyhadith.HadithBundle.getFallbackHadith(context),
+                        locale = "en"
+                    )
+                }
+                WidgetPrefs.saveDailyContent(context, newPayload)
+
+                val mgr = AppWidgetManager.getInstance(context)
+                val ids = mgr.getAppWidgetIds(android.content.ComponentName(context, DailyAyahWidget::class.java))
+                ids.forEach { updateWidget(context, mgr, it) }
+            } catch (t: Throwable) {
+                Log.e(TAG, "cycleNextAyah error", t)
+            }
+        }
 
         fun updateWidget(context: Context, mgr: AppWidgetManager, appWidgetId: Int) {
             try {
@@ -115,21 +220,29 @@ class DailyAyahWidget : AppWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_root, pi)
 
                 // ─── 8. 1-Tap ↻ Refresh Intent ───
-                val refreshIntent = android.content.Intent(context, com.siraj.app.widgets.WidgetAlarmReceiver::class.java).apply {
-                    action = com.siraj.app.widgets.WidgetAlarmReceiver.ACTION_REFRESH_ALL
+                val cycleIntent = Intent(context, DailyAyahWidget::class.java).apply {
+                    action = ACTION_CYCLE_AYAH
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
                 }
-                val refreshPi = PendingIntent.getBroadcast(
+                val cyclePi = PendingIntent.getBroadcast(
                     context,
-                    204,
-                    refreshIntent,
+                    appWidgetId * 10 + 5,
+                    cycleIntent,
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
-                views.setOnClickPendingIntent(R.id.widget_btn_refresh, refreshPi)
+                views.setOnClickPendingIntent(R.id.widget_btn_refresh, cyclePi)
 
                 mgr.updateAppWidget(appWidgetId, views)
             } catch (t: Throwable) {
                 Log.e(TAG, "Critical error updating DailyAyahWidget $appWidgetId", t)
             }
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_CYCLE_AYAH) {
+            cycleNextAyah(context)
         }
     }
 

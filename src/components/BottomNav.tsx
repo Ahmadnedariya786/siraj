@@ -1,11 +1,10 @@
-import { memo, useMemo, useState, useEffect } from "react";
+import { memo, useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { BookOpen, Settings as SettingsIcon, Compass, LayoutGrid, Home } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useAppTheme } from "@/lib/theme-engine";
 import {
-  THEME_NAVBAR_VARIANT,
   type NavbarVariantId,
   isNavItemActive,
   resolveActiveNavbarVariant,
@@ -44,6 +43,54 @@ const BottomNav = memo(function BottomNav() {
     return resolveActiveNavbarVariant(currentTheme);
   }, [currentTheme, overrideTick]);
 
+  const isIconOnlyStyle = variant === 'split-islands' || variant === 'morph-capsule';
+  const [showIntroLabels, setShowIntroLabels] = useState(false);
+  const [activeTooltip, setActiveTooltip] = useState<{ title: string; left: number } | null>(null);
+  const pointerTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isIconOnlyStyle) {
+      const storageKey = `siraj_dock_intro_${variant}`;
+      try {
+        const seen = localStorage.getItem(storageKey);
+        if (!seen) {
+          setShowIntroLabels(true);
+          const t = setTimeout(() => {
+            setShowIntroLabels(false);
+            try {
+              localStorage.setItem(storageKey, 'true');
+            } catch (err) {
+              console.debug('[BottomNav] intro save error:', err);
+            }
+          }, 3000);
+          return () => clearTimeout(t);
+        }
+      } catch (err) {
+        console.debug('[BottomNav] intro read error:', err);
+      }
+    } else {
+      setShowIntroLabels(false);
+    }
+  }, [variant, isIconOnlyStyle]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLElement>, title: string) => {
+    if (!isIconOnlyStyle) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerLeft = rect.left + rect.width / 2;
+    if (pointerTimerRef.current) clearTimeout(pointerTimerRef.current);
+    pointerTimerRef.current = setTimeout(() => {
+      setActiveTooltip({ title, left: centerLeft });
+    }, 450);
+  }, [isIconOnlyStyle]);
+
+  const handlePointerClear = useCallback(() => {
+    if (pointerTimerRef.current) {
+      clearTimeout(pointerTimerRef.current);
+      pointerTimerRef.current = null;
+    }
+    setActiveTooltip(null);
+  }, []);
+
   const navItems: NavItemDef[] = useMemo(() => [
     { id: 'qibla', title: t('qibla') || 'Qibla', path: '/qibla', icon: Compass },
     { id: 'quran', title: t('quran') || 'Quran', path: '/quran', icon: BookOpen },
@@ -67,6 +114,41 @@ const BottomNav = memo(function BottomNav() {
         boxSizing: 'border-box',
       }}
     >
+      {/* Press & Hold Floating Tooltip for Icon-Only Docks */}
+      {activeTooltip && (
+        <div
+          role="tooltip"
+          className="fixed z-50 px-3 py-1 rounded-xl text-xs font-bold border shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150"
+          style={{
+            bottom: 'calc(78px + env(safe-area-inset-bottom, 0px))',
+            left: `${activeTooltip.left}px`,
+            transform: 'translateX(-50%)',
+            background: 'var(--surface-2)',
+            color: 'var(--text-primary)',
+            borderColor: 'var(--accent)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5), 0 0 14px var(--accent-glow)',
+          }}
+        >
+          {activeTooltip.title}
+        </div>
+      )}
+
+      {/* One-Time 3-Second Gentle Intro Overlay */}
+      {showIntroLabels && (
+        <div
+          aria-hidden="true"
+          className="fixed z-40 px-3 py-1.5 rounded-full text-[11px] font-bold border pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-300"
+          style={{
+            bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
+            background: 'var(--surface-2)',
+            color: 'var(--accent-text)',
+            borderColor: 'var(--accent)',
+            boxShadow: '0 6px 20px rgba(0, 0, 0, 0.45), 0 0 10px var(--accent-glow)',
+          }}
+        >
+          💡 Tip: Press &amp; hold any icon to see tab name
+        </div>
+      )}
       {/* =========================================================================
           VARIANT 1: SPOTLIGHT BEAM (Oxford Gold)
           Overhead spotlight lamp bar + conical beam + lifted icon
@@ -221,6 +303,10 @@ const BottomNav = memo(function BottomNav() {
                 to={item.path}
                 replace
                 end={item.exact}
+                onPointerDown={(e) => handlePointerDown(e, item.title)}
+                onPointerUp={handlePointerClear}
+                onPointerLeave={handlePointerClear}
+                onPointerCancel={handlePointerClear}
                 className="flex items-center justify-center rounded-full select-none"
                 style={{
                   flex: '0 0 44px',
@@ -448,6 +534,10 @@ const BottomNav = memo(function BottomNav() {
                   to={item.path}
                   replace
                   end={item.exact}
+                  onPointerDown={(e) => handlePointerDown(e, item.title)}
+                  onPointerUp={handlePointerClear}
+                  onPointerLeave={handlePointerClear}
+                  onPointerCancel={handlePointerClear}
                   className="flex items-center justify-center rounded-[22px] select-none"
                   style={{
                     padding: isActive ? '6px 10px' : '4px 8px',
@@ -526,6 +616,10 @@ const BottomNav = memo(function BottomNav() {
                   to={item.path}
                   replace
                   end={item.exact}
+                  onPointerDown={(e) => handlePointerDown(e, item.title)}
+                  onPointerUp={handlePointerClear}
+                  onPointerLeave={handlePointerClear}
+                  onPointerCancel={handlePointerClear}
                   className="flex items-center justify-center rounded-[22px] select-none"
                   style={{
                     padding: isActive ? '6px 10px' : '4px 8px',

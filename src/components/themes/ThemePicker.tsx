@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useState, useEffect } from 'react';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Sparkles, Lock } from 'lucide-react';
 import { type ThemeId } from '@/types/theme';
 import { useAppTheme, THEMES } from '@/lib/theme-engine';
 import {
@@ -221,29 +221,43 @@ export const ThemePreviewCard = memo<ThemePreviewCardProps>(({
       </div>
 
       {/* Signature Navbar Architecture Micro-Badge */}
-      <div
-        className="mt-2 flex items-center gap-1.5 px-2 py-1 rounded-md text-[9.5px] font-semibold w-full shrink-0 select-none pointer-events-none"
-        style={{
-          background: theme.tokens['--surface-2'],
-          color: theme.tokens['--accent-text'],
-          border: `1px solid ${theme.tokens['--border']}`,
-          borderLeft: `2.5px solid ${theme.tokens['--accent']}`,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        <span
-          className="w-1.5 h-1.5 rounded-full shrink-0"
-          style={{
-            background: theme.tokens['--accent'],
-            boxShadow: theme.id === 'kiswah-noir' ? 'none' : `0 0 5px ${theme.tokens['--accent-glow']}`,
-          }}
-        />
-        <span className="truncate tracking-tight font-medium">
-          Dock: <strong className="font-bold">{NAVBAR_VARIANT_NAMES[THEME_NAVBAR_VARIANT[themeId]]}</strong>
-        </span>
-      </div>
+      {(() => {
+        const overrideConfig = getNavbarOverrideConfig();
+        const isLocked = overrideConfig.enabled;
+        return (
+          <div
+            className="mt-2 flex items-center gap-1.5 px-2 py-1 rounded-md text-[9.5px] font-semibold w-full shrink-0 select-none pointer-events-none transition-opacity"
+            style={{
+              background: theme.tokens['--surface-2'],
+              color: theme.tokens['--accent-text'],
+              border: `1px solid ${theme.tokens['--border']}`,
+              borderLeft: `2.5px solid ${theme.tokens['--accent']}`,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              opacity: isLocked ? 0.65 : 1,
+            }}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{
+                background: theme.tokens['--accent'],
+                boxShadow: theme.id === 'kiswah-noir' ? 'none' : `0 0 5px ${theme.tokens['--accent-glow']}`,
+              }}
+            />
+            <span className="truncate tracking-tight font-medium inline-flex items-center gap-1 min-w-0">
+              <span>Dock:</span>
+              <strong className="font-bold truncate">{NAVBAR_VARIANT_NAMES[THEME_NAVBAR_VARIANT[themeId]]}</strong>
+              {isLocked && (
+                <span className="inline-flex items-center gap-0.5 text-[8px] font-bold opacity-85 shrink-0">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>(locked)</span>
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Description Footer */}
       <p className="text-[10px] text-muted-foreground/90 mt-2 line-clamp-2 leading-tight">

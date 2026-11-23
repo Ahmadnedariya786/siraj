@@ -142,7 +142,7 @@ const QiblaInfoCard = ({
         </CardContent>
       </Card>
 
-      {/* Sun Position */}
+      {/* Sun / Celestial Position */}
       {sunPosition && (
         <Card className="bg-gradient-to-r from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 border-amber-200 dark:border-amber-700">
           <CardContent className="p-4">
@@ -152,26 +152,32 @@ const QiblaInfoCard = ({
                   {isSunUp ? (
                     <Sun className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                   ) : (
-                    <Moon className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                    <Moon className="w-5 h-5 text-sky-400" />
                   )}
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">
-                    {isSunUp ? 'Sun Position' : 'Moon Position'}
+                    {isSunUp ? 'Sun Position' : 'Celestial Helper'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {isSunUp ? 'Above horizon' : 'Below horizon'}
+                    {isSunUp ? 'Above horizon' : 'Night: verify North via Polaris (North Star) & Big Dipper pointer stars'}
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                  {sunPosition.azimuth.toFixed(1)}°
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Alt: {sunPosition.altitude.toFixed(1)}°
-                </p>
-              </div>
+              {isSunUp ? (
+                <div className="text-right">
+                  <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                    {sunPosition.azimuth.toFixed(1)}°
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Alt: {sunPosition.altitude.toFixed(1)}°
+                  </p>
+                </div>
+              ) : (
+                <div className="text-right shrink-0">
+                  <span className="text-xs font-bold text-sky-400">Polaris (0° N)</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

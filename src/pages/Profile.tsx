@@ -18,6 +18,7 @@ import {
   Lock,
   LayoutGrid,
   Calculator,
+  AlertTriangle,
 } from 'lucide-react';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { CURRENT_APP_VERSION } from '@/lib/constants';
@@ -336,7 +337,17 @@ const Profile: React.FC = () => {
       }
 
       try {
-        if (typeof LocalNotifications !== 'undefined' && LocalNotifications.getPending) {
+        let isDenied = false;
+        if (typeof LocalNotifications !== 'undefined' && LocalNotifications.checkPermissions) {
+          const perm = await LocalNotifications.checkPermissions();
+          isDenied = perm.display === 'denied';
+        } else if (typeof Notification !== 'undefined') {
+          isDenied = Notification.permission === 'denied';
+        }
+
+        if (isDenied) {
+          updates['notifications'] = 'DENIED';
+        } else if (typeof LocalNotifications !== 'undefined' && LocalNotifications.getPending) {
           const pending = await LocalNotifications.getPending();
           updates['notifications'] = pending?.notifications?.length !== undefined
             ? String(pending.notifications.length)
@@ -634,6 +645,14 @@ const Profile: React.FC = () => {
                           {hasAsyncKey && (
                             val === undefined ? (
                               <div className="w-7 h-3.5 bg-[var(--surface-2)] rounded-full animate-pulse shrink-0" />
+                            ) : row.id === 'notifications' && val === 'DENIED' ? (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0 bg-amber-500/15 border-amber-500/40 text-amber-500"
+                                title="Enable notifications"
+                              >
+                                <AlertTriangle className="w-3 h-3 stroke-[2.5]" />
+                                <span>! Enable</span>
+                              </span>
                             ) : val !== null ? (
                               <span
                                 className="settings-value-chip shrink-0 !max-w-none !px-[6px] !py-[2px] !text-[0.60rem]"

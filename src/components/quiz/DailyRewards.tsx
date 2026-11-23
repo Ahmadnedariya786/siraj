@@ -21,7 +21,13 @@ import {
   Crown,
   ChevronRight,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Scissors,
+  Clock,
+  Lightbulb,
+  SkipForward,
+  Zap,
+  Trophy,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -77,15 +83,22 @@ export function DailyRewards({ onClose }: DailyRewardsProps) {
   };
 
   const getItemIcon = (itemId: string) => {
-    const icons: Record<string, string> = {
-      fifty_fifty: '✂️',
-      extra_time: '⏰',
-      hint: '💡',
-      skip: '⏭️',
-      double_points: '2️⃣',
-      perfect_round: '✨'
-    };
-    return icons[itemId] || '📦';
+    switch (itemId) {
+      case 'fifty_fifty':
+        return <Scissors className="w-3.5 h-3.5 text-[var(--accent-text)] mx-auto" />;
+      case 'extra_time':
+        return <Clock className="w-3.5 h-3.5 text-sky-400 mx-auto" />;
+      case 'hint':
+        return <Lightbulb className="w-3.5 h-3.5 text-amber-400 mx-auto" />;
+      case 'skip':
+        return <SkipForward className="w-3.5 h-3.5 text-emerald-400 mx-auto" />;
+      case 'double_points':
+        return <Zap className="w-3.5 h-3.5 text-amber-500 mx-auto" />;
+      case 'perfect_round':
+        return <Sparkles className="w-3.5 h-3.5 text-purple-400 mx-auto" />;
+      default:
+        return <Package className="w-3.5 h-3.5 text-[var(--accent-text)] mx-auto" />;
+    }
   };
 
   const getDayLabel = (day: number) => {
@@ -215,9 +228,9 @@ export function DailyRewards({ onClose }: DailyRewardsProps) {
                   <motion.div
                     animate={{ rotate: [0, 10, -10, 0] }}
                     transition={{ duration: 0.5, repeat: 2 }}
-                    className="text-4xl mb-3"
+                    className="flex justify-center mb-3"
                   >
-                    🎉
+                    <Trophy className="w-12 h-12 text-[var(--accent)]" />
                   </motion.div>
                   <h3 className="font-bold text-lg text-[var(--success)]">
                     Day {justClaimed.day} Reward Claimed!

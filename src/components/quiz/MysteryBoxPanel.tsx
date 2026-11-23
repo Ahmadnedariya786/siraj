@@ -92,31 +92,40 @@ export function MysteryBoxPanel({ onClose }: MysteryBoxPanelProps) {
         </div>
 
         {/* Daily Free Box */}
-        <Card className={`overflow-hidden ${canClaimDaily ? 'ring-2 ring-[var(--accent)]' : ''}`}>
-          <div className="bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] p-4 text-[var(--on-accent)]">
+        <Card className={`overflow-hidden border border-[var(--border)] bg-[var(--surface)] ${canClaimDaily ? 'ring-2 ring-[var(--accent)]/50 shadow-lg' : ''}`}>
+          <div className="bg-[var(--surface-2)] border-b border-[var(--border)] p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="text-3xl">🎁</div>
+                <div className="w-12 h-12 rounded-2xl bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent-text)] border border-[var(--accent)]/30 shadow-sm">
+                  <Gift className="w-6 h-6 text-[var(--accent-text)]" />
+                </div>
                 <div>
-                  <h3 className="font-bold">Daily Free Box</h3>
-                  <p className="text-sm opacity-90">
+                  <h3 className="font-bold text-base text-[var(--accent-text)]">Daily Free Box</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">
                     {canClaimDaily ? 'Ready to open!' : `Next in ${timeUntilNext}`}
                   </p>
                 </div>
               </div>
               {canClaimDaily && (
-                <Badge className="bg-white text-[var(--accent-text)] animate-pulse font-bold">FREE</Badge>
+                <Badge className="bg-[var(--accent)] text-[var(--on-accent)] font-bold animate-pulse">FREE</Badge>
               )}
             </div>
           </div>
-          <CardContent className="p-4">
+          <CardContent className="p-4 space-y-2">
             <Button
-              className="w-full"
+              className="w-full font-bold transition-all active:scale-98 shadow-sm cursor-pointer"
+              style={{
+                backgroundColor: 'var(--accent)',
+                color: 'var(--on-accent)',
+              }}
               disabled={!canClaimDaily || isOpening}
               onClick={() => setSelectedBox('daily_free_box')}
             >
               {canClaimDaily ? 'Open Free Box' : `Wait ${timeUntilNext}`}
             </Button>
+            <p className="text-[11px] text-[var(--text-secondary)] text-center font-medium pt-0.5">
+              Common 70% • Rare 25% • Legendary 5%
+            </p>
           </CardContent>
         </Card>
 

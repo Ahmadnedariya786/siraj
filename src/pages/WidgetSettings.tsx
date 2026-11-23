@@ -139,7 +139,6 @@ export const WidgetSettings: React.FC = () => {
 
     // Check upcoming fard prayer
     const upcomingFard = fard.find((p) => p.startTime > now);
-    const activeFard = fard.find((p) => p.isCurrent) || fard[fard.length - 1];
     const target = upcomingFard || fard[0];
 
     const diff = target.startTime.getTime() - now.getTime();
@@ -265,13 +264,19 @@ export const WidgetSettings: React.FC = () => {
   // Compute Live Preview styles
   const activePreset = ACCENT_PRESETS[config.accentPreset] || ACCENT_PRESETS.ivory;
 
+  const surfaceLabel = useMemo(() => {
+    if (config.surfaceStyle === 'oled') return 'OLED';
+    if (config.surfaceStyle === 'frosted') return 'Frosted Glass';
+    return 'Theme';
+  }, [config.surfaceStyle]);
+
   const previewSurfaceBg = useMemo(() => {
     const alpha = config.opacity / 100;
     if (config.surfaceStyle === 'oled') {
       return `rgba(0, 0, 0, ${alpha})`;
     }
     if (config.surfaceStyle === 'frosted') {
-      return `rgba(18, 24, 38, ${Math.max(0.4, alpha)})`;
+      return `rgba(28, 36, 52, ${Math.max(0.35, alpha * 0.85)})`;
     }
     // Match active theme default
     return `rgba(15, 23, 42, ${alpha})`;
@@ -329,15 +334,20 @@ export const WidgetSettings: React.FC = () => {
             type="button"
             onClick={() => handlePinWidget('next_prayer')}
             disabled={pinningType === 'next_prayer'}
-            className="w-full h-12 rounded-2xl font-bold text-sm shadow-md flex items-center justify-center gap-2.5 transition-all active:scale-98 border border-[var(--accent)] cursor-pointer"
+            className="w-full h-12 rounded-2xl font-bold text-sm shadow-md flex items-center justify-between px-4 transition-all active:scale-98 border border-[var(--accent)] cursor-pointer"
             style={{
               backgroundColor: 'var(--accent)',
               color: 'var(--on-accent)',
               boxShadow: '0 4px 18px var(--accent-glow, rgba(212, 175, 55, 0.28))',
             }}
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>{strings.pinNextPrayer}</span>
+            <div className="flex items-center gap-2">
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>{strings.pinNextPrayer}</span>
+            </div>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-black/20 text-[var(--on-accent)] border border-white/20">
+              4×2
+            </span>
           </button>
 
           {/* 2-Column Grid of All Other 6 Widgets (360px Safe, No Text Cut-Off) */}
@@ -346,66 +356,96 @@ export const WidgetSettings: React.FC = () => {
               type="button"
               onClick={() => handlePinWidget('circular_clock')}
               disabled={pinningType === 'circular_clock'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 6px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
+              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
-              <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-              <span>{strings.pinCircularClock}</span>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
+                <span className="truncate">{strings.pinCircularClock}</span>
+              </div>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
+                2×2
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handlePinWidget('compact_strip')}
               disabled={pinningType === 'compact_strip'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 6px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
+              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
-              <StretchHorizontal className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-              <span>{strings.pinCompactStrip}</span>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <StretchHorizontal className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
+                <span className="truncate">{strings.pinCompactStrip}</span>
+              </div>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
+                4×1
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handlePinWidget('daily_ayah')}
               disabled={pinningType === 'daily_ayah'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 6px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
+              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
-              <BookOpen className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-              <span>{strings.pinDailyAyah}</span>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <BookOpen className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
+                <span className="truncate">{strings.pinDailyAyah}</span>
+              </div>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
+                4×2
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handlePinWidget('daily_hadith')}
               disabled={pinningType === 'daily_hadith'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 6px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
+              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
-              <Scroll className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-              <span>{strings.pinDailyHadith}</span>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <Scroll className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
+                <span className="truncate">{strings.pinDailyHadith}</span>
+              </div>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
+                4×2
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handlePinWidget('quran_progress')}
               disabled={pinningType === 'quran_progress'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 6px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
+              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
-              <TrendingUp className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-              <span>{strings.pinQuranProgress}</span>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <TrendingUp className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
+                <span className="truncate">{strings.pinQuranProgress}</span>
+              </div>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
+                2×2
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handlePinWidget('tasbeeh')}
               disabled={pinningType === 'tasbeeh'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 6px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
+              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
-              <CircleDot className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-              <span>{strings.pinTasbeeh}</span>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <CircleDot className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
+                <span className="truncate">{strings.pinTasbeeh}</span>
+              </div>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
+                2×2
+              </span>
             </button>
           </div>
 
@@ -424,14 +464,14 @@ export const WidgetSettings: React.FC = () => {
               {strings.livePreview}
             </Label>
             <span
-              className="text-[10px] font-mono px-2 py-0.5 rounded-full border"
+              className="text-[10px] font-mono px-2 py-0.5 rounded-full border transition-all"
               style={{
                 borderColor: activePreset.borderHex,
                 color: activePreset.accentHex,
                 background: 'var(--surface-2)',
               }}
             >
-              {config.opacity}% • {activePreset.name}
+              {config.opacity}% • {activePreset.name} • {surfaceLabel} • {config.fontScale}%
             </span>
           </div>
 
@@ -464,13 +504,15 @@ export const WidgetSettings: React.FC = () => {
             })}
           </div>
 
-          {/* LIVE PREVIEW CONTAINER (Pure opaque rendering) */}
+          {/* LIVE PREVIEW CONTAINER (Pure opaque & depth rendering without blur filter) */}
           <div
             className="relative rounded-3xl p-4 sm:p-5 overflow-hidden transition-all duration-300 border shadow-2xl"
             style={{
               backgroundColor: previewSurfaceBg,
-              borderColor: activePreset.borderHex,
-              boxShadow: `0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, ${config.opacity * 0.0015})`,
+              borderColor: config.surfaceStyle === 'frosted' ? 'rgba(255, 255, 255, 0.22)' : activePreset.borderHex,
+              boxShadow: config.surfaceStyle === 'frosted'
+                ? 'inset 0 1px 1px rgba(255, 255, 255, 0.25), 0 12px 36px rgba(0, 0, 0, 0.5)'
+                : `0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, ${config.opacity * 0.0015})`,
             }}
           >
             {/* ══════ PREVIEW 1: NEXT PRAYER (4x2) ══════ */}
@@ -646,13 +688,22 @@ export const WidgetSettings: React.FC = () => {
                     {nextPrayerData.name} • {nextPrayerData.timeStr}
                   </div>
 
-                  {/* Subline: Countdown or Qaza End Time */}
-                  <span
-                    className="text-[9px] font-medium mt-1 tabular-nums"
-                    style={{ color: activePreset.subHex }}
-                  >
-                    {config.showQazaEndTime ? `Ends ${nextPrayerData.qazaEnd}` : nextPrayerData.timeUntil}
-                  </span>
+                  {/* Subline: Countdown, Qaza End Time & City */}
+                  <div className="flex items-center gap-1.5 text-[9px] font-medium mt-1 tabular-nums" style={{ color: activePreset.subHex }}>
+                    {config.showCountdown && (
+                      <span className="text-emerald-400 font-bold">{nextPrayerData.timeUntil}</span>
+                    )}
+                    {config.showCountdown && config.showQazaEndTime && <span>•</span>}
+                    {config.showQazaEndTime && (
+                      <span>Ends {nextPrayerData.qazaEnd}</span>
+                    )}
+                  </div>
+
+                  {config.showCity && (
+                    <span className="text-[8.5px] font-medium opacity-80 truncate max-w-[120px] mt-0.5" style={{ color: activePreset.subHex }}>
+                      {displayCity.split(',')[0]}
+                    </span>
+                  )}
 
                   {/* Corner Refresh Indicator */}
                   <div className="absolute right-3 bottom-3 p-1 rounded-full opacity-60 hover:opacity-100 transition-opacity">
@@ -675,9 +726,11 @@ export const WidgetSettings: React.FC = () => {
                     {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })} • {formattedHijriDate}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] opacity-80" style={{ color: activePreset.subHex }}>
-                      {displayCity.split(',')[0]}
-                    </span>
+                    {config.showCity && (
+                      <span className="text-[10px] opacity-80" style={{ color: activePreset.subHex }}>
+                        {displayCity.split(',')[0]}
+                      </span>
+                    )}
                     <RotateCw className="w-3 h-3 opacity-60" style={{ color: activePreset.subHex }} />
                   </div>
                 </div>

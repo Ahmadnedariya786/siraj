@@ -83,6 +83,20 @@ object WidgetPrefs {
         return DailyContentPayload.fromJson(json)
     }
 
+    fun getHadithIndex(context: Context): Int =
+        privatePrefs(context).getInt("active_hadith_index", -1)
+
+    fun saveHadithIndex(context: Context, index: Int) {
+        privatePrefs(context).edit { putInt("active_hadith_index", index) }
+    }
+
+    fun getAyahIndex(context: Context): Int =
+        privatePrefs(context).getInt("active_ayah_index", -1)
+
+    fun saveAyahIndex(context: Context, index: Int) {
+        privatePrefs(context).edit { putInt("active_ayah_index", index) }
+    }
+
     // ─────────── Quran Progress ───────────
 
     fun saveQuranProgress(context: Context, payload: QuranProgressPayload) {

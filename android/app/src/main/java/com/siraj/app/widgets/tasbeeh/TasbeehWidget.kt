@@ -105,15 +105,16 @@ class TasbeehWidget : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(R.id.widget_reset, resetPi)
 
-                // Open-app icon → deep-link /tasbeeh
-                val openAppIntent = WidgetDeeplink.toIntent(context, WidgetDeeplink.buildTasbeeh())
+                // Open-app icon & Dhikr Name chip → deep-link /tasbeeh?dhikr=<id>
+                val openAppIntent = WidgetDeeplink.toIntent(context, WidgetDeeplink.buildTasbeeh(state.currentDhikr))
                 val openAppPi = PendingIntent.getActivity(
                     context,
-                    107,
+                    appWidgetId * 10 + 3,
                     openAppIntent,
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
                 views.setOnClickPendingIntent(R.id.widget_open_app, openAppPi)
+                views.setOnClickPendingIntent(R.id.widget_dhikr_name, openAppPi)
 
                 mgr.updateAppWidget(appWidgetId, views)
             } catch (t: Throwable) {

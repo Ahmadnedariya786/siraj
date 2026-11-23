@@ -43,7 +43,7 @@ object HadithBundle {
         return list[index]
     }
 
-    private fun loadAll(context: Context): List<HadithContent> {
+    fun loadAll(context: Context): List<HadithContent> {
         cachedHadiths?.let { return it }
         return try {
             val json = context.assets.open(ASSET_NAME).use { it.readBytes().toString(Charsets.UTF_8) }

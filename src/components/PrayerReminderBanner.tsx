@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Check, VolumeX } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { X, Check, VolumeX, Clock } from 'lucide-react';
 import { NoorDynamicLogo, getSelectedLogoEdition } from '@/components/NoorDynamicLogo';
 import {
   PRAYER_ALARM_CONTROL_EVENT,
@@ -80,6 +81,9 @@ export function triggerInAppPrayerAlert(prayerName: string, time12h?: string) {
 }
 
 export const PrayerReminderBanner: React.FC = () => {
+  const location = useLocation();
+  const isHome = location.pathname === '/' || location.pathname === '/dashboard';
+
   const [isVisible, setIsVisible] = useState(false);
   const [prayerName, setPrayerName] = useState('Fajr');
   const [prayerTime12h, setPrayerTime12h] = useState('05:15 AM');
@@ -94,6 +98,16 @@ export const PrayerReminderBanner: React.FC = () => {
       if (customEvent.detail?.prayerName) {
         const raw = customEvent.detail.prayerName.trim();
         const pName = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+        const pKey = pName.toLowerCase();
+
+        // Check if already dismissed for today
+        const now = new Date();
+        const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const isDismissed = localStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${pKey}`) === 'true' ||
+                            localStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${pName}`) === 'true' ||
+                            sessionStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${pKey}`) === 'true';
+        if (isDismissed) return;
+
         setPrayerName(pName);
         setPrayerTime12h(
           customEvent.detail.prayerTime12h ||
@@ -115,6 +129,16 @@ export const PrayerReminderBanner: React.FC = () => {
         if (customEvent.detail.isPlaying && customEvent.detail.prayerName) {
           const raw = customEvent.detail.prayerName.trim();
           const pName = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+          const pKey = pName.toLowerCase();
+
+          // Check if already dismissed for today
+          const now = new Date();
+          const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const isDismissed = localStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${pKey}`) === 'true' ||
+                              localStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${pName}`) === 'true' ||
+                              sessionStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${pKey}`) === 'true';
+          if (isDismissed) return;
+
           setPrayerName(pName);
           setPrayerTime12h(
             PRAYER_DETAILS[pName]?.default12h ||
@@ -174,7 +198,10 @@ export const PrayerReminderBanner: React.FC = () => {
   const recordModalDismissed = useCallback((pName: string) => {
     const now = new Date();
     const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const pKey = pName.toLowerCase();
     try {
+      sessionStorage.setItem(`noor_hadith_modal_dismissed_${todayIso}_${pKey}`, 'true');
+      localStorage.setItem(`noor_hadith_modal_dismissed_${todayIso}_${pKey}`, 'true');
       sessionStorage.setItem(`noor_hadith_modal_dismissed_${todayIso}_${pName}`, 'true');
       localStorage.setItem(`noor_hadith_modal_dismissed_${todayIso}_${pName}`, 'true');
     } catch {
@@ -187,6 +214,40 @@ export const PrayerReminderBanner: React.FC = () => {
     recordModalDismissed(prayerName);
     setIsVisible(false);
   }, [prayerName, recordModalDismissed]);
+
+  const handleRemind10m = useCallback(async () => {
+    void hapticService.trigger('light');
+    recordModalDismissed(prayerName);
+    setIsVisible(false);
+
+    const now = new Date();
+    const remindAt = new Date(now.getTime() + 10 * 60 * 1000);
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: Math.floor(Math.random() * 100000) + 1000,
+              title: `Prayer Reminder: ${prayerName}`,
+              body: `10 minutes have passed. Time for ${prayerName} prayer.`,
+              schedule: { at: remindAt },
+              sound: 'beep.wav',
+              extra: { prayerName, time12h: prayerTime12h },
+            },
+          ],
+        });
+      } catch (err) {
+        console.warn('LocalNotifications 10m reminder error:', err);
+      }
+    } else {
+      setTimeout(() => {
+        triggerInAppPrayerAlert(prayerName, prayerTime12h);
+      }, 10 * 60 * 1000);
+    }
+
+    toast.success(`Reminder set for 10m (${remindAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`);
+  }, [prayerName, prayerTime12h, recordModalDismissed]);
 
   const handleStopAdhan = useCallback(() => {
     void hapticService.trigger('medium');
@@ -239,7 +300,7 @@ export const PrayerReminderBanner: React.FC = () => {
       aria-live="assertive"
       className="fixed left-0 right-0 z-50 px-3 sm:px-4 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-300"
       style={{
-        top: 'max(env(safe-area-inset-top, 0px) + 10px, 14px)',
+        top: isHome ? 'calc(var(--safe-top, 0px) + 330px)' : 'max(env(safe-area-inset-top, 0px) + 10px, 14px)',
       }}
     >
       <div
@@ -395,12 +456,12 @@ export const PrayerReminderBanner: React.FC = () => {
           </div>
         </div>
 
-        {/* ── ACTION BUTTONS: Mark Prayed & Stop Adhan ── */}
-        <div className="mt-3 flex items-center gap-2">
+        {/* ── ACTION BUTTONS: Mark Prayed, Remind 10m & Stop/Dismiss ── */}
+        <div className="mt-3 flex items-center gap-1.5">
           <button
             type="button"
             onClick={handleMarkPrayed}
-            className="flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+            className="flex-1 py-1.5 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
             style={{
               background: 'var(--accent)',
               color: 'var(--on-accent)',
@@ -410,11 +471,20 @@ export const PrayerReminderBanner: React.FC = () => {
             <span>Mark Prayed</span>
           </button>
 
+          <button
+            type="button"
+            onClick={handleRemind10m}
+            className="py-1.5 px-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1 border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95 transition-all cursor-pointer shrink-0"
+          >
+            <Clock className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+            <span>Remind 10m</span>
+          </button>
+
           {isPlayingAdhan ? (
             <button
               type="button"
               onClick={handleStopAdhan}
-              className="py-1.5 px-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 border active:scale-95 transition-all cursor-pointer"
+              className="py-1.5 px-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1 border active:scale-95 transition-all cursor-pointer shrink-0"
               style={{
                 background: 'var(--surface-2)',
                 borderColor: 'var(--danger, #EF4444)',
@@ -422,13 +492,13 @@ export const PrayerReminderBanner: React.FC = () => {
               }}
             >
               <VolumeX className="w-3.5 h-3.5" />
-              <span>Stop Adhan</span>
+              <span>Stop</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={handleDismiss}
-              className="py-1.5 px-3 rounded-xl font-semibold text-xs border text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all cursor-pointer"
+              className="py-1.5 px-2.5 rounded-xl font-semibold text-xs border text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all cursor-pointer shrink-0"
               style={{
                 background: 'var(--surface-2)',
                 borderColor: 'var(--border)',
