@@ -11,6 +11,7 @@ import {
   subscribeOtaStatus,
   isBannerDismissed,
   dismissBanner,
+  formatReleaseTag,
   type UpdateCheckResult,
   type OtaStatus,
 } from '@/lib/update-checker';
@@ -182,7 +183,10 @@ export const UpdateBanner: React.FC = () => {
 
   // Compute exact non-truncating banner copy (zero truncation at 360px budget)
   let titleText = 'Update available';
-  let subtitleText = `Nightly v${(updateInfo.release?.tagName || '').replace(/^v/, '') || APP_VERSION || '2.3.0'}`;
+  let subtitleText = formatReleaseTag(
+    updateInfo.release?.tagName || APP_VERSION,
+    updateInfo.release?.commitSha
+  );
 
   if (isConnecting) {
     titleText = 'Connecting...';

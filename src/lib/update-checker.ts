@@ -193,17 +193,40 @@ interface StoredCache {
 }
 
 /**
+ * Normalize commit SHA safely (supports 7-40 character SHAs, filters out unknown/dev).
+ */
+export function normalizeSha(sha?: string | null): string {
+  if (!sha || typeof sha !== 'string') return '';
+  const clean = sha.trim().toLowerCase();
+  if (clean === 'unknown' || clean === 'dev' || clean.length < 4) return '';
+  return clean.slice(0, 7);
+}
+
+/**
+ * Format release tag nicely:
+ * - 'nightly' + sha -> 'Nightly • 4c41931'
+ * - 'nightly' without sha -> 'Nightly'
+ * - 'v3.0.1' -> 'v3.0.1'
+ * - '3.0.1' -> 'v3.0.1'
+ */
+export function formatReleaseTag(tagName?: string | null, sha?: string | null): string {
+  const tag = (tagName || '').trim();
+  const cleanSha = normalizeSha(sha);
+  if (!tag || tag.toLowerCase() === 'nightly') {
+    return cleanSha ? `Nightly • ${cleanSha}` : 'Nightly';
+  }
+  const stripped = tag.replace(/^v+/i, '');
+  return `v${stripped}`;
+}
+
+/**
  * Compare two commit SHAs safely (supports 7-character short SHAs and 40-character full SHAs).
  */
 export function isSameCommit(shaA?: string | null, shaB?: string | null): boolean {
-  if (!shaA || !shaB) return false;
-  const a = shaA.trim().toLowerCase();
-  const b = shaB.trim().toLowerCase();
-  if (a === 'unknown' || b === 'unknown' || a.length < 7 || b.length < 7) {
-    return false;
-  }
-  if (a === b) return true;
-  return a.startsWith(b) || b.startsWith(a);
+  const a = normalizeSha(shaA);
+  const b = normalizeSha(shaB);
+  if (!a || !b) return false;
+  return a === b;
 }
 
 /**
@@ -275,11 +298,14 @@ export function extractCommitFromRelease(body?: string | null, targetCommitish?:
 
 /**
  * Evaluates whether an update is available according to strict SHA-first comparison rules:
- * (1) Read SHA from release body:
- *     - If EQUAL to installedCommit -> "Up to date" (false)
- *     - If DIFFERENT -> "Update available" (true)
- * (2) Only when SHA is missing, fall back to asset uploaded_at vs installedBuildTime
- *     with a 10-minute grace window so the same commit's own upload never counts as an update.
+ * Rule A (Both SHAs Available — Primary Truth):
+ *   - If installedSha === latestSha -> ALWAYS return false ("Up to date")!
+ *     NEVER fall through to assetUpdatedAt > buildAt when commit SHAs match.
+ *   - If installedSha !== latestSha:
+ *     - If latestAssetMs + 60_000 < installedBuildMs -> return false (guard against dev build downgrade loop)
+ *     - Otherwise return true ("Update available")
+ * Rule B (Fallback ONLY when either SHA is missing):
+ *   - Requires latestAssetMs > installedBuildMs + 15 minutes (CI compile+upload buffer).
  */
 export function isUpdateAvailable(
   release: {
@@ -300,42 +326,49 @@ export function isUpdateAvailable(
     return false;
   }
 
-  const installedCommit = (local.commitSha || BUILD_COMMIT)?.trim();
+  const installedCommit = local.commitSha || BUILD_COMMIT;
   const installedBuildTime = local.buildTime || BUILD_TIME;
   const latestAssetUploadedAt = release.latestAssetUploadedAt || release.publishedAt || null;
-  const remoteCommit = release.commitSha?.trim();
 
-  // STEP 2 Comparison Rules:
-  // (1) Compare latest.commitSha vs installed.commitSha AND latest.assetUpdatedAt vs installed.buildAt.
-  // (2) If (latest.commitSha && installed.commitSha && latest.commitSha !== installed.commitSha) OR (latest.assetUpdatedAt > installed.buildAt)
-  //     -> Status MUST be "Update available" (true).
-  // (3) Only show "Up to date" (false) when SHA matches (or latest asset is not newer).
-  const hasValidRemoteSha = Boolean(remoteCommit && remoteCommit.toLowerCase() !== 'unknown' && remoteCommit.length >= 7);
-  const hasValidInstalledSha = Boolean(installedCommit && installedCommit.toLowerCase() !== 'unknown' && installedCommit.length >= 7);
-
-  let shaDiffers = false;
-  if (hasValidRemoteSha && hasValidInstalledSha) {
-    shaDiffers = !isSameCommit(remoteCommit, installedCommit);
-  }
+  const installedSha = normalizeSha(installedCommit);
+  const latestSha = normalizeSha(release.commitSha);
 
   const assetDate = latestAssetUploadedAt ? new Date(latestAssetUploadedAt) : null;
   const appBuildDate = installedBuildTime ? new Date(installedBuildTime) : null;
-  const assetTimeMs = assetDate && !isNaN(assetDate.getTime()) ? assetDate.getTime() : 0;
-  const appBuildTimeMs = appBuildDate && !isNaN(appBuildDate.getTime()) ? appBuildDate.getTime() : 0;
+  const latestAssetMs = assetDate && !isNaN(assetDate.getTime()) ? assetDate.getTime() : 0;
+  const installedBuildMs = appBuildDate && !isNaN(appBuildDate.getTime()) ? appBuildDate.getTime() : 0;
 
-  const assetIsNewer = Boolean(assetTimeMs > 0 && appBuildTimeMs > 0 && assetTimeMs > appBuildTimeMs);
+  let isAvailable = false;
 
-  const isAvailable = shaDiffers || assetIsNewer;
+  // Rule A (Both SHAs Available — Primary Truth):
+  if (installedSha && latestSha) {
+    if (installedSha === latestSha) {
+      // Identical commit SHA => Always Up to date! Never fall through to timestamp comparison!
+      isAvailable = false;
+    } else {
+      // Different SHA: guard against local dev build being newer than remote release
+      if (latestAssetMs > 0 && installedBuildMs > 0 && latestAssetMs + 60_000 < installedBuildMs) {
+        isAvailable = false;
+      } else {
+        isAvailable = true;
+      }
+    }
+  } else {
+    // Rule B (Fallback ONLY When Either SHA Missing):
+    // 15-minute buffer so CI compile+upload can never self-trigger an infinite loop
+    const CI_UPLOAD_BUFFER_MS = 15 * 60 * 1000;
+    if (latestAssetMs > 0 && installedBuildMs > 0) {
+      isAvailable = latestAssetMs > (installedBuildMs + CI_UPLOAD_BUFFER_MS);
+    } else {
+      isAvailable = false;
+    }
+  }
 
   console.log('[UpdateChecker] Comparison result:', {
-    hasValidRemoteSha,
-    hasValidInstalledSha,
-    shaDiffers,
-    assetIsNewer,
-    installedCommit,
-    remoteCommit: remoteCommit || 'none',
-    installedBuildTime,
-    latestAssetUploadedAt,
+    installedSha,
+    latestSha,
+    installedBuildMs,
+    latestAssetMs,
     isUpdateAvailable: isAvailable,
   });
 
@@ -975,9 +1008,8 @@ export function formatDateTime(isoString?: string | null): string {
  * Format commit hash for display (short 7-char hash).
  */
 export function formatCommit(sha?: string | null): string {
-  if (!sha || sha.toLowerCase() === 'unknown') return 'unknown';
-  const trimmed = sha.trim();
-  return trimmed.length > 7 ? trimmed.slice(0, 7) : trimmed;
+  const norm = normalizeSha(sha);
+  return norm || 'unknown';
 }
 
 /**

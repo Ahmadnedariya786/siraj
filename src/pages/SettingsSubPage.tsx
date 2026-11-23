@@ -82,6 +82,7 @@ import {
   formatReleaseDate,
   formatDateTime,
   formatCommit,
+  formatReleaseTag,
   formatUpdateError,
   getOtaLogTail,
   clearOtaLogs,
@@ -2132,7 +2133,7 @@ const SettingsSubPage: React.FC = () => {
               {/* Download update button or live progress bar when update is available */}
               {updateResult?.hasUpdate && updateResult.release && (
                 <div className="flex flex-col p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 gap-2.5">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div className="space-y-0.5 min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
@@ -2174,14 +2175,17 @@ const SettingsSubPage: React.FC = () => {
                           ? 'Tap Retry to resume'
                           : otaStatus.state === 'error'
                           ? 'Retry or use Browser'
-                          : `Nightly v${(updateResult.release.tagName || '').replace(/^v/, '') || '2.3.0'}`}
+                          : formatReleaseTag(
+                              updateResult.release.tagName,
+                              updateResult.release.commitSha
+                            )}
                       </p>
                     </div>
 
                     {otaStatus.state === 'installing' || otaStatus.state === 'verifying' ? (
                       <Button
                         size="sm"
-                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0"
+                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0 w-full sm:w-auto"
                         style={{
                           background: 'var(--accent)',
                           color: 'var(--on-accent)',
@@ -2194,7 +2198,7 @@ const SettingsSubPage: React.FC = () => {
                     ) : otaStatus.state === 'permission_required' ? (
                       <Button
                         size="sm"
-                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0"
+                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0 w-full sm:w-auto"
                         style={{
                           background: 'var(--warning)',
                           color: '#000000',
@@ -2204,7 +2208,7 @@ const SettingsSubPage: React.FC = () => {
                         Allow
                       </Button>
                     ) : otaStatus.state === 'downloading' || otaStatus.state === 'connecting' ? (
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center justify-end gap-1.5 shrink-0 w-full sm:w-auto">
                         <div
                           className="px-2 py-0.5 rounded-lg text-xs font-mono font-bold"
                           style={{
@@ -2230,7 +2234,7 @@ const SettingsSubPage: React.FC = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0"
+                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0 w-full sm:w-auto"
                         onClick={() => downloadAndInstallUpdate(updateResult.release?.apkUrl, updateResult.expectedBytes || updateResult.release?.expectedBytes)}
                       >
                         <RefreshCw className="w-3.5 h-3.5 mr-1" />
@@ -2239,7 +2243,7 @@ const SettingsSubPage: React.FC = () => {
                     ) : (
                       <Button
                         size="sm"
-                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0"
+                        className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0 w-full sm:w-auto"
                         style={{
                           background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)',
                           color: 'var(--on-accent)',
