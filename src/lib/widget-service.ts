@@ -200,13 +200,9 @@ export function buildPrayerPayload(
     const activePreset = ACCENT_PRESETS[styleConfig.accentPreset] || ACCENT_PRESETS.ivory;
     const themeHex = getActiveThemeHex();
 
-        // Real-Time Makruh Windows Evaluation
+        // Real-Time Makruh Windows Evaluation (Single Source of Truth via schedule)
     const makruhState = evaluateMakruhState(
-      {
-        Sunrise: schedule.sunrise,
-        Dhuhr: dhuhrItem?.startTime,
-        Maghrib: maghribItem?.startTime,
-      },
+      schedule,
       now,
       is24h ? '24h' : '12h'
     );

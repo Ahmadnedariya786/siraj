@@ -210,7 +210,7 @@ export const WeeklySalahChart = memo(function WeeklySalahChart() {
         <div className="flex items-center justify-center gap-4 mt-3 text-xs font-semibold tracking-wider text-[var(--text-secondary)]">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--accent)' }} />
-            <span>5/5</span>
+            <span>More</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }} />

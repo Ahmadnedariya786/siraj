@@ -508,7 +508,7 @@ export default function PrayerStats() {
                 />
                 <span className="w-2.5 h-2.5 rounded-[2px] bg-[var(--accent)]" />
                 <span dir="ltr" style={{ direction: 'ltr', unicodeBidi: 'isolate' }} className="tabular-nums font-mono">
-                  5/5
+                  More
                 </span>
               </div>
             </div>

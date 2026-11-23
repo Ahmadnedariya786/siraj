@@ -225,7 +225,7 @@ export const translations = {
         notificationHistoryDesc: "View and manage your notification history from prayer times, Ramadan countdowns, and Islamic events."
     },
     ar: {
-        appTitle: "نور كونيكت",
+        appTitle: "سِراج",
         // Navigation
         home: "الرئيسية",
         quran: "القرآن",
@@ -282,7 +282,7 @@ export const translations = {
         audioSettings: "إعدادات الصوت",
         storageBackup: "التخزين والنسخ الاحتياطي",
         contactSupport: "الاتصال والدعم",
-        about: "عن نور كونيكت",
+        about: "عن سِراج",
 
         // Misc
         loading: "جاري التحميل",

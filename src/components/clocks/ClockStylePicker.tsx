@@ -110,7 +110,7 @@ export const ClockStylePicker: React.FC<ClockStylePickerProps> = ({
                   >
                     {style.name}
                   </h3>
-                  <p className="text-[10px] text-[var(--text-secondary)] line-clamp-1 truncate">
+                  <p className="text-[10px] text-[var(--text-secondary)] leading-tight break-words">
                     {style.subtitle}
                   </p>
                 </div>

@@ -357,7 +357,7 @@ const WIDGET_I18N: Record<string, Partial<WidgetCustomizerI18n>> = {
     applyButton: 'تطبيق وتحديث العناصر',
     syncedToastTitle: 'تم تحديث العناصر',
     syncedToastDesc: 'تمت مزامنة عناصر الشاشة الرئيسية بنجاح.',
-    howToAddTitle: 'طريقة إضافة عناصر نور كونكت إلى الشاشة الرئيسية',
+    howToAddTitle: 'طريقة إضافة عناصر سِراج إلى الشاشة الرئيسية',
     howToAddStep1: 'اضغط مطولاً على أي مساحة فارغة في شاشتك الرئيسية.',
     howToAddStep2: 'اضغط على "عناصر واجهة المستخدم" (Widgets).',
     howToAddStep3: 'ابحث عن تطبيق "Siraj".',

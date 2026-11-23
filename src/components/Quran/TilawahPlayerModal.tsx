@@ -145,7 +145,7 @@ export const TilawahPlayerModal: React.FC<TilawahPlayerModalProps> = ({
               className="text-xs font-bold uppercase tracking-widest"
               style={{ color: 'var(--accent-text)' }}
             >
-              🎧 Noor Tilawah
+              🎧 Siraj Tilawah
             </span>
           </div>
           <button

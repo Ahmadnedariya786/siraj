@@ -208,9 +208,10 @@ export const togglePrayer = (prayer: PrayerName, prayerTimes?: Record<string, { 
   saveAllDays(newDays);
   updateStreak();
 
+  const titlePrayer = prayer.charAt(0).toUpperCase() + prayer.slice(1);
   return {
     success: true,
-    message: willBeCompleted ? `${prayer} marked as completed!` : `${prayer} unchecked`,
+    message: willBeCompleted ? `${titlePrayer} marked as completed!` : `${titlePrayer} unchecked`,
     completed: willBeCompleted,
   };
 };

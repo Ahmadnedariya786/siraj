@@ -228,7 +228,7 @@ export const MosqueLedClock: React.FC<ClockProps> = ({
                   boxShadow: '0 0 6px var(--accent-glow)',
                 }}
               />
-              <span className={cn(isStaticPreview ? "whitespace-nowrap" : "truncate")}>
+              <span className={cn(isStaticPreview ? "whitespace-nowrap" : "line-clamp-2 leading-tight break-words")}>
                 {prayerName}
               </span>
             </div>

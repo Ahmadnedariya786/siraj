@@ -483,7 +483,7 @@ export const WidgetSettings: React.FC = () => {
                       className="font-arabic font-bold text-lg leading-none shrink-0"
                       style={{ color: activePreset.accentHex }}
                     >
-                      نور
+                      سِرَاج
                     </span>
                     <span className="opacity-40 text-xs shrink-0">·</span>
                     <span

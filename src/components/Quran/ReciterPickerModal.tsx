@@ -91,7 +91,7 @@ export const ReciterPickerModal: React.FC<ReciterPickerModalProps> = ({
                   className="tracking-tight text-[var(--text-primary)]"
                   style={{ fontSize: '0.92rem', fontWeight: 800, whiteSpace: 'nowrap' }}
                 >
-                  47 Authentic Reciters
+                  47 EveryAyah reciters
                 </h2>
                 <span
                   className="uppercase bg-[var(--accent)]/15 text-[var(--accent-text)] border border-[var(--accent)]/30"

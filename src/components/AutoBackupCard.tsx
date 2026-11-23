@@ -328,7 +328,7 @@ export function AutoBackupCard() {
         {/* Description */}
         <p className="text-xs text-muted-foreground leading-relaxed">
           {t('backupStatusLine') ||
-            'Saved on this device. Also save a file to Google Drive to protect against phone loss.'}
+            "Use 'Save backup…' to export a file to Google Drive or any folder."}
         </p>
 
         {/* Primary CTA */}
@@ -385,7 +385,7 @@ export function AutoBackupCard() {
             ) : (
               <Download className="w-3.5 h-3.5 shrink-0 transition-transform duration-200 group-hover:-translate-y-0.5" />
             )}
-            <span className="truncate">{t('backupToDrive') || 'Save to Drive'}</span>
+            <span className="truncate">{t('backupToDrive') || 'Save backup…'}</span>
           </button>
 
           <input

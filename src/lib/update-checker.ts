@@ -300,43 +300,38 @@ export function isUpdateAvailable(
     return false;
   }
 
-  const installedCommit = local.commitSha || BUILD_COMMIT;
+  const installedCommit = (local.commitSha || BUILD_COMMIT)?.trim();
   const installedBuildTime = local.buildTime || BUILD_TIME;
   const latestAssetUploadedAt = release.latestAssetUploadedAt || release.publishedAt || null;
   const remoteCommit = release.commitSha?.trim();
 
-  let isAvailable = false;
-  let comparisonOrder = 'none';
-
-  // STEP 2 Comparison Order:
-  // (1) Read SHA from release body:
-  //     If EQUAL to VITE_BUILD_COMMIT -> show "Up to date" (false)
-  //     If DIFFERENT -> show "Update available" (true)
+  // STEP 2 Comparison Rules:
+  // (1) Compare latest.commitSha vs installed.commitSha AND latest.assetUpdatedAt vs installed.buildAt.
+  // (2) If (latest.commitSha && installed.commitSha && latest.commitSha !== installed.commitSha) OR (latest.assetUpdatedAt > installed.buildAt)
+  //     -> Status MUST be "Update available" (true).
+  // (3) Only show "Up to date" (false) when SHA matches (or latest asset is not newer).
   const hasValidRemoteSha = Boolean(remoteCommit && remoteCommit.toLowerCase() !== 'unknown' && remoteCommit.length >= 7);
   const hasValidInstalledSha = Boolean(installedCommit && installedCommit.toLowerCase() !== 'unknown' && installedCommit.length >= 7);
 
+  let shaDiffers = false;
   if (hasValidRemoteSha && hasValidInstalledSha) {
-    comparisonOrder = 'sha_comparison';
-    const isSame = isSameCommit(remoteCommit, installedCommit);
-    isAvailable = !isSame;
-  } else {
-    // (2) Only when SHA is missing, fall back to asset uploaded_at vs VITE_BUILD_TIME with a 10-minute grace window
-    comparisonOrder = 'timestamp_fallback_10m_grace';
-    const assetDate = latestAssetUploadedAt ? new Date(latestAssetUploadedAt) : null;
-    const appBuildDate = installedBuildTime ? new Date(installedBuildTime) : null;
-    const assetTimeMs = assetDate && !isNaN(assetDate.getTime()) ? assetDate.getTime() : 0;
-    const appBuildTimeMs = appBuildDate && !isNaN(appBuildDate.getTime()) ? appBuildDate.getTime() : 0;
-
-    if (assetTimeMs > 0 && appBuildTimeMs > 0) {
-      // 10-minute grace window (600,000 ms) so the same commit's own upload never counts as an update
-      isAvailable = (assetTimeMs - appBuildTimeMs) > 10 * 60 * 1000;
-    } else {
-      isAvailable = false;
-    }
+    shaDiffers = !isSameCommit(remoteCommit, installedCommit);
   }
 
+  const assetDate = latestAssetUploadedAt ? new Date(latestAssetUploadedAt) : null;
+  const appBuildDate = installedBuildTime ? new Date(installedBuildTime) : null;
+  const assetTimeMs = assetDate && !isNaN(assetDate.getTime()) ? assetDate.getTime() : 0;
+  const appBuildTimeMs = appBuildDate && !isNaN(appBuildDate.getTime()) ? appBuildDate.getTime() : 0;
+
+  const assetIsNewer = Boolean(assetTimeMs > 0 && appBuildTimeMs > 0 && assetTimeMs > appBuildTimeMs);
+
+  const isAvailable = shaDiffers || assetIsNewer;
+
   console.log('[UpdateChecker] Comparison result:', {
-    comparisonOrder,
+    hasValidRemoteSha,
+    hasValidInstalledSha,
+    shaDiffers,
+    assetIsNewer,
     installedCommit,
     remoteCommit: remoteCommit || 'none',
     installedBuildTime,
@@ -350,7 +345,7 @@ export function isUpdateAvailable(
 /**
  * Read cached check result from localStorage.
  */
-function readCache(): StoredCache | null {
+export function readCache(): StoredCache | null {
   try {
     const raw = localStorage.getItem(UPDATE_CHECK_CACHE_KEY) || localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -359,6 +354,35 @@ function readCache(): StoredCache | null {
     // Handled localStorage read fallback
     return null;
   }
+}
+
+/**
+ * Read cached update information safely for Deep X-Ray Diagnostics
+ */
+export function getCachedUpdateInfo(): {
+  installedSha: string;
+  installedBuildTime: string;
+  latestSha: string;
+  latestAssetUploadedAt: string;
+  status: string;
+} {
+  const currentBuildCommit = BUILD_COMMIT;
+  const currentBuildTime = BUILD_TIME;
+  const cached = readCache();
+  const release = cached?.release;
+  const latestSha = release?.commitSha || 'unknown';
+  const latestAssetUploadedAt = release?.latestAssetUploadedAt || release?.publishedAt || 'unknown';
+  const hasUpdate = release
+    ? isUpdateAvailable(release, { commitSha: currentBuildCommit, buildTime: currentBuildTime })
+    : false;
+
+  return {
+    installedSha: currentBuildCommit,
+    installedBuildTime: currentBuildTime,
+    latestSha,
+    latestAssetUploadedAt,
+    status: hasUpdate ? 'Update available' : (release ? 'Up to date' : 'Not checked'),
+  };
 }
 
 /**
@@ -601,7 +625,7 @@ async function fetchFromGitHubReleasesApi(signal: AbortSignal, isManualCheck = f
     if ((err as { name?: string })?.name === 'AbortError') throw err;
     const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
     const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
-    if (!isManualCheck && (isOffline || isNetworkErr)) {
+    if (!isManualCheck) {
       console.debug('[UpdateChecker] GitHub Releases API offline/unreachable (background check):', err);
     } else {
       console.warn('[UpdateChecker] GitHub Releases API fetch failed:', err);
@@ -657,7 +681,7 @@ async function fetchCommitFromAtomFeed(signal: AbortSignal, isManualCheck = fals
       if ((err as { name?: string })?.name === 'AbortError') throw err;
       const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
       const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
-      if (!isManualCheck && (isOffline || isNetworkErr)) {
+      if (!isManualCheck) {
         console.debug(`[UpdateChecker] Atom feed offline/unreachable for ${url}:`, err);
       } else {
         console.warn(`[UpdateChecker] Atom feed fetch failed for ${url}:`, err);
@@ -714,7 +738,7 @@ async function fetchCommitFromVersionManifest(signal: AbortSignal, isManualCheck
       if ((err as { name?: string })?.name === 'AbortError') throw err;
       const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
       const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
-      if (!isManualCheck && (isOffline || isNetworkErr)) {
+      if (!isManualCheck) {
         console.debug(`[UpdateChecker] Version manifest offline/unreachable for ${url}:`, err);
       } else {
         console.warn(`[UpdateChecker] Version manifest fetch failed for ${url}:`, err);
@@ -877,7 +901,7 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
   } catch (err: unknown) {
     const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
     const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
-    if (!force && (isOffline || isNetworkErr)) {
+    if (!force) {
       console.debug('[UpdateChecker] Background check aborted silently (offline or network error):', err);
     } else {
       console.warn('[UpdateChecker] Check failed:', err);

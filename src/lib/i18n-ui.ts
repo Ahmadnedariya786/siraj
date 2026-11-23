@@ -296,7 +296,7 @@ const UI_DICTIONARIES: Record<LanguageCode, AppUIStrings> = {
     qazaTracker: 'Qaza Tracker',
     qazaTrackerSub: 'Missed prayer makeup',
     quranAudio: 'Quran Audio',
-    quranAudioSub: '289 reciters & HD audio',
+    quranAudioSub: '289 reciters (MP3Quran) • HD audio',
     nasheeds: 'Nasheeds',
     nasheedsSub: '400 vocals-only tracks',
     liveMecca: 'Live Mecca',
@@ -431,7 +431,7 @@ const UI_DICTIONARIES: Record<LanguageCode, AppUIStrings> = {
 
   ar: {
     settings: 'الإعدادات',
-    settingsSubtitle: 'نور كونكت • مركز التحكم',
+    settingsSubtitle: 'سِراج • مركز التحكم',
     performanceOptimized: 'أداء فائق السرعة',
     islamicMobileExp: 'تجربة إسلامية متكاملة',
     heroDesc: 'اضبط تنبيهات الصلاة، الثيمات، والإشعارات بسلاسة تامة.',

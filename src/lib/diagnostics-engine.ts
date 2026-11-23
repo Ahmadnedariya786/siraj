@@ -24,6 +24,7 @@ import {
   healPermissionOnboardingFlags,
 } from '@/lib/onboarding-permissions';
 import { getOtaLogTail } from '@/lib/app-updater';
+import { getCachedUpdateInfo } from '@/lib/update-checker';
 
 export type DiagnosticCategory =
   | 'REACT_CRASH'
@@ -1546,9 +1547,15 @@ export async function generateAiDiagnosticReport(existingScan?: DeepHealthScanRe
     md += `\n`;
   }
 
+  const otaInfo = getCachedUpdateInfo();
   const otaLogs = getOtaLogTail(50);
   md += `---\n\n`;
-  md += `## 4. IN-APP OTA UPDATE ENGINE EVENT LOG (${otaLogs.length} EVENTS)\n\n`;
+  md += `## 4. IN-APP OTA UPDATE ENGINE & SUBSYSTEM REPORT (${otaLogs.length} EVENTS)\n\n`;
+  md += `- **Installed SHA:** \`${otaInfo.installedSha !== 'unknown' ? otaInfo.installedSha.slice(0, 7) : 'dev'}\` (${otaInfo.installedSha})\n`;
+  md += `- **Installed Built At:** ${otaInfo.installedBuildTime}\n`;
+  md += `- **Latest SHA:** \`${otaInfo.latestSha !== 'unknown' ? otaInfo.latestSha.slice(0, 7) : 'unknown'}\` (${otaInfo.latestSha})\n`;
+  md += `- **Latest Asset Uploaded At:** ${otaInfo.latestAssetUploadedAt}\n`;
+  md += `- **OTA Subsystem Status:** **${otaInfo.status}**\n\n`;
 
   if (otaLogs.length === 0) {
     md += `*No OTA update events recorded in buffer.*\n\n`;

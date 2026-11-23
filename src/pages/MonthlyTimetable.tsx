@@ -786,12 +786,9 @@ export default function MonthlyTimetable() {
                   {monthName} {currentYear}
                 </h2>
                 <p
-                  className="font-medium text-[var(--accent-text)] print:text-gray-600 truncate"
+                  className="font-medium text-[var(--accent-text)] print:text-gray-600 line-clamp-2 leading-tight break-words"
                   style={{
                     fontSize: '0.65rem',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
                     marginTop: '2px',
                   }}
                   title={hijriMonthSpan}

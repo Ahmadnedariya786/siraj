@@ -253,7 +253,7 @@ export const DigitalBoldClock: React.FC<ClockProps> = ({
                 background: 'var(--accent)',
               }}
             />
-            <span className={cn(isStaticPreview ? "whitespace-nowrap" : "truncate max-w-[120px] sm:max-w-none")}>
+            <span className={cn(isStaticPreview ? "whitespace-nowrap" : "line-clamp-2 leading-tight break-words")}>
               {prayerName}
             </span>
             {countdownText && (

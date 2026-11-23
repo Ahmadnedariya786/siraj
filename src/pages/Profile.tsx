@@ -180,7 +180,7 @@ function getSettingsGroups(ui: any): SettingsGroup[] {
     {
       id: 'about',
       title: ui.trustGroup,
-      badge: ui.badgeSiraj || ui.badgeNoor || 'Siraj',
+      badge: ui.badgeSiraj || 'Siraj',
       rows: [
         {
           id: 'about',

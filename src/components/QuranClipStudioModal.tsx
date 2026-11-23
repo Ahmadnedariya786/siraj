@@ -1425,7 +1425,14 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
               </span>
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
+            <div
+              className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none"
+              style={{
+                WebkitMaskImage: 'linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent)',
+                maskImage: 'linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent)',
+                scrollBehavior: 'smooth',
+              }}
+            >
               {SCENE_DEFINITIONS.map((scene) => {
                 const isSel = scene.id === sceneId;
                 return (

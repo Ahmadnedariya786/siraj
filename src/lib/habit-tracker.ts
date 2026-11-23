@@ -77,7 +77,7 @@ export const DEFAULT_HABITS: Habit[] = [
   {
     id: 'charity',
     name: 'Give Charity',
-    description: 'Give sadaqah or help someone',
+    description: 'Give daily sadaqah',
     category: 'charity',
     icon: '💝',
     color: 'bg-pink-500'

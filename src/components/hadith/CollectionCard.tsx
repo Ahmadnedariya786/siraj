@@ -39,7 +39,7 @@ export function CollectionCard({ collection, onClick }: CollectionCardProps) {
               <BookIcon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-base sm:text-lg text-foreground group-hover:text-primary transition-colors truncate">
+              <h3 className="font-bold text-base sm:text-lg text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-tight break-words">
                 {collection.title}
               </h3>
               <p className="text-xs sm:text-sm text-muted-foreground font-arabic truncate" dir="rtl">

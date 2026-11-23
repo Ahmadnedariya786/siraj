@@ -377,7 +377,7 @@ export function GlobalNasheedPlayer() {
         navigator.mediaSession.metadata = new MediaMetadata({
             title: currentTrack.title,
             artist: currentTrack.artist,
-            album: 'Noor Nasheed Player',
+            album: 'Siraj Nasheed Player',
             artwork: [{ src: '/icon-192x192.png', sizes: '192x192', type: 'image/png' }]
         });
         navigator.mediaSession.setActionHandler('play', resume);

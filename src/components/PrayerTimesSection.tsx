@@ -597,7 +597,7 @@ export const PrayerTimesSectionComponent: React.FC<PrayerTimesSectionProps> = ({
 
       // Candidate 3: Makruh windows start and end
       try {
-        const currentMakruh = evaluateMakruhState(displayedPrayers, currentDate, tf);
+        const currentMakruh = evaluateMakruhState(fullSchedule || displayedPrayers, currentDate, tf);
         if (currentMakruh?.activeWindow?.end instanceof Date && !isNaN(currentMakruh.activeWindow.end.getTime())) {
           candidates.push(currentMakruh.activeWindow.end.getTime() + 50);
         }
@@ -684,11 +684,24 @@ export const PrayerTimesSectionComponent: React.FC<PrayerTimesSectionProps> = ({
 
   const makruhState = useMemo(() => {
     return evaluateMakruhState(
-      displayedPrayers,
+      fullSchedule || displayedPrayers,
       now,
       timeFormat === '24' || timeFormat === '24h' ? '24h' : '12h'
     );
-  }, [displayedPrayers, now, timeFormat]);
+  }, [fullSchedule, displayedPrayers, now, timeFormat]);
+
+  // Dev-only invariant guard: Verify active Sunset Makruh window === Reference Schedule Sunset Makruh window (0-minute mismatch guaranteed)
+  if (process.env.NODE_ENV !== 'production' && fullSchedule) {
+    const activeGhurub = makruhState.allWindows.find((w) => w.id === 'ghurub');
+    const refSunset = fullSchedule.makruhWindows.find((w) => w.id === 'sunset');
+    if (activeGhurub && refSunset) {
+      console.assert(
+        Math.abs(activeGhurub.start.getTime() - refSunset.start.getTime()) < 1000 &&
+        Math.abs(activeGhurub.end.getTime() - refSunset.end.getTime()) < 1000,
+        `[Makruh Invariant Guard] Sunset Makruh mismatch! Active: ${activeGhurub.startFormatted}-${activeGhurub.endFormatted}, Ref: ${refSunset.startFormatted}-${refSunset.endFormatted}`
+      );
+    }
+  }
 
   const isMakruhActive = Boolean(
     selectedDateOffset === 0 && makruhState.isMakruhNow && makruhState.activeWindow
@@ -1963,6 +1976,11 @@ export const PrayerTimesSectionComponent: React.FC<PrayerTimesSectionProps> = ({
                           </span>
                         </div>
                       ))}
+                      {fullSchedule.maghribIhtiyatMin > 0 && (
+                        <p className="text-[10.5px] text-[var(--text-secondary)] italic mt-2 px-1 leading-snug">
+                          * Maghrib Awwal includes your active +{fullSchedule.maghribIhtiyatMin}m Ihtiyat precaution after Sunset.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

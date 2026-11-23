@@ -12,6 +12,8 @@
  * blinking indicators and instantly auto-dismisses the exact second the window terminates.
  */
 
+import { computeMakruhWindows } from './prayer-times';
+
 export type MakruhWindowId = 'tulu' | 'zawal' | 'ghurub';
 export type MakruhRelatedRow = 'Sunrise' | 'Dhuhr' | 'Maghrib';
 
@@ -135,8 +137,9 @@ function createDateFromSeconds(baseDate: Date, seconds: number): Date {
 
 /**
  * Core Real-Time Evaluator for Makruh Prayer Windows.
+ * Consumes the single source of truth pure function `computeMakruhWindows`.
  *
- * @param prayerInput - Daily timings object or PrayerItem array
+ * @param prayerInput - Daily timings object, FullPrayerSchedule, or PrayerItem array
  * @param nowDate - Current time (defaults to new Date())
  * @param timeFormat - '12h' or '24h' for label formatting
  * @returns MakruhState containing real-time status, active window, and formatted countdown
@@ -146,36 +149,7 @@ export function evaluateMakruhState(
   nowDate: Date = new Date(),
   timeFormat: '12h' | '24h' = '12h'
 ): MakruhState {
-  let sunriseVal: string | Date | undefined;
-  let dhuhrVal: string | Date | undefined;
-  let maghribVal: string | Date | undefined;
-
-  if (Array.isArray(prayerInput)) {
-    for (const item of prayerInput) {
-      const lower = (item.originalName || item.name || '').toLowerCase();
-      if (lower === 'sunrise') sunriseVal = item.date || item.time;
-      if (lower === 'dhuhr' || lower === 'jummah') dhuhrVal = item.date || item.time;
-      if (lower === 'maghrib') maghribVal = item.date || item.time;
-    }
-  } else if (prayerInput && typeof prayerInput === 'object') {
-    sunriseVal = prayerInput.Sunrise || prayerInput.sunrise;
-    dhuhrVal = prayerInput.Dhuhr || prayerInput.dhuhr;
-    maghribVal = prayerInput.Maghrib || prayerInput.maghrib;
-  }
-
-  // Strict validation: eliminate startup '--:--' / missing prayer time false Makruh calculation
-  const isValidTimeValue = (val: unknown): boolean => {
-    if (!val) return false;
-    if (val instanceof Date) return !isNaN(val.getTime());
-    if (typeof val === 'string') {
-      const trimmed = val.replace(/\s*\([^)]*\)\s*/g, '').trim();
-      if (!trimmed || trimmed.includes('--')) return false;
-      return /^\d{1,2}:\d{2}/.test(trimmed);
-    }
-    return false;
-  };
-
-  if (!isValidTimeValue(sunriseVal) || !isValidTimeValue(dhuhrVal) || !isValidTimeValue(maghribVal)) {
+  if (!prayerInput) {
     return {
       isMakruhNow: false,
       activeWindow: null,
@@ -185,86 +159,39 @@ export function evaluateMakruhState(
     };
   }
 
-  const sunriseSec = parseTimeToSeconds(sunriseVal);
-  const dhuhrSec = parseTimeToSeconds(dhuhrVal);
-  const maghribSec = parseTimeToSeconds(maghribVal);
+  const is24h = timeFormat === '24h';
+  const computed = computeMakruhWindows(prayerInput, {
+    is24h,
+    baseDate: nowDate,
+  });
 
-  const windows: MakruhWindowInfo[] = [];
-
-  // Window 1: Sunrise (Tulu' al-Shams) -> [Sunrise, Sunrise + 20 min)
-  if (sunriseSec !== null) {
-    const startSec = sunriseSec;
-    const endSec = sunriseSec + 20 * 60;
-    windows.push({
-      id: 'tulu',
-      title: "Sunrise (Tulu')",
-      titleUrdu: 'طلوعِ آفتاب (مکروہ وقت)',
-      arabicTitle: 'طلوع الشمس',
-      shortLabel: 'Sunrise',
-      hadithRef: 'Sahih Muslim 831',
-      ruling:
-        'During Sunrise until 20 minutes after, all Salah (Fard, Sunnah, Nafl) and Sajdah at-Tilawat are strictly prohibited (Makruh Tahrimi).',
-      rulingUrdu:
-        'طلوعِ آفتاب کے وقت سے لے کر 20 منٹ تک ہر قسم کی نماز (فرض، سنت و نفل) اور سجدۂ تلاوت پڑھنا ممنوع و مکروہِ تحریمی ہے۔',
-      start: createDateFromSeconds(nowDate, startSec),
-      end: createDateFromSeconds(nowDate, endSec),
-      startSecondsOfDay: startSec,
-      endSecondsOfDay: endSec,
-      startFormatted: formatSecondsToTime(startSec, timeFormat),
-      endFormatted: formatSecondsToTime(endSec, timeFormat),
-      relatedRow: 'Sunrise',
-    });
+  if (!computed.windowsList || computed.windowsList.length === 0) {
+    return {
+      isMakruhNow: false,
+      activeWindow: null,
+      remainingSeconds: 0,
+      remainingFormatted: '',
+      allWindows: [],
+    };
   }
 
-  // Window 2: Zawal / Istiwa (Midday Zenith) -> [Dhuhr - 5 min, Dhuhr)
-  if (dhuhrSec !== null) {
-    const startSec = dhuhrSec - 5 * 60;
-    const endSec = dhuhrSec;
-    windows.push({
-      id: 'zawal',
-      title: 'Zawal (Zenith)',
-      titleUrdu: 'زوالِ آفتاب / استواء (مکروہ وقت)',
-      arabicTitle: 'وقت الزوال',
-      shortLabel: 'Zawal',
-      hadithRef: 'Sahih Muslim 831',
-      ruling:
-        'At midday (Istiwa) when the sun reaches its zenith until Dhuhr begins, all prayer and Sajdah are strictly prohibited (Makruh Tahrimi).',
-      rulingUrdu:
-        'نصف النہار (استواء) سے لے کر ظہر کا وقت شروع ہونے تک نماز اور سجدۂ تلاوت پڑھنا ممنوع و مکروہِ تحریمی ہے۔',
-      start: createDateFromSeconds(nowDate, startSec),
-      end: createDateFromSeconds(nowDate, endSec),
-      startSecondsOfDay: startSec,
-      endSecondsOfDay: endSec,
-      startFormatted: formatSecondsToTime(startSec, timeFormat),
-      endFormatted: formatSecondsToTime(endSec, timeFormat),
-      relatedRow: 'Dhuhr',
-    });
-  }
-
-  // Window 3: Sunset (Ghurub) -> [Maghrib - 15 min, Maghrib)
-  if (maghribSec !== null) {
-    const startSec = maghribSec - 15 * 60;
-    const endSec = maghribSec;
-    windows.push({
-      id: 'ghurub',
-      title: 'Sunset (Ghurub)',
-      titleUrdu: 'غروبِ آفتاب (مکروہ وقت)',
-      arabicTitle: 'غروب الشمس',
-      shortLabel: 'Sunset',
-      hadithRef: 'Sahih Muslim 831',
-      ruling:
-        "Before sunset (as the sun turns pale yellow) until Maghrib enters, prayer is prohibited, except that day's unperformed Asr (which remains Makruh to delay).",
-      rulingUrdu:
-        'غروبِ آفتاب سے 15 منٹ قبل سے لے کر مغرب کا وقت داخل ہونے تک نماز پڑھنا ممنوع ہے (سوائے اسی دن کی عصر کے اگر رہ گئی ہو)۔',
-      start: createDateFromSeconds(nowDate, startSec),
-      end: createDateFromSeconds(nowDate, endSec),
-      startSecondsOfDay: startSec,
-      endSecondsOfDay: endSec,
-      startFormatted: formatSecondsToTime(startSec, timeFormat),
-      endFormatted: formatSecondsToTime(endSec, timeFormat),
-      relatedRow: 'Maghrib',
-    });
-  }
+  const windows: MakruhWindowInfo[] = computed.windowsList.map((w) => ({
+    id: w.tuluId,
+    title: w.title,
+    titleUrdu: w.titleUrdu,
+    arabicTitle: w.arabicTitle,
+    shortLabel: w.shortLabel,
+    hadithRef: w.hadithRef,
+    ruling: w.ruling,
+    rulingUrdu: w.rulingUrdu,
+    start: w.start,
+    end: w.end,
+    startSecondsOfDay: w.startSecondsOfDay,
+    endSecondsOfDay: w.endSecondsOfDay,
+    startFormatted: w.startFormatted,
+    endFormatted: w.endFormatted,
+    relatedRow: w.relatedRow,
+  }));
 
   const nowSec = nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds();
 

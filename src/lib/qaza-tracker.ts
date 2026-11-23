@@ -94,10 +94,22 @@ export interface QazaUndoSnapshot {
   date?: string;
 }
 
+export interface BulkQazaUndoSnapshot {
+  id: string;
+  timestamp: number;
+  addedCounts: Record<string, number>;
+  source: 'undated';
+}
+
 let activeUndoSnapshot: QazaUndoSnapshot | null = null;
+let activeBulkUndoSnapshot: BulkQazaUndoSnapshot | null = null;
 
 export const setLastQazaUndo = (snapshot: QazaUndoSnapshot): void => {
   activeUndoSnapshot = snapshot;
+};
+
+export const setLastBulkQazaUndo = (snapshot: BulkQazaUndoSnapshot): void => {
+  activeBulkUndoSnapshot = snapshot;
 };
 
 export const getLastQazaUndo = (): QazaUndoSnapshot | null => {
@@ -111,6 +123,40 @@ export const getLastQazaUndo = (): QazaUndoSnapshot | null => {
 
 export const clearQazaUndo = (): void => {
   activeUndoSnapshot = null;
+};
+
+export const clearBulkQazaUndo = (): void => {
+  activeBulkUndoSnapshot = null;
+};
+
+export const performBulkQazaUndo = (): boolean => {
+  if (!activeBulkUndoSnapshot) return false;
+  const snapshot = activeBulkUndoSnapshot;
+  activeBulkUndoSnapshot = null;
+
+  const backlog = getUndatedBacklogInternal();
+  for (const [prayer, count] of Object.entries(snapshot.addedCounts)) {
+    const current = backlog[prayer] || 0;
+    backlog[prayer] = Math.max(0, current - count);
+  }
+  saveUndatedBacklog(backlog);
+  return true;
+};
+
+export const addBulkQazaPrayers = (counts: Record<string, number>): void => {
+  const backlog = getUndatedBacklogInternal();
+  for (const [prayer, count] of Object.entries(counts)) {
+    if (count > 0) {
+      backlog[prayer] = (backlog[prayer] || 0) + count;
+    }
+  }
+  saveUndatedBacklog(backlog);
+  setLastBulkQazaUndo({
+    id: `bulk_undo_${Date.now()}`,
+    timestamp: Date.now(),
+    addedCounts: counts,
+    source: 'undated',
+  });
 };
 
 export const performQazaUndo = (): boolean => {

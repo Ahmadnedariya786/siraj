@@ -589,7 +589,7 @@ export const REVELATION_TYPE_I18N: Record<
 
 export const SERVICES_TOOLS_BANNER_I18N: Record<LanguageCode, string> = {
   en: 'Siraj • 17 Spiritual Tools',
-  ar: 'نور كونكت • ١٧ أداة روحانية',
+  ar: 'سِراج • ١٧ أداة روحانية',
   ur: 'سِراج • ۱۷ روحانی ٹولز',
   gu: 'નૂર કનેક્ટ • ૧૭ આધ્યાત્મિક સાધનો',
   hi: 'नूर कनेक्ट • १७ आध्यात्मिक साधन',

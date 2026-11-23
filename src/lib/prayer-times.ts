@@ -420,6 +420,313 @@ export interface StaticMakruhWindow {
   description: string;
 }
 
+export interface MakruhWindowDetail {
+  id: 'sunrise' | 'zawaal' | 'sunset';
+  tuluId: 'tulu' | 'zawal' | 'ghurub';
+  title: string;
+  titleUrdu: string;
+  arabicTitle: string;
+  shortLabel: string;
+  hadithRef: string;
+  ruling: string;
+  rulingUrdu: string;
+  start: Date;
+  end: Date;
+  startFormatted: string;
+  endFormatted: string;
+  startMs: number;
+  endMs: number;
+  startSecondsOfDay: number;
+  endSecondsOfDay: number;
+  relatedRow: 'Sunrise' | 'Dhuhr' | 'Maghrib';
+  description: string;
+}
+
+export interface ComputedMakruhWindows {
+  sunrise: MakruhWindowDetail;
+  zawaal: MakruhWindowDetail;
+  sunset: MakruhWindowDetail;
+  windowsList: MakruhWindowDetail[];
+  staticWindows: StaticMakruhWindow[];
+}
+
+function parseTimeStringToDate(input?: string | Date | null, baseDate: Date = new Date()): Date | null {
+  if (!input) return null;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+  if (typeof input !== 'string') return null;
+  const cleaned = input.replace(/\s*\([^)]*\)\s*/g, '').trim();
+  if (!cleaned || cleaned.includes('--')) return null;
+  const ampmMatch = cleaned.match(/(AM|PM)/i);
+  const is12Hour = Boolean(ampmMatch);
+  const isPM = is12Hour && ampmMatch![1].toUpperCase() === 'PM';
+  const isAM = is12Hour && ampmMatch![1].toUpperCase() === 'AM';
+  const numericPart = cleaned.replace(/[^\d:]/g, '');
+  const parts = numericPart.split(':').map((p) => parseInt(p, 10));
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+  let hours = parts[0];
+  const minutes = parts[1];
+  const seconds = parts[2] || 0;
+  if (is12Hour) {
+    if (isPM && hours < 12) hours += 12;
+    if (isAM && hours === 12) hours = 0;
+  }
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  const d = new Date(baseDate.getTime());
+  d.setHours(hours, minutes, seconds, 0);
+  return d;
+}
+
+/**
+ * Single Source of Truth pure function for computing all 3 daily Makruh windows.
+ * Synchronized across Active Home Makruh Banner, Detail Card, Prayer Row Badge,
+ * Reference Schedule Card, and Native Android Circular Clock Widget.
+ *
+ * 1. Sunrise (Tulu'): Sunrise -> Sunrise + 20m
+ * 2. Zawaal (Istiwa'): Solar Noon -> Dhuhr Start (Solar Noon + 5m)
+ * 3. Sunset (Ghurub): Sunset - 15m -> Sunset (Exact astronomical sunset — NEVER shifted past sunset)
+ */
+export function computeMakruhWindows(
+  scheduleOrTimings:
+    | FullPrayerSchedule
+    | {
+        sunrise?: Date | string;
+        dhuhr?: Date | string;
+        sunset?: Date | string;
+        solarNoon?: Date | string;
+        zawaal?: Date | string;
+        maghrib?: Date | string;
+        Sunrise?: Date | string;
+        Dhuhr?: Date | string;
+        Sunset?: Date | string;
+        Zawaal?: Date | string;
+        Maghrib?: Date | string;
+      }
+    | Array<{ name?: string; originalName?: string; time?: string; date?: Date }>,
+  options?: {
+    is24h?: boolean;
+    dhuhrZawaalSafetyMin?: number;
+    maghribIhtiyatMin?: number;
+    baseDate?: Date;
+  }
+): ComputedMakruhWindows {
+  const is24h = Boolean(options?.is24h);
+  const baseDate = options?.baseDate || new Date();
+  const maghribIhtiyat = typeof options?.maghribIhtiyatMin === 'number'
+    ? options.maghribIhtiyatMin
+    : getMaghribIhtiyatMin();
+  const dhuhrSafety = typeof options?.dhuhrZawaalSafetyMin === 'number'
+    ? options.dhuhrZawaalSafetyMin
+    : getDhuhrZawaalSafetyMin(5);
+
+  let sunriseDate: Date | null = null;
+  let solarNoonDate: Date | null = null;
+  let dhuhrDate: Date | null = null;
+  let sunsetDate: Date | null = null;
+  let maghribDate: Date | null = null;
+
+  if (Array.isArray(scheduleOrTimings)) {
+    for (const item of scheduleOrTimings) {
+      const lower = (item.originalName || item.name || '').toLowerCase();
+      if (lower === 'sunrise') sunriseDate = item.date || parseTimeStringToDate(item.time, baseDate);
+      if (lower === 'dhuhr' || lower === 'jummah') dhuhrDate = item.date || parseTimeStringToDate(item.time, baseDate);
+      if (lower === 'sunset' || lower === 'guroob') sunsetDate = item.date || parseTimeStringToDate(item.time, baseDate);
+      if (lower === 'maghrib') maghribDate = item.date || parseTimeStringToDate(item.time, baseDate);
+      if (lower === 'zawaal' || lower === 'zawal') solarNoonDate = item.date || parseTimeStringToDate(item.time, baseDate);
+    }
+  } else if (scheduleOrTimings && typeof scheduleOrTimings === 'object') {
+    if ('sunnahTimes' in scheduleOrTimings && 'fardPrayers' in scheduleOrTimings) {
+      const full = scheduleOrTimings as FullPrayerSchedule;
+      sunriseDate = full.sunrise;
+      solarNoonDate = full.sunnahTimes.zawaal;
+      dhuhrDate = full.fardPrayers.find((p) => p.id === 'dhuhr')?.startTime || null;
+      sunsetDate = full.sunnahTimes.sunset;
+      maghribDate = full.fardPrayers.find((p) => p.id === 'maghrib')?.startTime || null;
+    } else {
+      const obj = scheduleOrTimings as Record<string, unknown>;
+      sunriseDate = parseTimeStringToDate(obj.sunrise as string | Date || obj.Sunrise as string | Date, baseDate);
+      dhuhrDate = parseTimeStringToDate(obj.dhuhr as string | Date || obj.Dhuhr as string | Date, baseDate);
+      sunsetDate = parseTimeStringToDate(obj.sunset as string | Date || obj.Sunset as string | Date, baseDate);
+      solarNoonDate = parseTimeStringToDate(
+        obj.solarNoon as string | Date || obj.zawaal as string | Date || obj.Zawaal as string | Date,
+        baseDate
+      );
+      maghribDate = parseTimeStringToDate(obj.maghrib as string | Date || obj.Maghrib as string | Date, baseDate);
+    }
+  }
+
+  // Fallbacks:
+  // If sunset is missing but maghrib is available:
+  if (!sunsetDate && maghribDate) {
+    sunsetDate = maghribIhtiyat > 0
+      ? new Date(maghribDate.getTime() - maghribIhtiyat * 60000)
+      : new Date(maghribDate.getTime());
+  }
+
+  // If dhuhr is available but solarNoon is missing:
+  if (!solarNoonDate && dhuhrDate) {
+    solarNoonDate = dhuhrSafety > 0
+      ? new Date(dhuhrDate.getTime() - dhuhrSafety * 60000)
+      : new Date(dhuhrDate.getTime());
+  }
+
+  // Strict startup guard: do not compute Makruh windows if primary times are uninitialized/invalid
+  if (!sunriseDate || !dhuhrDate || (!sunsetDate && !maghribDate)) {
+    return {
+      sunrise: {} as MakruhWindowDetail,
+      zawaal: {} as MakruhWindowDetail,
+      sunset: {} as MakruhWindowDetail,
+      windowsList: [],
+      staticWindows: [],
+    };
+  }
+
+  const safeSunrise = sunriseDate;
+  const safeSolarNoon = solarNoonDate || new Date(dhuhrDate.getTime() - dhuhrSafety * 60000);
+  const safeDhuhr = dhuhrDate;
+  const safeSunset = sunsetDate || (maghribDate ? (maghribIhtiyat > 0 ? new Date(maghribDate.getTime() - maghribIhtiyat * 60000) : maghribDate) : new Date(baseDate.setHours(18, 0, 0, 0)));
+
+  // Window 1: Sunrise (Tulu') -> [Sunrise, Sunrise + 20m]
+  const tuluStart = new Date(safeSunrise.getTime());
+  const tuluEnd = new Date(safeSunrise.getTime() + 20 * 60000);
+
+  // Window 2: Zawaal (Istiwa') -> [Solar Noon, Dhuhr Start]
+  const zawalStart = new Date(safeSolarNoon.getTime());
+  const zawalEnd = new Date(safeDhuhr.getTime());
+
+  // Window 3: Sunset (Ghurub) -> [Sunset - 15m, Sunset] (Astronomical sunset)
+  const ghurubStart = new Date(safeSunset.getTime() - 15 * 60000);
+  const ghurubEnd = new Date(safeSunset.getTime());
+
+  const toDetail = (
+    id: 'sunrise' | 'zawaal' | 'sunset',
+    tuluId: 'tulu' | 'zawal' | 'ghurub',
+    title: string,
+    titleUrdu: string,
+    arabicTitle: string,
+    shortLabel: string,
+    hadithRef: string,
+    ruling: string,
+    rulingUrdu: string,
+    start: Date,
+    end: Date,
+    relatedRow: 'Sunrise' | 'Dhuhr' | 'Maghrib',
+    description: string
+  ): MakruhWindowDetail => {
+    const startSec = start.getHours() * 3600 + start.getMinutes() * 60 + start.getSeconds();
+    const endSec = end.getHours() * 3600 + end.getMinutes() * 60 + end.getSeconds();
+    return {
+      id,
+      tuluId,
+      title,
+      titleUrdu,
+      arabicTitle,
+      shortLabel,
+      hadithRef,
+      ruling,
+      rulingUrdu,
+      start,
+      end,
+      startFormatted: formatScheduleTime(start, is24h),
+      endFormatted: formatScheduleTime(end, is24h),
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+      startSecondsOfDay: startSec,
+      endSecondsOfDay: endSec,
+      relatedRow,
+      description,
+    };
+  };
+
+  const sunriseDetail = toDetail(
+    'sunrise',
+    'tulu',
+    "Sunrise (Tulu')",
+    'طلوعِ آفتاب (مکروہ وقت)',
+    'طلوع الشمس',
+    'Sunrise',
+    'Sahih Muslim 831',
+    'During Sunrise until 20 minutes after, all Salah (Fard, Sunnah, Nafl) and Sajdah at-Tilawat are strictly prohibited (Makruh Tahrimi).',
+    'طلوعِ آفتاب کے وقت سے لے کر 20 منٹ تک ہر قسم کی نماز (فرض، سنت و نفل) اور سجدۂ تلاوت پڑھنا ممنوع و مکروہِ تحریمی ہے۔',
+    tuluStart,
+    tuluEnd,
+    'Sunrise',
+    'Until the sun rises above spear length (~20m). Salah & Tilawat prohibited.'
+  );
+
+  const zawalDetail = toDetail(
+    'zawaal',
+    'zawal',
+    'Zawal (Zenith)',
+    'زوالِ آفتاب / استواء (مکروہ وقت)',
+    'وقت الزوال',
+    'Zawal',
+    'Sahih Muslim 831',
+    'At midday (Istiwa) when the sun reaches its zenith until Dhuhr begins, all prayer and Sajdah are strictly prohibited (Makruh Tahrimi).',
+    'نصف النہار (استواء) سے لے کر ظہر کا وقت شروع ہونے تک نماز اور سجدۂ تلاوت پڑھنا ممنوع و مکروہِ تحریمی ہے۔',
+    zawalStart,
+    zawalEnd,
+    'Dhuhr',
+    'Midday zenith when sun is directly overhead. Prohibited until Dhuhr begins.'
+  );
+
+  const sunsetDetail = toDetail(
+    'sunset',
+    'ghurub',
+    'Sunset (Ghurub)',
+    'غروبِ آفتاب (مکروہ وقت)',
+    'غروب الشمس',
+    'Sunset',
+    'Sahih Muslim 831',
+    "Before sunset (as the sun turns pale yellow) until Maghrib enters, prayer is prohibited, except that day's unperformed Asr (which remains Makruh to delay).",
+    'غروبِ آفتاب سے 15 منٹ قبل سے لے کر مغرب کا وقت داخل ہونے تک نماز پڑھنا ممنوع ہے (سوائے اسی دن کی عصر کے اگر رہ گئی ہو)۔',
+    ghurubStart,
+    ghurubEnd,
+    'Maghrib',
+    '15m before sunset as the sun pales. Only today\'s Asr Fard permitted if delayed.'
+  );
+
+  const staticWindows: StaticMakruhWindow[] = [
+    {
+      id: 'sunrise',
+      title: 'Sunrise Makruh (طلوع آفتاب)',
+      titleUrdu: 'طلوع آفتاب (مکروہ وقت)',
+      start: sunriseDetail.start,
+      end: sunriseDetail.end,
+      startFormatted: sunriseDetail.startFormatted,
+      endFormatted: sunriseDetail.endFormatted,
+      description: sunriseDetail.description,
+    },
+    {
+      id: 'zawaal',
+      title: 'Zawaal Makruh (نصف النہار / استواء)',
+      titleUrdu: 'زوال کا وقت (مکروہ وقت)',
+      start: zawalDetail.start,
+      end: zawalDetail.end,
+      startFormatted: zawalDetail.startFormatted,
+      endFormatted: zawalDetail.endFormatted,
+      description: zawalDetail.description,
+    },
+    {
+      id: 'sunset',
+      title: 'Sunset Makruh (غروب آفتاب)',
+      titleUrdu: 'غروب آفتاب (مکروہ وقت)',
+      start: sunsetDetail.start,
+      end: sunsetDetail.end,
+      startFormatted: sunsetDetail.startFormatted,
+      endFormatted: sunsetDetail.endFormatted,
+      description: sunsetDetail.description,
+    },
+  ];
+
+  return {
+    sunrise: sunriseDetail,
+    zawaal: zawalDetail,
+    sunset: sunsetDetail,
+    windowsList: [sunriseDetail, zawalDetail, sunsetDetail],
+    staticWindows,
+  };
+}
+
 export interface FullPrayerSchedule {
   fardPrayers: FardPrayerScheduleItem[];
   sunrise: Date;
@@ -694,48 +1001,17 @@ export function computeFullPrayerSchedule(
     tahajjudDescription: `Last 1/6: ${formatScheduleTime(tahajjud, is24h)} • Last 1/3: ${formatScheduleTime(tahajjudLastThird, is24h)}`,
   };
 
-  // 3 Daily Prohibited (Makruh) Windows
-  // 1. Sunrise (Tulu'): [Sunrise, Sunrise + 20m]
-  const sunriseMakruhEnd = new Date(sunrise.getTime() + 20 * 60000);
-  // 2. Zawaal (Istiwa'): Astronomical Solar Noon until Dhuhr start (e.g. 12:21 PM – 12:26 PM)
-  const zawalMakruhStart = rawSolarNoon;
-  const zawalMakruhEnd = dhuhr;
-  // 3. Sunset (Ghurub): [Sunset - 15m, Sunset]
-  const sunsetMakruhStart = new Date(sunset.getTime() - 15 * 60000);
-  const sunsetMakruhEnd = sunset;
-
-  const makruhWindows: StaticMakruhWindow[] = [
+  // 3 Daily Prohibited (Makruh) Windows via single source of truth computeMakruhWindows
+  const computedMakruh = computeMakruhWindows(
     {
-      id: 'sunrise',
-      title: 'Sunrise Makruh (طلوع آفتاب)',
-      titleUrdu: 'طلوع آفتاب (مکروہ وقت)',
-      start: sunrise,
-      end: sunriseMakruhEnd,
-      startFormatted: formatScheduleTime(sunrise, is24h),
-      endFormatted: formatScheduleTime(sunriseMakruhEnd, is24h),
-      description: 'Until the sun rises above spear length (~20m). Salah & Tilawat prohibited.',
+      sunrise,
+      solarNoon: rawSolarNoon,
+      dhuhr,
+      sunset: rawSunset,
     },
-    {
-      id: 'zawaal',
-      title: 'Zawaal Makruh (نصف النہار / استواء)',
-      titleUrdu: 'زوال کا وقت (مکروہ وقت)',
-      start: zawalMakruhStart,
-      end: zawalMakruhEnd,
-      startFormatted: formatScheduleTime(zawalMakruhStart, is24h),
-      endFormatted: formatScheduleTime(zawalMakruhEnd, is24h),
-      description: 'Midday zenith when sun is directly overhead. Prohibited until Dhuhr begins.',
-    },
-    {
-      id: 'sunset',
-      title: 'Sunset Makruh (غروب آفتاب)',
-      titleUrdu: 'غروب آفتاب (مکروہ وقت)',
-      start: sunsetMakruhStart,
-      end: sunsetMakruhEnd,
-      startFormatted: formatScheduleTime(sunsetMakruhStart, is24h),
-      endFormatted: formatScheduleTime(sunsetMakruhEnd, is24h),
-      description: '15m before sunset as the sun pales. Only today\'s Asr Fard permitted if delayed.',
-    },
-  ];
+    { is24h, dhuhrZawaalSafetyMin: dhuhrSafety, maghribIhtiyatMin: maghribIhtiyat, baseDate: date }
+  );
+  const makruhWindows: StaticMakruhWindow[] = computedMakruh.staticWindows;
 
   return {
     fardPrayers,

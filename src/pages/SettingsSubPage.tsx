@@ -183,7 +183,7 @@ const SECTION_TITLES: Record<string, { title: string; subtitle: string; icon: an
 };
 
 const SUPPORT_EMAIL = 'overstay-cobbler41@bravealias.com';
-const MAILTO_FEEDBACK_URL = `mailto:${SUPPORT_EMAIL}?subject=Noor%20Connect%20Feedback`;
+const MAILTO_FEEDBACK_URL = `mailto:${SUPPORT_EMAIL}?subject=Siraj%20Feedback`;
 
 const SettingsSubPage: React.FC = () => {
   const { sectionId: rawSectionId = 'appearance' } = useParams<{ sectionId: string }>();
@@ -2838,6 +2838,22 @@ const SettingsSubPage: React.FC = () => {
                       OTA Update Events ({otaLogEntries.length})
                     </Label>
                     <span className="text-[10px] text-muted-foreground">Ring buffer (last 50)</span>
+                  </div>
+
+                  {/* OTA Subsystem Target Summary */}
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/60 text-xs font-mono space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground text-[10px] shrink-0">Installed:</span>
+                      <span className="font-bold text-[var(--accent-text)] truncate text-[11px]">
+                        {formatCommit(updateResult?.installedCommit || BUILD_COMMIT)} · {formatDateTime(updateResult?.installedBuildTime || BUILD_TIME)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground text-[10px] shrink-0">Latest:</span>
+                      <span className="font-bold text-foreground/90 truncate text-[11px]">
+                        {formatCommit(updateResult?.remoteCommit || updateResult?.release?.commitSha || 'unknown')} · {formatDateTime(updateResult?.latestApkUploadedAt || updateResult?.release?.latestAssetUploadedAt || updateResult?.release?.publishedAt || 'unknown')}
+                      </span>
+                    </div>
                   </div>
                   {otaLogEntries.length === 0 ? (
                     <div className="p-3 rounded-xl bg-muted/20 border border-border/40 text-center text-xs text-muted-foreground">

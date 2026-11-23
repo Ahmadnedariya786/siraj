@@ -907,7 +907,7 @@ function MosqueFinderContent() {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-text)] block">
-                  100% Free • OpenStreetMap & Komoot
+                  100% Free • OPENSTREETMAP & PHOTON (KOMOOT)
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-lg font-extrabold text-[var(--text-primary)] truncate">
@@ -1009,7 +1009,7 @@ function MosqueFinderContent() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
               <Input
                 type="text"
-                placeholder="Search by name (e.g. Aqsa, Chhapi, Jumma)..."
+                placeholder="Search by name (e.g. Aqsa, Chhapi)"
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
                 className="pl-9 pr-8 h-10 rounded-xl text-xs"
@@ -1159,7 +1159,7 @@ function MosqueFinderContent() {
             <div className="py-10 text-center space-y-3">
               <RefreshCw className="w-6 h-6 mx-auto animate-spin text-[var(--accent)]" />
               <p className="text-xs text-[var(--text-secondary)] font-medium">
-                Scanning OpenStreetMap & Komoot servers within {radiusMeters / 1000} km...
+                Scanning OPENSTREETMAP & PHOTON (KOMOOT) servers within {radiusMeters / 1000} km...
               </p>
             </div>
           )}

@@ -233,7 +233,7 @@ export const PlaybackOptionsDrawer: React.FC<PlaybackOptionsDrawerProps> = ({
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-1.5 flex items-center gap-1.5">
               <Volume2 className="w-3.5 h-3.5 text-[var(--accent-text)]" />
-              Reciter (45+ Qaris)
+              47 EveryAyah reciters
             </label>
             <button
               onClick={() => setIsReciterModalOpen(true)}

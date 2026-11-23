@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Minus, Target, Calendar, RotateCcw, Check, Clock, Trash2, Calculator, ChevronDown, ChevronUp, Info, Coins, Share2, Sparkles, BookOpen } from "lucide-react";
+import { ArrowLeft, Plus, Minus, Target, Calendar, RotateCcw, Check, Clock, Trash2, Calculator, ChevronDown, ChevronUp, Info, Coins, Share2, Sparkles, BookOpen, AlertCircle, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,8 @@ import {
   getUndatedBacklogSummary, 
   performQazaUndo, 
   addPendingDateQazaPrayer, 
+  addBulkQazaPrayers,
+  performBulkQazaUndo,
   type PrayerName, 
   type QazaPrayerName, 
   type DateWiseQazaRecord 
@@ -105,6 +108,28 @@ export default function QazaPage() {
   const [customPrayersFidya, setCustomPrayersFidya] = useState<string>("");
   const [missedFasts, setMissedFasts] = useState<string>("0");
   const [costPerUnit, setCostPerUnit] = useState<string>(() => getDefaultFidyaCost(getSavedCurrency()).toString());
+
+  // Bulk Confirmation Modal & Themed Currency Sheet State
+  const [bulkConfirmModal, setBulkConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    countDetails: string;
+    onConfirm: () => void;
+  } | null>(null);
+  const [showCurrencySheet, setShowCurrencySheet] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState('');
+
+  const filteredCurrencies = useMemo(() => {
+    if (!currencySearch.trim()) return SUPPORTED_CURRENCIES;
+    const q = currencySearch.toLowerCase();
+    return SUPPORTED_CURRENCIES.filter(
+      (c) =>
+        c.code.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
+        c.symbol.toLowerCase().includes(q)
+    );
+  }, [currencySearch]);
 
   // Date-Wise Qaza state
   const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -376,29 +401,44 @@ export default function QazaPage() {
       toast({ title: "Please enter a valid time period", variant: "destructive" });
       return;
     }
+    const counts: Record<string, number> = {};
+    let activePrayerCount = 0;
     PRAYERS.forEach((p) => {
       if (p.name === 'witr' && !includeWitr) return;
-      addQazaPrayer(p.name, umriTotalDays);
+      counts[p.name] = umriTotalDays;
+      activePrayerCount++;
     });
-    loadQazaData();
-    toast({
-      title: "Added Qaza-e-Umri Backlog",
-      description: (
-        <div className="flex items-center justify-between gap-2 w-full">
-          <span>Added {umriTotalPrayers.toLocaleString()} prayers ({parsedUmriYears}y {parsedUmriMonths}m)</span>
-          <button
-            type="button"
-            onClick={() => {
-              performQazaUndo();
-              loadQazaData();
-            }}
-            className="px-2 py-0.5 rounded text-[11px] font-bold bg-[var(--accent)] text-[var(--on-accent)] shrink-0 active:scale-95 cursor-pointer"
-          >
-            Undo
-          </button>
-        </div>
-      ),
-      duration: 5000,
+    const total = umriTotalPrayers;
+
+    setBulkConfirmModal({
+      isOpen: true,
+      title: "Add Qaza-e-Umri to Backlog?",
+      description: `This will add ${parsedUmriYears} years and ${parsedUmriMonths} months of missed prayers (${umriTotalDays.toLocaleString()} days) to your Undated Backlog.`,
+      countDetails: `${total.toLocaleString()} total prayers (${umriTotalDays.toLocaleString()} per prayer × ${activePrayerCount} prayers)`,
+      onConfirm: () => {
+        addBulkQazaPrayers(counts);
+        loadQazaData();
+        toast({
+          title: "Added Qaza-e-Umri Backlog",
+          description: (
+            <div className="flex items-center justify-between gap-2 w-full">
+              <span>Added {total.toLocaleString()} prayers ({parsedUmriYears}y {parsedUmriMonths}m)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  performBulkQazaUndo();
+                  loadQazaData();
+                  toast({ title: "Qaza-e-Umri addition undone" });
+                }}
+                className="px-2 py-0.5 rounded text-[11px] font-bold bg-[var(--accent)] text-[var(--on-accent)] shrink-0 active:scale-95 cursor-pointer"
+              >
+                Undo
+              </button>
+            </div>
+          ),
+          duration: 10000,
+        });
+      },
     });
   };
 
@@ -985,9 +1025,41 @@ export default function QazaPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  PRAYERS.forEach(p => addQazaPrayer(p.name, 30));
-                  loadQazaData();
-                  toast({ title: "Added 1 month for all prayers" });
+                  const counts: Record<string, number> = {};
+                  PRAYERS.forEach((p) => {
+                    counts[p.name] = 30;
+                  });
+                  const total = 30 * PRAYERS.length;
+                  setBulkConfirmModal({
+                    isOpen: true,
+                    title: "Add 1 Month to Backlog?",
+                    description: "This will add 30 missed prayers for each prayer to your Undated Backlog.",
+                    countDetails: `+30 days across ${PRAYERS.length} prayers (= ${total} total prayers)`,
+                    onConfirm: () => {
+                      addBulkQazaPrayers(counts);
+                      loadQazaData();
+                      toast({
+                        title: "Added 1 Month for all prayers",
+                        description: (
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <span>Added {total} prayers to backlog</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                performBulkQazaUndo();
+                                loadQazaData();
+                                toast({ title: "Bulk addition undone" });
+                              }}
+                              className="px-2 py-0.5 rounded text-[11px] font-bold bg-[var(--accent)] text-[var(--on-accent)] shrink-0 active:scale-95 cursor-pointer"
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        ),
+                        duration: 10000,
+                      });
+                    },
+                  });
                 }}
               >
                 +1 Month
@@ -1122,21 +1194,17 @@ export default function QazaPage() {
                       Currency: {currencyConfig.flag} {currencyConfig.name} ({currencyConfig.symbol})
                     </span>
                   </div>
-                  <select
-                    value={activeCurrency}
-                    onChange={(e) => {
-                      const nextCur = e.target.value;
-                      setActiveCurrency(nextCur);
-                      setCostPerUnit(getDefaultFidyaCost(nextCur).toString());
-                    }}
-                    className="text-xs font-bold py-1 px-2 rounded-lg bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] cursor-pointer shrink-0 outline-none"
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrencySheet(true)}
+                    className="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)] text-xs font-bold hover:border-[var(--accent)] cursor-pointer shrink-0 transition-all active:scale-95"
+                    aria-label={`Select currency: current is ${currencyConfig.code}`}
                   >
-                    {SUPPORTED_CURRENCIES.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.flag} {c.code} ({c.symbol})
-                      </option>
-                    ))}
-                  </select>
+                    <span>{currencyConfig.flag}</span>
+                    <span>{currencyConfig.code}</span>
+                    <span className="text-[11px] text-[var(--text-secondary)] font-normal">({currencyConfig.symbol})</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-[var(--text-secondary)] ml-0.5" />
+                  </button>
                 </div>
 
                 {/* Input 1: Missed Prayers Count */}
@@ -1360,6 +1428,191 @@ export default function QazaPage() {
             makruhName={makruhState.activeWindow?.name || 'Makruh Waqt'}
             makruhEndTime={makruhState.activeWindow?.endTimeFormatted || ''}
           />
+
+          {/* Bulk Confirmation Modal (Part 3) */}
+          {bulkConfirmModal?.isOpen && typeof document !== 'undefined' && createPortal(
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/75 animate-in fade-in duration-150"
+              onClick={() => setBulkConfirmModal(null)}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div
+                className="w-full max-w-sm bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-[var(--accent-soft)] text-[var(--accent-text)] flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-[var(--text-primary)]">
+                      {bulkConfirmModal.title}
+                    </h3>
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      Confirm bulk addition to your store
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] space-y-1.5 text-xs">
+                  <p className="text-[var(--text-primary)] leading-relaxed">
+                    {bulkConfirmModal.description}
+                  </p>
+                  <div className="font-mono font-bold text-[var(--accent-text)] text-[11px]">
+                    {bulkConfirmModal.countDetails}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBulkConfirmModal(null)}
+                    className="h-9 text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const cb = bulkConfirmModal.onConfirm;
+                      setBulkConfirmModal(null);
+                      cb();
+                    }}
+                    className="h-9 text-xs font-bold bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90 cursor-pointer"
+                  >
+                    Confirm Add
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+          {/* Themed Currency Picker Bottom Sheet (Part 5f) */}
+          {showCurrencySheet && typeof document !== 'undefined' && createPortal(
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-[rgba(2,4,10,0.80)] animate-in fade-in duration-150"
+              onClick={() => {
+                setShowCurrencySheet(false);
+                setCurrencySearch('');
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Select Currency"
+            >
+              <div
+                className="w-full max-w-[340px] bg-[var(--surface)] border border-[var(--border)] rounded-[24px] flex flex-col shadow-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-150"
+                style={{
+                  boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.7)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="p-3.5 border-b border-[var(--border)] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-[var(--accent-soft)] text-[var(--accent-text)] flex items-center justify-center shrink-0">
+                      <Coins className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-[var(--text-primary)]">
+                        Select Currency
+                      </h3>
+                      <p className="text-[10px] text-[var(--text-secondary)]">
+                        Fidya calculation standard
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCurrencySheet(false);
+                      setCurrencySearch('');
+                    }}
+                    className="w-8 h-8 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] shrink-0 active:scale-95 cursor-pointer"
+                    aria-label="Close currency sheet"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Search Input */}
+                <div className="p-2.5 border-b border-[var(--border)] bg-[var(--surface)]">
+                  <div className="relative flex items-center">
+                    <Search className="w-3.5 h-3.5 text-[var(--text-secondary)] absolute left-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={currencySearch}
+                      onChange={(e) => setCurrencySearch(e.target.value)}
+                      placeholder="Search currency, code, or country..."
+                      className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--accent)]"
+                    />
+                    {currencySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCurrencySearch('')}
+                        className="absolute right-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* List */}
+                <div className="p-2.5 overflow-y-auto space-y-1 max-h-[55vh]">
+                  {filteredCurrencies.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-[var(--text-secondary)]">
+                      No currencies match "{currencySearch}"
+                    </div>
+                  ) : (
+                    filteredCurrencies.map((c) => {
+                      const isSelected = activeCurrency === c.code;
+                      return (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => {
+                            setActiveCurrency(c.code);
+                            setCostPerUnit(getDefaultFidyaCost(c.code).toString());
+                            setShowCurrencySheet(false);
+                            setCurrencySearch('');
+                          }}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left active:scale-[0.98] transition-transform duration-100 cursor-pointer ${
+                            isSelected
+                              ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)] ring-1 ring-[var(--accent)]/30'
+                              : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--accent)]/40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="text-xl leading-none shrink-0">{c.flag}</span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs flex items-center gap-1.5">
+                                <span>{c.code}</span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-normal">({c.symbol})</span>
+                              </div>
+                              <div className="text-[10px] text-[var(--text-secondary)] font-medium truncate">
+                                {c.name}
+                              </div>
+                            </div>
+                          </div>
+                          {isSelected ? (
+                            <span className="w-5 h-5 rounded-full bg-[var(--accent)] text-[var(--on-accent)] flex items-center justify-center shrink-0 shadow-sm ml-2">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </span>
+                          ) : (
+                            <span className="w-5 h-5 rounded-full border border-[var(--border)] shrink-0 ml-2" />
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
         </div>
       </div>
     </LayoutManager>
