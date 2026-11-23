@@ -59,6 +59,38 @@ export const DEFAULT_HABITS: Habit[] = [
     color: 'bg-blue-500'
   },
   {
+    id: 'dhuhr-prayer',
+    name: 'Dhuhr Prayer',
+    description: 'Perform Dhuhr prayer on time',
+    category: 'prayer',
+    icon: '🙏',
+    color: 'bg-amber-500'
+  },
+  {
+    id: 'asr-prayer',
+    name: 'Asr Prayer',
+    description: 'Perform Asr prayer on time',
+    category: 'prayer',
+    icon: '🙏',
+    color: 'bg-emerald-500'
+  },
+  {
+    id: 'maghrib-prayer',
+    name: 'Maghrib Prayer',
+    description: 'Perform Maghrib prayer on time',
+    category: 'prayer',
+    icon: '🙏',
+    color: 'bg-orange-500'
+  },
+  {
+    id: 'isha-prayer',
+    name: 'Isha Prayer',
+    description: 'Perform Isha prayer on time',
+    category: 'prayer',
+    icon: '🙏',
+    color: 'bg-indigo-500'
+  },
+  {
     id: 'dhikr-morning',
     name: 'Morning Dhikr',
     description: 'Recite morning adhkar',
@@ -576,3 +608,44 @@ export class HabitTracker {
 }
 
 export const habitTracker = new HabitTracker();
+
+/**
+ * Auto-syncs Worship Journal prayer completion (on-time / late) to daily Habit deeds
+ */
+export function syncPrayerToHabits(date: string, prayer: string, status: string): void {
+  try {
+    const habitId = `${prayer.toLowerCase()}-prayer`;
+    const ENTRIES_KEY = 'habit-entries';
+    const entriesJson = localStorage.getItem(ENTRIES_KEY);
+    const entries: HabitEntry[] = entriesJson ? JSON.parse(entriesJson) : [];
+
+    const isDone = status === 'ontime' || status === 'late';
+    const existingIndex = entries.findIndex((e) => e.habitId === habitId && e.date === date);
+
+    if (isDone) {
+      if (existingIndex >= 0) {
+        entries[existingIndex].completed = true;
+        entries[existingIndex].notes = 'synced-from-journal';
+      } else {
+        entries.push({
+          id: `entry-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          habitId,
+          date,
+          completed: true,
+          timestamp: Date.now(),
+          notes: 'synced-from-journal',
+        });
+      }
+      localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+      window.dispatchEvent(new CustomEvent('habits-updated'));
+    } else if (status === 'missed' || status === 'none') {
+      if (existingIndex >= 0 && entries[existingIndex].notes === 'synced-from-journal') {
+        entries.splice(existingIndex, 1);
+        localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+        window.dispatchEvent(new CustomEvent('habits-updated'));
+      }
+    }
+  } catch (err) {
+    console.debug('[syncPrayerToHabits] Failed to auto-sync prayer to habit:', err);
+  }
+}

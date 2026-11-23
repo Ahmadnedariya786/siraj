@@ -92,7 +92,9 @@ export function HabitWidget({ className }: HabitWidgetProps) {
 
         <div className="space-y-1">
           {habits.slice(0, 4).map(h => {
-            const done = doneIds.has(h.id);
+            const entry = entries.find(e => e.habitId === h.id);
+            const done = Boolean(entry);
+            const isSynced = entry?.notes === 'synced-from-journal';
             const color = CATEGORY_COLOR[h.category] ?? '#64748b';
             return (
               <button
@@ -113,6 +115,11 @@ export function HabitWidget({ className }: HabitWidgetProps) {
                 <span className={cn('text-xs flex-1 truncate', done ? 'text-[var(--accent)] font-medium' : 'text-foreground')}>
                   {h.name}
                 </span>
+                {isSynced && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full font-semibold bg-[var(--accent)]/15 text-[var(--accent-text)] border border-[var(--accent)]/20 shrink-0 select-none">
+                    Synced
+                  </span>
+                )}
               </button>
             );
           })}

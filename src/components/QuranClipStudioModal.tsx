@@ -93,6 +93,16 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
   const [withTashkeel, setWithTashkeel] = useState<boolean>(true);
   const [subtitleLang, setSubtitleLang] = useState<'none' | 'en' | 'ur' | 'hi' | 'gu'>('en');
   const [audioMastering, setAudioMastering] = useState<'haramain' | 'pure'>('haramain');
+  const [autoSaveToGallery, setAutoSaveToGallery] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('siraj_clip_autosave_gallery') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [smartRangeNotice, setSmartRangeNotice] = useState<string | null>(null);
+  const [isAutoMeaningSync, setIsAutoMeaningSync] = useState<boolean>(true);
+  const [customAyahScenes, setCustomAyahScenes] = useState<Record<number, SceneId>>({});
 
   // Reciter Selection
   const [selectedReciterId, setSelectedReciterId] = useState<string>(
@@ -428,11 +438,13 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
 
     handleToAyahChange(targetTo);
     const count = targetTo - fromAyah + 1;
-    toast.success(
-      count === 1
-        ? `✨ Smart Range: Ayah ${fromAyah} selected (~${totalEstSec}s reel)`
-        : `✨ Smart Range: Ayahs ${fromAyah}–${targetTo} (${count} Ayahs, ~${totalEstSec}s reel)`
-    );
+    const msg = count === 1
+      ? `✨ Smart Range: Ayah ${fromAyah} selected (~${totalEstSec}s reel)`
+      : `✨ Smart Range: Ayahs ${fromAyah}–${targetTo} (${count} Ayahs, ~${totalEstSec}s reel)`;
+    setSmartRangeNotice(msg);
+    setTimeout(() => {
+      setSmartRangeNotice((cur) => (cur === msg ? null : cur));
+    }, 4500);
   }, [fromAyah, toAyah, totalAyahsInSurah, versesData, surahNumber, handleToAyahChange]);
 
   // Opening Arabic Snippets for Stepper Previews
@@ -728,6 +740,23 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
         scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       }, 50);
 
+      if (autoSaveToGallery && result.blob) {
+        try {
+          const filename = `siraj-clip-s${surahNumber}-a${fromAyah}-${toAyah}${result.extension}`;
+          const cleanMime = cleanMimeType(result.mimeType);
+          if (Capacitor.isNativePlatform()) {
+            const cacheFile = await writeBlobToNativeCache(result.blob, filename);
+            await NoorMediaBridge.saveToGallery({
+              cacheFileName: cacheFile,
+              mimeType: cleanMime,
+            });
+            toast.success('✨ Saved to Gallery / Movies!');
+          }
+        } catch (saveErr) {
+          console.warn('[QuranClipStudio] Auto-save to gallery failed:', saveErr);
+        }
+      }
+
       toast.success('Quran Recitation Reel generated successfully!');
     } catch (err: any) {
       if ((err instanceof DOMException && err.name === 'AbortError') || err?.name === 'AbortError') {
@@ -772,6 +801,22 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
         blob: result.blob,
         dataUrl: result.dataUrl,
       });
+
+      if (autoSaveToGallery && result.blob) {
+        try {
+          const filename = `siraj-ayah-s${surahNumber}-a${fromAyah}.png`;
+          if (Capacitor.isNativePlatform()) {
+            const cacheFile = await writeBlobToNativeCache(result.blob, filename);
+            await NoorMediaBridge.saveToGallery({
+              cacheFileName: cacheFile,
+              mimeType: 'image/png',
+            });
+            toast.success('✨ Saved Ayah Card to Gallery / Pictures!');
+          }
+        } catch (saveErr) {
+          console.warn('[QuranClipStudio] Auto-save image to gallery failed:', saveErr);
+        }
+      }
 
       toast.success('Ayah Image Card rendered in 1080p!');
     } catch (err) {
@@ -1001,15 +1046,41 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isGenerating}
-            className="w-8 h-8 rounded-full flex items-center justify-center border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-40"
-            title="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Auto-save to Gallery Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !autoSaveToGallery;
+                setAutoSaveToGallery(next);
+                try {
+                  localStorage.setItem('siraj_clip_autosave_gallery', String(next));
+                } catch {
+                  // Ignore storage error
+                }
+                toast.info(next ? 'Auto-save to Gallery: ON' : 'Auto-save to Gallery: OFF');
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-all ${
+                autoSaveToGallery
+                  ? 'border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-text)]'
+                  : 'border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-secondary)]'
+              }`}
+              title="Automatically save rendered reels to device Gallery/Downloads"
+            >
+              <Download className="w-3 h-3" />
+              <span>{autoSaveToGallery ? 'Auto-Save: ON' : 'Auto-Save'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isGenerating}
+              className="w-8 h-8 rounded-full flex items-center justify-center border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-40"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* SCROLLABLE BODY */}
@@ -1475,18 +1546,33 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
             {/* Dynamic Auto Scene Journey Ribbon */}
             {sceneId === 'auto-meaning' && (
               <div className="p-2.5 rounded-2xl border border-[var(--accent)]/30 bg-[var(--surface-2)] space-y-2 w-full max-w-full overflow-hidden animate-in fade-in duration-200">
-                <div className="flex items-center justify-between text-[11px] gap-2">
-                  <span className="font-bold text-[var(--accent-text)] flex items-center gap-1.5 truncate">
+                <div className="flex items-center justify-between text-[11px] gap-2 pb-1 border-b border-[var(--border)]/30">
+                  <div className="flex items-center gap-1.5 truncate">
                     <Sparkles className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
-                    Auto Scene Journey ({sceneJourney.length} {sceneJourney.length === 1 ? 'Ayah' : 'Ayahs'}):
-                  </span>
-                  <span className="text-[10px] text-[var(--text-secondary)] font-medium shrink-0">
-                    500ms dynamic cross-fade
-                  </span>
+                    <span className="font-bold text-[var(--accent-text)] truncate">
+                      Auto Meaning Sync ({sceneJourney.length} {sceneJourney.length === 1 ? 'Ayah' : 'Ayahs'})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAutoMeaningSync((prev) => !prev);
+                      setVideoResult(null);
+                    }}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all shrink-0 ${
+                      isAutoMeaningSync
+                        ? 'border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-text)]'
+                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                    title={isAutoMeaningSync ? "Semantic AI automatically matches scene backgrounds with verse meanings" : "Manual mode: customize each ayah background"}
+                  >
+                    {isAutoMeaningSync ? 'Auto Sync ON' : 'Custom Scenes'}
+                  </button>
                 </div>
                 <div className="flex flex-col gap-1.5 w-full max-w-full">
                   {sceneJourney.map((step) => {
                     const hasSubTimeline = step.subTimeline && step.subTimeline.length > 1;
+                    const activeStepScene = customAyahScenes[step.ayahNumber] || step.sceneId;
                     return (
                       <div
                         key={step.ayahNumber}
@@ -1496,13 +1582,33 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
                           <span className="font-bold text-[var(--text-primary)]">
                             Ayah {step.ayahNumber}:
                           </span>
-                          {hasSubTimeline && (
+                          {!isAutoMeaningSync ? (
+                            <select
+                              value={activeStepScene}
+                              onChange={(e) => {
+                                const newScene = e.target.value as SceneId;
+                                setCustomAyahScenes((prev) => ({ ...prev, [step.ayahNumber]: newScene }));
+                                setVideoResult(null);
+                              }}
+                              className="text-[10px] font-semibold py-0.5 px-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--accent-text)]"
+                            >
+                              {SCENE_DEFINITIONS.filter((s) => s.id !== 'auto-meaning').map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : hasSubTimeline ? (
                             <span className="text-[10px] text-[var(--accent-text)] font-semibold">
                               {step.subTimeline!.length} Choreographed Scenes
                             </span>
+                          ) : (
+                            <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                              500ms dynamic cross-fade
+                            </span>
                           )}
                         </div>
-                        {hasSubTimeline ? (
+                        {isAutoMeaningSync && hasSubTimeline ? (
                           <div className="flex flex-wrap items-center gap-1 w-full max-w-full">
                             {step.subTimeline!.map((sub, sIdx) => (
                               <React.Fragment key={sIdx}>
@@ -1522,7 +1628,7 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
                         ) : (
                           <div className="flex items-center gap-1.5 text-[11px]">
                             <span className="text-[var(--accent-text)] font-semibold">
-                              {step.icon} {step.moodLabel}
+                              {step.icon} {SCENE_DEFINITIONS.find((s) => s.id === activeStepScene)?.name || step.moodLabel}
                             </span>
                           </div>
                         )}
@@ -1559,6 +1665,57 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
             </div>
           )}
         </div>
+
+        {/* PRESET SHARE CAPTION + HASHTAGS BOX (When clip or image is ready) */}
+        {((activeTab === 'video' && videoResult) || (activeTab === 'image' && imageResult)) && (
+          <div className="px-3 sm:px-4 pt-2.5 pb-1 shrink-0 bg-[var(--surface)]">
+            <div className="p-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] flex items-center justify-between gap-2 shadow-xs">
+              <div className="min-w-0 flex-1">
+                <div className="text-[9px] font-bold text-[var(--accent-text)] uppercase tracking-wider">
+                  Preset Share Caption
+                </div>
+                <div className="text-xs text-[var(--text-primary)] font-medium truncate select-all">
+                  Surah {surahNameEnglish} {fromAyah === toAyah ? fromAyah : `${fromAyah}–${toAyah}`} • #Siraj #QuranReel
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  const cite = fromAyah === toAyah ? `${fromAyah}` : `${fromAyah}–${toAyah}`;
+                  const cleanName = surahNameEnglish.replace(/[^a-zA-Z0-9]/g, '');
+                  const text = `Surah ${surahNameEnglish} ${cite} • #Siraj #QuranReel #Surah${cleanName}`;
+                  if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(text);
+                    toast.success('📋 Caption & hashtags copied!');
+                  }
+                }}
+                className="h-7 px-2.5 text-[11px] font-bold rounded-xl bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--accent-text)] transition-all active:scale-95 shrink-0"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* FLOATING SMART RANGE TOAST (Stacked neatly ABOVE footer CTA bar) */}
+        {smartRangeNotice && (
+          <div
+            className="absolute bottom-[76px] left-3 right-3 z-30 flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[var(--accent)]/50 shadow-2xl text-xs font-semibold text-[var(--accent-text)] animate-in fade-in slide-in-from-bottom-2 duration-200"
+            style={{ background: 'var(--surface)' }}
+          >
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+              <span className="truncate">{smartRangeNotice}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSmartRangeNotice(null)}
+              className="p-1 rounded text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
         {/* BOTTOM ACTION BAR */}
         <div className="p-3 sm:p-4 border-t border-[var(--border)] bg-[var(--surface)] shrink-0 flex items-center gap-2">

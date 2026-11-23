@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,8 +12,10 @@ import {
   Sparkles,
   Download,
   CheckCircle,
-  FileText
+  FileText,
 } from "lucide-react";
+import { getPrimaryMasjid, type MosqueItem } from "@/lib/mosque-service";
+import { buildMasjidDeepLink } from "@/lib/route-utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +106,7 @@ function formatTimetableTime(timeStr: string, is24h: boolean): string {
 
 export default function MonthlyTimetable() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const location = useLocationState();
   const { timeFormat } = useSettings();
@@ -116,32 +119,51 @@ export default function MonthlyTimetable() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSharingImage, setIsSharingImage] = useState<boolean>(false);
   const [offsets, setOffsets] = useState<PrayerMinuteOffsets>(() => getPrayerMinuteOffsets());
+  const [primaryMasjid, setPrimaryMasjidState] = useState<MosqueItem | null>(() => getPrimaryMasjid());
 
   const selectedMethod = useMemo(() => prayerMethods.getSelectedMethod(), []);
   const madhab = useMemo(() => getMadhab(), []);
 
-  // Listen to minute offsets changes
+  // Listen to minute offsets & primary masjid changes
   useEffect(() => {
     const handleOffsetsChange = () => {
       setOffsets(getPrayerMinuteOffsets());
     };
+    const handleMasjidChange = () => {
+      setPrimaryMasjidState(getPrimaryMasjid());
+    };
     window.addEventListener("prayer-offsets-changed", handleOffsetsChange);
     window.addEventListener(PRAYER_OFFSETS_CHANGED_EVENT, handleOffsetsChange);
+    window.addEventListener("noor-primary-masjid-changed", handleMasjidChange);
+    window.addEventListener("storage", handleMasjidChange);
     window.addEventListener("focus", handleOffsetsChange);
     return () => {
       window.removeEventListener("prayer-offsets-changed", handleOffsetsChange);
       window.removeEventListener(PRAYER_OFFSETS_CHANGED_EVENT, handleOffsetsChange);
+      window.removeEventListener("noor-primary-masjid-changed", handleMasjidChange);
+      window.removeEventListener("storage", handleMasjidChange);
       window.removeEventListener("focus", handleOffsetsChange);
     };
   }, []);
 
+  const isMasjidContext = useMemo(() => {
+    return searchParams.get("source") === "masjid" || searchParams.has("masjid") || Boolean(primaryMasjid?.jamaatTimes);
+  }, [searchParams, primaryMasjid]);
+
+  const qrPayload = useMemo(() => {
+    if (isMasjidContext && primaryMasjid) {
+      return buildMasjidDeepLink(primaryMasjid);
+    }
+    return GITHUB_APP_URL;
+  }, [isMasjidContext, primaryMasjid]);
+
   const qrSvg = useMemo(() => {
-    return generateQRCodeSVG(GITHUB_APP_URL, 64, "#0B101B", "#FFFFFF");
-  }, []);
+    return generateQRCodeSVG(qrPayload, 64, "#0B101B", "#FFFFFF");
+  }, [qrPayload]);
 
   const printQrSvg = useMemo(() => {
-    return generateQRCodeSVG(GITHUB_APP_URL, 56, "#0f172a", "#ffffff");
-  }, []);
+    return generateQRCodeSVG(qrPayload, 56, "#0f172a", "#ffffff");
+  }, [qrPayload]);
 
   const loadCalendar = useCallback(async (year: number, month: number, forceRefresh = false) => {
     if (!location.latitude || !location.longitude) return;
@@ -259,8 +281,11 @@ export default function MonthlyTimetable() {
       const headerHeight = 220 * scale;
       const tableHeaderHeight = 44 * scale;
       const footerHeight = 70 * scale;
+      const hasJamaatRow = Boolean(primaryMasjid?.jamaatTimes);
+      const jamaatRowHeight = hasJamaatRow ? 34 * scale : 0;
+      const footerExtra = primaryMasjid ? 24 * scale : 0;
       const totalRows = calendar.days.length;
-      const height = headerHeight + tableHeaderHeight + totalRows * rowHeight + footerHeight;
+      const height = headerHeight + tableHeaderHeight + jamaatRowHeight + totalRows * rowHeight + footerHeight + footerExtra;
 
       const canvas = document.createElement("canvas");
       canvas.width = width;
@@ -332,6 +357,31 @@ export default function MonthlyTimetable() {
 
       // Draw Rows
       let curY = tableY + tableHeaderHeight;
+
+      if (hasJamaatRow && primaryMasjid?.jamaatTimes) {
+        ctx.fillStyle = "rgba(245, 158, 11, 0.22)";
+        ctx.fillRect(40 * scale, curY, width - 80 * scale, jamaatRowHeight);
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.5)";
+        ctx.lineWidth = 1 * scale;
+        ctx.strokeRect(40 * scale, curY, width - 80 * scale, jamaatRowHeight);
+
+        ctx.fillStyle = "#F59E0B";
+        ctx.font = `bold ${11.5 * scale}px sans-serif`;
+        ctx.fillText("🕌 JAMAAT", cols[0].x, curY + 22 * scale);
+        ctx.fillText("Fixed", cols[1].x, curY + 22 * scale);
+        ctx.fillText(primaryMasjid.name.substring(0, 10), cols[2].x, curY + 22 * scale);
+
+        const jt = primaryMasjid.jamaatTimes;
+        ctx.fillText(jt.fajr || "—", cols[3].x, curY + 22 * scale);
+        ctx.fillText("—", cols[4].x, curY + 22 * scale);
+        ctx.fillText(jt.dhuhr || jt.jummah || "—", cols[5].x, curY + 22 * scale);
+        ctx.fillText(jt.asr || "—", cols[6].x, curY + 22 * scale);
+        ctx.fillText(jt.maghrib || "—", cols[7].x, curY + 22 * scale);
+        ctx.fillText(jt.isha || "—", cols[8].x, curY + 22 * scale);
+
+        curY += jamaatRowHeight;
+      }
+
       ctx.font = `${11.5 * scale}px sans-serif`;
 
       calendar.days.forEach((day, idx) => {
@@ -379,13 +429,30 @@ export default function MonthlyTimetable() {
       });
 
       // Footer
-      ctx.fillStyle = "#64748B";
-      ctx.font = `${11 * scale}px sans-serif`;
-      ctx.fillText(
-        `Generated by Siraj • Open Source Islamic Companion • ${GITHUB_APP_URL}`,
-        40 * scale,
-        curY + 36 * scale
-      );
+      if (primaryMasjid) {
+        ctx.fillStyle = "#E2E8F0";
+        ctx.font = `bold ${11.5 * scale}px sans-serif`;
+        ctx.fillText(
+          `🕌 Primary Masjid: ${primaryMasjid.name}${primaryMasjid.address ? ` • ${primaryMasjid.address}` : ""}`,
+          40 * scale,
+          curY + 32 * scale
+        );
+        ctx.fillStyle = "#64748B";
+        ctx.font = `${10.5 * scale}px sans-serif`;
+        ctx.fillText(
+          `Generated by Siraj • Open Source Islamic Companion • ${qrPayload}`,
+          40 * scale,
+          curY + 52 * scale
+        );
+      } else {
+        ctx.fillStyle = "#64748B";
+        ctx.font = `${11 * scale}px sans-serif`;
+        ctx.fillText(
+          `Generated by Siraj • Open Source Islamic Companion • ${GITHUB_APP_URL}`,
+          40 * scale,
+          curY + 36 * scale
+        );
+      }
 
       const fileName = `siraj-timetable-${currentYear}-${String(currentMonth).padStart(2, "0")}.png`;
 
@@ -570,6 +637,31 @@ export default function MonthlyTimetable() {
           </tr>
         </thead>
         <tbody>
+          {primaryMasjid?.jamaatTimes && (
+            <tr style={{ background: "#fef3c7", color: "#92400e", fontWeight: 700 }}>
+              <td colSpan={3} style={{ padding: "4px 6px", border: "1px solid #f59e0b", textAlign: "left" }}>
+                🕌 JAMAAT — {primaryMasjid.name}
+              </td>
+              <td style={{ padding: "4px 5px", border: "1px solid #f59e0b", textAlign: "center" }}>
+                {primaryMasjid.jamaatTimes.fajr || "—"}
+              </td>
+              <td style={{ padding: "4px 5px", border: "1px solid #f59e0b", textAlign: "center" }}>
+                —
+              </td>
+              <td style={{ padding: "4px 5px", border: "1px solid #f59e0b", textAlign: "center" }}>
+                {primaryMasjid.jamaatTimes.dhuhr || primaryMasjid.jamaatTimes.jummah || "—"}
+              </td>
+              <td style={{ padding: "4px 5px", border: "1px solid #f59e0b", textAlign: "center" }}>
+                {primaryMasjid.jamaatTimes.asr || "—"}
+              </td>
+              <td style={{ padding: "4px 5px", border: "1px solid #f59e0b", textAlign: "center" }}>
+                {primaryMasjid.jamaatTimes.maghrib || "—"}
+              </td>
+              <td style={{ padding: "4px 5px", border: "1px solid #f59e0b", textAlign: "center" }}>
+                {primaryMasjid.jamaatTimes.isha || "—"}
+              </td>
+            </tr>
+          )}
           {calendar?.days.map((day, idx) => {
             const fri = isFriday(day);
             const adj = applyOffsetsToTimings(day.timings, offsets);
@@ -665,7 +757,11 @@ export default function MonthlyTimetable() {
           alignItems: "center",
         }}
       >
-        <span>Times formatted in 12h/24h per user preference • Includes active Masjid minute offsets</span>
+        <span>
+          {primaryMasjid
+            ? `🕌 Primary Masjid: ${primaryMasjid.name}${primaryMasjid.address ? ` (${primaryMasjid.address})` : ""} • Includes active minute offsets`
+            : "Times formatted in 12h/24h per user preference • Includes active Masjid minute offsets"}
+        </span>
         <span>Generated by Siraj (Free & Open Source)</span>
       </div>
     </div>,
@@ -856,6 +952,32 @@ export default function MonthlyTimetable() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]/60 text-[10.5px] sm:text-xs print:divide-gray-300">
+                  {primaryMasjid?.jamaatTimes && (
+                    <tr className="bg-[var(--accent)]/15 border-b border-[var(--accent)]/40 font-bold text-[var(--accent-text)]">
+                      <td className="py-2 px-1 text-left" colSpan={1}>
+                        <span className="flex items-center gap-1">
+                          <span>🕌</span>
+                          <span>Jamaat</span>
+                        </span>
+                      </td>
+                      <td className="py-2 px-0.5 text-center font-mono">
+                        {primaryMasjid.jamaatTimes.fajr || "—"}
+                      </td>
+                      <td className="py-2 px-0.5 text-center text-muted-foreground">—</td>
+                      <td className="py-2 px-0.5 text-center font-mono">
+                        {primaryMasjid.jamaatTimes.dhuhr || primaryMasjid.jamaatTimes.jummah || "—"}
+                      </td>
+                      <td className="py-2 px-0.5 text-center font-mono">
+                        {primaryMasjid.jamaatTimes.asr || "—"}
+                      </td>
+                      <td className="py-2 px-0.5 text-center font-mono">
+                        {primaryMasjid.jamaatTimes.maghrib || "—"}
+                      </td>
+                      <td className="py-2 px-0.5 text-center font-mono">
+                        {primaryMasjid.jamaatTimes.isha || "—"}
+                      </td>
+                    </tr>
+                  )}
                   {isLoading ? (
                     <tr>
                       <td colSpan={7} className="text-center py-12 text-sm text-[var(--text-secondary)]">

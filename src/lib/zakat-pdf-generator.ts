@@ -52,7 +52,7 @@ export interface ZakatPdfData {
 /**
  * Converts a data URL to a raw Uint8Array
  */
-function dataUrlToUint8Array(dataUrl: string): Uint8Array {
+export function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   const commaIdx = dataUrl.indexOf(',');
   const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
   const binaryStr = typeof atob === 'function' ? atob(base64) : '';
@@ -98,7 +98,7 @@ export function blobToBase64(blob: Blob): Promise<string> {
  * Wraps raw JPEG bytes into a 100% spec-compliant %PDF-1.4 single-page A4 PDF binary.
  * A4 Standard Dimensions in PDF points (72 DPI): 595.28 × 841.89 pt
  */
-function jpegBytesToA4PdfBlob(
+export function jpegBytesToA4PdfBlob(
   jpegBytes: Uint8Array,
   imagePixelWidth: number,
   imagePixelHeight: number

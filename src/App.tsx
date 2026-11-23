@@ -287,6 +287,7 @@ function AppRoutes() {
           <Route path="/timetable" element={<MonthlyTimetable />} />
           <Route path="/services/timetable" element={<Navigate to="/timetable" replace />} />
           <Route path="/mosques" element={<MosqueFinder />} />
+          <Route path="/masjid" element={<MosqueFinder />} />
           <Route path="/services/mosques" element={<Navigate to="/mosques" replace />} />
           <Route path="/qibla" element={<Qibla />} />
           <Route path="/duas" element={<Duas />} />

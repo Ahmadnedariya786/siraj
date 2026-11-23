@@ -49,6 +49,11 @@ import { quranFeaturesService } from '@/lib/quran-features';
 import { AyahStudySheet } from '@/components/Quran/AyahStudySheet';
 import { updateAutoMovingBookmarks } from '@/lib/quran-bookmarks';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
+import {
+  getWordTimingsForVerse,
+  getActiveWordPosition,
+  type WordSegment,
+} from '@/lib/word-timings';
 
 const LS_LAST_SURAH = 'quran-reader-last-surah';
 const LS_LAST_PAGE = 'quran-reader-last-page';
@@ -65,10 +70,23 @@ export default function QuranReader() {
   const navigate = useNavigate();
 
   // Tilawah global player
-  const { isPlaying, currentSurah, currentAyah, playAyah, togglePlay } = useTilawah();
+  const {
+    isPlaying,
+    currentSurah,
+    currentAyah,
+    playAyah,
+    togglePlay,
+    reciter,
+    playbackTimeMs,
+    duration,
+  } = useTilawah();
   const [currentPageData, setCurrentPageData] = useState<InteractivePageData | null>(null);
   const pageDataRef = useRef<InteractivePageData | null>(null);
   const lastObservedVerseRef = useRef<string | null>(null);
+
+  // Cards Mode word-by-word audio-sync state
+  const [verseSegments, setVerseSegments] = useState<WordSegment[] | null>(null);
+  const [activeWordPos, setActiveWordPos] = useState<number | null>(null);
 
   const routeSurahId = useMemo(() => {
     const raw = id ?? surahName ?? '1';
@@ -132,6 +150,53 @@ export default function QuranReader() {
   const [cardArabicFontSize, setCardArabicFontSize] = useState<number>(28);
   const [cardTranslations, setCardTranslations] = useState<Record<number, string>>({});
   const [isCardTranslationLoading, setIsCardTranslationLoading] = useState(false);
+
+  // Fetch word-by-word timestamp segments for Cards Mode audio-sync
+  useEffect(() => {
+    let isMounted = true;
+    if (readerViewMode === 'card' && isPlaying && currentSurah > 0 && currentAyah > 0) {
+      getWordTimingsForVerse(reciter.id, currentSurah, currentAyah)
+        .then((segs) => {
+          if (isMounted) {
+            setVerseSegments(segs);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setVerseSegments(null);
+        });
+    } else {
+      setVerseSegments(null);
+      setActiveWordPos(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [readerViewMode, isPlaying, currentSurah, currentAyah, reciter.id]);
+
+  // Synchronize active word in Cards Mode
+  useEffect(() => {
+    if (readerViewMode !== 'card' || !isPlaying || currentSurah <= 0 || currentAyah <= 0 || !currentPageData) {
+      setActiveWordPos(null);
+      return;
+    }
+
+    const activeVerse = currentPageData.verses.find(
+      (v) => v.surah_number === currentSurah && v.verse_number === currentAyah
+    );
+
+    if (!activeVerse) {
+      setActiveWordPos(null);
+      return;
+    }
+
+    const pos = getActiveWordPosition(
+      verseSegments,
+      playbackTimeMs,
+      Math.round(duration * 1000),
+      activeVerse.words
+    );
+    setActiveWordPos(pos);
+  }, [readerViewMode, isPlaying, currentSurah, currentAyah, playbackTimeMs, duration, verseSegments, currentPageData]);
 
   useEffect(() => {
     if (readerViewMode !== 'card') return;
@@ -1088,13 +1153,33 @@ export default function QuranReader() {
                         </div>
                       </div>
 
-                      {/* Arabic Text with Ornate Medallion */}
+                      {/* Arabic Text with Ornate Medallion & Word-by-Word Audio Sync */}
                       <div
                         dir="rtl"
                         className="font-arabic text-right leading-[2.2] select-text text-[var(--accent-text)]"
                         style={{ fontSize: `${cardArabicFontSize}px` }}
                       >
-                        {v.text_uthmani}{' '}
+                        {v.words && v.words.length > 0 ? (
+                          v.words
+                            .filter((w) => w.char_type_name !== 'end')
+                            .map((w, wIdx) => {
+                              const isRecited = isThisPlaying && activeWordPos === w.position;
+                              return (
+                                <span
+                                  key={`${v.verse_key}-w-${w.position || wIdx}`}
+                                  className={`inline-block mx-0.5 px-1 rounded transition-all duration-150 ${
+                                    isRecited
+                                      ? 'bg-[var(--accent)] text-[var(--on-accent)] font-bold scale-105 shadow-sm'
+                                      : ''
+                                  }`}
+                                >
+                                  {w.text_uthmani || ''}
+                                </span>
+                              );
+                            })
+                        ) : (
+                          v.text_uthmani
+                        )}{' '}
                         <span className="inline-block text-[var(--accent)] mx-1 select-none font-bold">
                           ﴿{v.verse_number}﴾
                         </span>

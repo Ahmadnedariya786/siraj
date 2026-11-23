@@ -74,6 +74,8 @@ export function normalizeAppRoute(rawInput?: string | null): string {
     canonicalPath = '/qibla';
   } else if (rawPath.startsWith('/settings')) {
     canonicalPath = rawPath;
+  } else if (rawPath.startsWith('/masjid') || rawPath.startsWith('/mosque')) {
+    canonicalPath = '/mosques';
   }
 
   // Return clean path (if root and no query/hash, return "/")
@@ -82,4 +84,37 @@ export function normalizeAppRoute(rawInput?: string | null): string {
   }
 
   return canonicalPath + searchAndHash;
+}
+
+/**
+ * Builds a canonical, shareable Siraj Masjid Deep-Link with full metadata & Jamaat times.
+ */
+export function buildMasjidDeepLink(masjid: {
+  name: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+  jamaatTimes?: {
+    fajr?: string;
+    dhuhr?: string;
+    asr?: string;
+    maghrib?: string;
+    isha?: string;
+    jummah?: string;
+  } | null;
+}): string {
+  const params = new URLSearchParams();
+  if (masjid.name) params.set('name', masjid.name);
+  if (masjid.latitude !== undefined && Number.isFinite(masjid.latitude)) params.set('lat', String(masjid.latitude));
+  if (masjid.longitude !== undefined && Number.isFinite(masjid.longitude)) params.set('lon', String(masjid.longitude));
+  if (masjid.address) params.set('address', masjid.address);
+  if (masjid.jamaatTimes) {
+    if (masjid.jamaatTimes.fajr) params.set('fajr', masjid.jamaatTimes.fajr);
+    if (masjid.jamaatTimes.dhuhr) params.set('dhuhr', masjid.jamaatTimes.dhuhr);
+    if (masjid.jamaatTimes.asr) params.set('asr', masjid.jamaatTimes.asr);
+    if (masjid.jamaatTimes.maghrib) params.set('maghrib', masjid.jamaatTimes.maghrib);
+    if (masjid.jamaatTimes.isha) params.set('isha', masjid.jamaatTimes.isha);
+    if (masjid.jamaatTimes.jummah) params.set('jummah', masjid.jamaatTimes.jummah);
+  }
+  return `siraj://masjid?${params.toString()}`;
 }

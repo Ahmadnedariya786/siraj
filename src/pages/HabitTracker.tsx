@@ -393,6 +393,7 @@ const StatCard = memo(function StatCard({ label, value, icon }: StatCardProps) {
 interface HabitRowProps {
   habit: Habit;
   done: boolean;
+  isSynced?: boolean;
   last7: boolean[];
   current: number;
   rate: number;
@@ -424,6 +425,7 @@ const getHabitVectorIcon = (category: string) => {
 const HabitRow = memo(function HabitRow({
   habit,
   done,
+  isSynced,
   last7,
   current,
   rate,
@@ -448,6 +450,11 @@ const HabitRow = memo(function HabitRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className={cn("font-semibold text-sm truncate", done && "text-[#C9860A]")}>{habit.name}</h3>
+            {isSynced && (
+              <span className="text-[9px] px-1.5 py-0.2 rounded-full font-semibold bg-[var(--accent)]/15 text-[var(--accent-text)] border border-[var(--accent)]/25 shrink-0 select-none">
+                Synced
+              </span>
+            )}
             {current > 0 && (
               <span
                 className="flex items-center gap-0.5 text-xs font-bold text-orange-500 shrink-0"
@@ -627,6 +634,7 @@ export default function HabitTrackerPage() {
       return {
         habit,
         done: selectedEntries.has(habit.id),
+        isSynced: Boolean(entries.find((e) => e.habitId === habit.id && e.date === selectedDate)?.notes === 'synced-from-journal'),
         last7,
         current: streak.current,
         longest: streak.longest,
@@ -957,6 +965,7 @@ export default function HabitTrackerPage() {
               key={row.habit.id}
               habit={row.habit}
               done={row.done}
+              isSynced={row.isSynced}
               last7={row.last7}
               current={row.current}
               rate={row.rate}

@@ -28,6 +28,7 @@ import {
   Check,
   ChevronDown,
   Loader2,
+  Repeat,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getPageForSurahAndAyah } from '@/lib/interactive-mushaf';
@@ -58,6 +59,8 @@ export const TilawahPlayerModal: React.FC<TilawahPlayerModalProps> = ({
     activeAyahTranslation,
     sleepTimerOption,
     sleepRemainingSeconds,
+    autoContinueNextSurah,
+    setAutoContinueNextSurah,
     togglePlay,
     nextAyah,
     prevAyah,
@@ -471,6 +474,55 @@ export const TilawahPlayerModal: React.FC<TilawahPlayerModalProps> = ({
               })}
             </div>
           )}
+
+          {/* Auto-continue Next Surah Toggle */}
+          <div
+            className="p-3 rounded-2xl flex items-center justify-between gap-2"
+            style={{
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: 'var(--surface-2)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                <Repeat className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Auto-continue Next Surah
+                </p>
+                <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                  {autoContinueNextSurah
+                    ? `Seamlessly plays Surah ${currentSurah < 114 ? currentSurah + 1 : 1} next`
+                    : 'Pauses recitation when current Surah ends'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoContinueNextSurah}
+              onClick={() => setAutoContinueNextSurah(!autoContinueNextSurah)}
+              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ${
+                autoContinueNextSurah ? 'bg-[var(--accent)]' : 'bg-[var(--surface-2)] border border-[var(--border)]'
+              }`}
+              title="Toggle auto-continue next Surah"
+              aria-label="Toggle auto-continue next Surah"
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                  autoContinueNextSurah ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
 
           {/* Live Synchronized Ayah Card */}
           <div

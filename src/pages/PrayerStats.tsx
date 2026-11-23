@@ -25,7 +25,11 @@ import {
   WifiOff,
   Sun,
   ShieldCheck,
+  FileText,
+  Download,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { shareYearJournalPdf } from "@/lib/worship-pdf-export";
 import {
   formatDateKey,
   getDayWorshipLog,
@@ -60,6 +64,7 @@ const PRAYERS: { key: PrayerName; label: string; sunnahMax: number; sunnahCycleL
 export default function PrayerStats() {
   const { timeFormat } = useSettings();
   const { language, ui, isRTL } = useLanguage();
+  const { toast } = useToast();
   const wj = useMemo(() => getWorshipJournalStrings(language), [language]);
   const is24h = timeFormat === "24h";
 
@@ -71,9 +76,11 @@ export default function PrayerStats() {
   }, [selectedDateKey]);
 
   // Reactive state
+  const [monthOffset, setMonthOffset] = useState<number>(0);
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [dayLog, setDayLog] = useState<DayWorshipLog>(() => getDayWorshipLog(selectedDateKey));
   const [kpis, setKpis] = useState<WorshipKPIs>(() => getWorshipKPIs());
-  const [heatmapCells, setHeatmapCells] = useState<HeatmapDayCell[]>(() => get3MonthHeatmapData());
+  const [heatmapCells, setHeatmapCells] = useState<HeatmapDayCell[]>(() => get3MonthHeatmapData(0));
 
   // Prayer times state for selected date
   const [daySchedule, setDaySchedule] = useState<any>(null);
@@ -103,8 +110,26 @@ export default function PrayerStats() {
   const refreshAll = useCallback(() => {
     setDayLog(getDayWorshipLog(selectedDateKey));
     setKpis(getWorshipKPIs());
-    setHeatmapCells(get3MonthHeatmapData());
-  }, [selectedDateKey]);
+    setHeatmapCells(get3MonthHeatmapData(monthOffset));
+  }, [selectedDateKey, monthOffset]);
+
+  useEffect(() => {
+    setHeatmapCells(get3MonthHeatmapData(monthOffset));
+  }, [monthOffset]);
+
+  const handleExportYearPdf = async () => {
+    try {
+      setIsExportingPdf(true);
+      await shareYearJournalPdf(selectedDate.getFullYear(), (msg) => {
+        toast({ title: "Worship Journal", description: msg });
+      });
+    } catch (err) {
+      console.error("[PrayerStats] PDF Export error:", err);
+      toast({ title: "Export Failed", description: "Could not generate Year PDF report.", variant: "destructive" });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   // Sync with storage events from Home Dashboard
   useEffect(() => {
@@ -391,10 +416,54 @@ export default function PrayerStats() {
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
                   {wj.heatmapTitle}
                 </h3>
+                {/* Prev / Next Month Selector */}
+                <div className="flex items-center gap-0.5 ms-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMonthOffset((o) => o - 1)}
+                    className="h-6 w-6 p-0 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+                    title="Previous 3 Months"
+                    aria-label="Previous 3 Months"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </Button>
+                  {monthOffset !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMonthOffset(0)}
+                      className="text-[9px] font-bold text-[var(--accent-text)] px-1.5 py-0.5 rounded bg-[var(--surface-2)] border border-[var(--border)]"
+                      title="Reset to current month"
+                    >
+                      Now
+                    </button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={monthOffset >= 0}
+                    onClick={() => setMonthOffset((o) => o + 1)}
+                    className="h-6 w-6 p-0 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] disabled:opacity-30"
+                    title="Next 3 Months"
+                    aria-label="Next 3 Months"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
-              <span className="text-[11px] text-[var(--text-secondary)] shrink-0">
-                {wj.tapCellToEdit}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isExportingPdf}
+                  onClick={handleExportYearPdf}
+                  className="h-7 px-2.5 text-[10px] font-bold rounded-xl border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent-text)] hover:border-[var(--accent)] transition-all flex items-center gap-1.5"
+                  title="Export Annual Worship Journal PDF"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span>{isExportingPdf ? "Exporting..." : "Export Year PDF"}</span>
+                </Button>
+              </div>
             </div>
 
             {/* Heatmap Grid Container (Horizontal scroll safe for 360px) */}

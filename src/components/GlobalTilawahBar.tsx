@@ -6,7 +6,7 @@
  * Follows the user across all app routes with ergonomic one-handed controls.
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTilawah } from '@/contexts/TilawahContext';
 import { getPageForSurahAndAyah } from '@/lib/interactive-mushaf';
@@ -45,6 +45,34 @@ export const GlobalTilawahBar: React.FC = () => {
   const isQuranReader = useMemo(() => {
     return /^\/quran\/.+/.test(location.pathname);
   }, [location.pathname]);
+
+  // Touch gesture handling: swipe-down (deltaY > 40px) to dismiss, swipe-up (deltaY < -40px) to open full player
+  const touchStartY = useRef<number | null>(null);
+  const touchDeltaY = useRef<number>(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchDeltaY.current = 0;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    touchDeltaY.current = e.touches[0].clientY - touchStartY.current;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartY.current !== null) {
+      if (touchDeltaY.current > 40) {
+        // Swiped down -> dismiss floating dock
+        dismissBar();
+      } else if (touchDeltaY.current < -40) {
+        // Swiped up -> open full Tilawah player
+        openPlayer();
+      }
+    }
+    touchStartY.current = null;
+    touchDeltaY.current = 0;
+  };
 
   const shouldShow =
     isBarVisible &&
@@ -108,6 +136,9 @@ export const GlobalTilawahBar: React.FC = () => {
     <aside
       role="region"
       aria-label="Quran Tilawah Mini Player"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       className="fixed z-[60] left-3 right-3 max-w-lg mx-auto print:hidden select-none animate-in fade-in slide-in-from-bottom-3 duration-200"
       style={{
         bottom: bottomOffset,

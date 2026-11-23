@@ -18,6 +18,7 @@ import {
 import { OnlinePrayerAPI, onlinePrayerApi, type LiveDaySchedule } from './online-prayer-api';
 import { getPrayerMinuteOffsets, applyOffsetsToTimings } from './prayer-offsets';
 import { calculatePrayerTimes } from './prayer-calculator';
+import { syncPrayerToHabits } from './habit-tracker';
 
 export type { PrayerName };
 
@@ -240,6 +241,7 @@ export const updatePrayerStatus = (
   };
 
   saveRawWorshipDays(days);
+  syncPrayerToHabits(dateKey, prayer, resolvedStatus);
   return updatedLog;
 };
 
@@ -467,19 +469,22 @@ export const getWorshipKPIs = (): WorshipKPIs => {
 
 /**
  * 3-Month Consistency Heatmap Matrix
- * 13 weeks x 7 days = 91 days ending on the end of current week
+ * 13 weeks x 7 days = 91 days ending on the end of reference week
  */
-export const get3MonthHeatmapData = (): HeatmapDayCell[] => {
+export const get3MonthHeatmapData = (monthOffset: number = 0): HeatmapDayCell[] => {
   const days = getRawWorshipDays();
-  const today = new Date();
-  const todayKey = formatDateKey(today);
+  const refDate = new Date();
+  if (monthOffset !== 0) {
+    refDate.setMonth(refDate.getMonth() + monthOffset);
+  }
+  const actualTodayKey = formatDateKey(new Date());
 
   // Align to end of current week (Sunday)
   // JS getDay(): 0 is Sun, 1 is Mon, 6 is Sat
-  const dayOfWeek = today.getDay(); // 0..6
+  const dayOfWeek = refDate.getDay(); // 0..6
   const daysToSunday = (7 - dayOfWeek) % 7;
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + daysToSunday);
+  const endDate = new Date(refDate);
+  endDate.setDate(refDate.getDate() + daysToSunday);
 
   const totalCells = 91; // 13 weeks * 7 days
   const cells: HeatmapDayCell[] = [];
@@ -510,7 +515,7 @@ export const get3MonthHeatmapData = (): HeatmapDayCell[] => {
       dayOfWeek: mappedDay,
       completedCount: completed,
       fasted: Boolean(log?.fasted),
-      isToday: key === todayKey,
+      isToday: key === actualTodayKey,
       monthName: d.getDate() === 1 ? monthNames[d.getMonth()] : undefined,
     };
 

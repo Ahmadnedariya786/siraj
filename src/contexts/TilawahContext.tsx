@@ -93,8 +93,10 @@ export interface TilawahContextValue {
   // UI state
   isBarVisible: boolean;
   isPlayerOpen: boolean;
+  autoContinueNextSurah: boolean;
 
   // Actions
+  setAutoContinueNextSurah: (val: boolean) => void;
   playAyah: (surah: number, ayah: number, reciterParam?: string | TilawahReciter) => Promise<void>;
   togglePlay: () => void;
   pause: () => void;
@@ -173,6 +175,23 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Mini-player bar visibility
   const [isBarVisible, setIsBarVisible] = useState<boolean>(false);
   const [isPlayerOpen, setIsPlayerOpen] = useState<boolean>(false);
+  const [autoContinueNextSurah, setAutoContinueNextSurahState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('siraj_auto_continue_next_surah');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const setAutoContinueNextSurah = useCallback((val: boolean) => {
+    setAutoContinueNextSurahState(val);
+    try {
+      localStorage.setItem('siraj_auto_continue_next_surah', String(val));
+    } catch {
+      // Storage safe
+    }
+  }, []);
 
   // Sleep Timer state
   const [sleepTimerOption, setSleepTimerOption] = useState<SleepTimerOption>(null);
@@ -747,6 +766,15 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Advance to next surah
     if (currentSurah < 114) {
+      if (!autoContinueNextSurah) {
+        setIsPlaying(false);
+        isTransitioningRef.current = false;
+        toast({
+          title: 'Surah Completed 📖',
+          description: `Finished Surah ${surahInfo?.englishName || currentSurah}. Auto-continue to next surah is OFF.`,
+        });
+        return;
+      }
       scheduleNext(currentSurah + 1, 1);
       return;
     }
@@ -1087,6 +1115,8 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
       openPlayer,
       closePlayer,
       dismissBar,
+      autoContinueNextSurah,
+      setAutoContinueNextSurah,
     }),
     [
       isPlaying,
@@ -1131,6 +1161,8 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
       openPlayer,
       closePlayer,
       dismissBar,
+      autoContinueNextSurah,
+      setAutoContinueNextSurah,
     ]
   );
 

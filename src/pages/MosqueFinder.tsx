@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   MapPin,
   Navigation,
@@ -21,6 +21,7 @@ import {
   Trash2,
   BookmarkCheck,
   Edit3,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -46,6 +47,7 @@ import {
   type MosqueJamaatTimes,
   type StreetLocationResult,
 } from "@/lib/mosque-service";
+import { buildMasjidDeepLink } from "@/lib/route-utils";
 
 /* ─────────────────────────────────────────────────────────────
    MODAL 1: EDIT LOCAL JAMAAT TIMES FOR ANY MOSQUE
@@ -702,6 +704,7 @@ function InlineJamaatStrip({ times, onEdit }: InlineJamaatStripProps) {
    ───────────────────────────────────────────────────────────── */
 function MosqueFinderContent() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const location = useLocationState();
 
@@ -720,6 +723,69 @@ function MosqueFinderContent() {
 
   const lat = location.latitude;
   const lon = location.longitude;
+
+  // Deep-link masjid parser (siraj://masjid?name=...&lat=...&lon=...&address=...&fajr=...)
+  const deepLinkedMasjid = useMemo<MosqueItem | null>(() => {
+    const name = searchParams.get("name");
+    if (!name) return null;
+    const latStr = searchParams.get("lat");
+    const lonStr = searchParams.get("lon");
+    const address = searchParams.get("address") || "";
+    const parsedLat = latStr ? parseFloat(latStr) : (lat || 0);
+    const parsedLon = lonStr ? parseFloat(lonStr) : (lon || 0);
+
+    const jt: MosqueJamaatTimes = {
+      fajr: searchParams.get("fajr") || undefined,
+      dhuhr: searchParams.get("dhuhr") || undefined,
+      asr: searchParams.get("asr") || undefined,
+      maghrib: searchParams.get("maghrib") || undefined,
+      isha: searchParams.get("isha") || undefined,
+      jummah: searchParams.get("jummah") || undefined,
+    };
+
+    const hasAnyJamaat = Object.values(jt).some(Boolean);
+    const id = `masjid-link-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+
+    return {
+      id,
+      name,
+      latitude: parsedLat,
+      longitude: parsedLon,
+      distanceMeters: 0,
+      distanceFormatted: "",
+      walkingEstimate: "",
+      drivingEstimate: "",
+      address,
+      isFavourite: true,
+      isPrimary: true,
+      isCustom: true,
+      jamaatTimes: hasAnyJamaat ? jt : null,
+    };
+  }, [searchParams, lat, lon]);
+
+  const [showSavePinPrompt, setShowSavePinPrompt] = useState<boolean>(() => Boolean(searchParams.get("name")));
+
+  useEffect(() => {
+    if (deepLinkedMasjid) {
+      setShowSavePinPrompt(true);
+    }
+  }, [deepLinkedMasjid]);
+
+  const handleSaveAndPinDeepLinked = () => {
+    if (!deepLinkedMasjid) return;
+    saveCustomMosque(deepLinkedMasjid);
+    if (deepLinkedMasjid.jamaatTimes) {
+      saveMosqueJamaatTimes(deepLinkedMasjid.id, deepLinkedMasjid.jamaatTimes);
+    }
+    setPrimaryMasjid(deepLinkedMasjid);
+    setPrimaryMasjidState(deepLinkedMasjid);
+    toast({
+      title: "Masjid Saved & Pinned! 🕌",
+      description: `${deepLinkedMasjid.name} is now your Primary Masjid.`,
+    });
+    setShowSavePinPrompt(false);
+    setSearchParams({}, { replace: true });
+  };
 
   // Sync primary masjid changes
   useEffect(() => {
@@ -1052,6 +1118,68 @@ function MosqueFinderContent() {
             )}
           </div>
 
+          {/* SHARED MASJID DEEP-LINK PROMPT BANNER */}
+          {showSavePinPrompt && deepLinkedMasjid && (
+            <Card
+              className="p-3.5 rounded-2xl border space-y-2.5 shadow-lg animate-in fade-in slide-in-from-top-2 duration-200"
+              style={{
+                borderColor: "var(--accent)",
+                background: "linear-gradient(135deg, rgba(245, 158, 11, 0.16), var(--surface))",
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-base">🕌</span>
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--accent-text)] truncate">
+                    Shared Masjid Deep-Link
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSavePinPrompt(false);
+                    setSearchParams({}, { replace: true });
+                  }}
+                  className="text-[10px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+
+              <div>
+                <h2 className="text-sm font-extrabold text-[var(--text-primary)] leading-tight">
+                  {deepLinkedMasjid.name}
+                </h2>
+                {deepLinkedMasjid.address && (
+                  <p className="text-[11px] text-[var(--text-secondary)] truncate mt-0.5">
+                    {deepLinkedMasjid.address}
+                  </p>
+                )}
+              </div>
+
+              {deepLinkedMasjid.jamaatTimes && (
+                <InlineJamaatStrip
+                  times={deepLinkedMasjid.jamaatTimes}
+                  onEdit={() => setSelectedMosqueForJamaat(deepLinkedMasjid)}
+                />
+              )}
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveAndPinDeepLinked}
+                className="w-full h-8 rounded-xl text-xs font-bold gap-1.5 cursor-pointer shadow-sm"
+                style={{
+                  background: "linear-gradient(135deg, var(--accent), var(--accent-2))",
+                  color: "var(--on-accent)",
+                }}
+              >
+                <Star className="w-3.5 h-3.5 fill-current" />
+                <span>Save & Pin this Masjid</span>
+              </Button>
+            </Card>
+          )}
+
           {/* PINNED PRIMARY MASJID HERO CARD (if set) */}
           {primaryMasjid && (
             <Card
@@ -1093,35 +1221,62 @@ function MosqueFinderContent() {
               />
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-2 pt-1 border-t" style={{ borderColor: "var(--border)" }}>
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t" style={{ borderColor: "var(--border)" }}>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => openGoogleMapsDirections(primaryMasjid.latitude, primaryMasjid.longitude)}
-                  className="h-8 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer"
+                  className="h-8 rounded-xl text-xs font-semibold gap-1 cursor-pointer px-1"
                   style={{
                     borderColor: "var(--border)",
                     background: "var(--surface)",
                     color: "var(--text-primary)",
                   }}
                 >
-                  <Navigation className="w-3.5 h-3.5 text-[var(--accent)]" />
-                  <span>Directions</span>
+                  <Navigation className="w-3 h-3 text-[var(--accent)]" />
+                  <span className="truncate">Directions</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const deepLink = buildMasjidDeepLink(primaryMasjid);
+                    const shareText = `🕌 ${primaryMasjid.name}\n${primaryMasjid.address || ''}\n\nOpen in Siraj: ${deepLink}`;
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({ title: primaryMasjid.name, text: shareText, url: deepLink });
+                      } catch {}
+                    } else if (navigator.clipboard) {
+                      navigator.clipboard.writeText(deepLink);
+                      toast({ title: "Link Copied", description: "Masjid deep-link copied to clipboard." });
+                    }
+                  }}
+                  className="h-8 rounded-xl text-xs font-semibold gap-1 cursor-pointer px-1"
+                  style={{
+                    borderColor: "var(--border)",
+                    background: "var(--surface)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <Share2 className="w-3 h-3 text-[var(--accent)]" />
+                  <span className="truncate">Share</span>
                 </Button>
 
                 <Button
                   type="button"
                   size="sm"
                   onClick={() => setSelectedMosqueForJamaat(primaryMasjid)}
-                  className="h-8 rounded-xl text-xs font-bold gap-1 cursor-pointer"
+                  className="h-8 rounded-xl text-xs font-bold gap-1 cursor-pointer px-1"
                   style={{
                     background: "linear-gradient(135deg, var(--accent), var(--accent-2))",
                     color: "var(--on-accent)",
                   }}
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Jamaat</span>
+                  <Edit3 className="w-3 h-3" />
+                  <span className="truncate">Edit</span>
                 </Button>
               </div>
             </Card>
