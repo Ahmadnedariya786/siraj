@@ -360,10 +360,83 @@ function buildDailyContentPayload(): DailyContentPayload {
 }
 
 // ─────────────────────────────────────────────────────────
+// Shared Widget Sync Scheduler (Battery-Safe 800ms Coalescing)
+// ─────────────────────────────────────────────────────────
+
+export class WidgetSyncScheduler {
+  private static instance: WidgetSyncScheduler;
+  private timer: NodeJS.Timeout | null = null;
+  private pendingUpdateFn: (() => Promise<void>) | null = null;
+  private readonly DEBOUNCE_MS = 800;
+  private coalescedCallCount = 0;
+  private lastExecutedAt = 0;
+
+  static getInstance(): WidgetSyncScheduler {
+    if (!WidgetSyncScheduler.instance) {
+      WidgetSyncScheduler.instance = new WidgetSyncScheduler();
+    }
+    return WidgetSyncScheduler.instance;
+  }
+
+  schedule(updateFn: () => Promise<void>): void {
+    this.coalescedCallCount++;
+    this.pendingUpdateFn = updateFn;
+    if (this.timer) {
+      clearTimeout(this.timer);
+    }
+    this.timer = setTimeout(async () => {
+      this.timer = null;
+      const fn = this.pendingUpdateFn;
+      this.pendingUpdateFn = null;
+      if (fn) {
+        try {
+          await fn();
+          this.lastExecutedAt = Date.now();
+        } catch {
+          // Handled silent fallback
+        }
+      }
+    }, this.DEBOUNCE_MS);
+  }
+
+  isPending(): boolean {
+    return this.timer !== null;
+  }
+
+  getStats() {
+    return {
+      debounceMs: this.DEBOUNCE_MS,
+      coalescedCallCount: this.coalescedCallCount,
+      lastExecutedAt: this.lastExecutedAt,
+      isPending: this.isPending(),
+    };
+  }
+}
+
+export const widgetSyncScheduler = WidgetSyncScheduler.getInstance();
+
+// ─────────────────────────────────────────────────────────
 // Public WidgetService API
 // ─────────────────────────────────────────────────────────
 
 export class WidgetService {
+  /**
+   * Battery-safe coalesced widget sync (~800ms debounce).
+   * Rapid calls from sliders/pickers are collapsed into a single native bridge update.
+   */
+  static coalesceSyncWidgets(
+    latitude?: number,
+    longitude?: number,
+    locationName?: string
+  ): void {
+    widgetSyncScheduler.schedule(async () => {
+      if (latitude !== undefined && longitude !== undefined) {
+        await WidgetService.updateWidget(latitude, longitude, locationName);
+      } else {
+        await WidgetService.syncAllWidgets();
+      }
+    });
+  }
   /**
    * Authoritative widget update — pushes single-source-of-truth prayer
    * + daily content to all native widgets.

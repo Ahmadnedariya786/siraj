@@ -10,17 +10,24 @@ import {
   setNavbarOverrideConfig,
 } from '@/lib/navbar-variants';
 import { useToast } from '@/hooks/use-toast';
+import { useSettings } from '@/contexts/SettingsContext';
 import { cn } from '@/lib/utils';
 
 interface ThemePreviewCardProps {
   themeId: ThemeId;
   isActive: boolean;
+  dockStyle: string;
+  isDockLocked: boolean;
+  fluidAnimations: boolean;
   onSelect: (themeId: ThemeId, themeName?: string) => void;
 }
 
 export const ThemePreviewCard = memo<ThemePreviewCardProps>(({
   themeId,
   isActive,
+  dockStyle,
+  isDockLocked,
+  fluidAnimations,
   onSelect,
 }) => {
   const theme = THEMES[themeId] || THEMES['oxford-gold'];
@@ -36,12 +43,14 @@ export const ThemePreviewCard = memo<ThemePreviewCardProps>(({
     }
   };
 
-  // Cheap glow calculation: at most 2 shadow layers, kiswah-noir stays zero-glow
+  // Limit active card glow to ONE crisp box-shadow + border highlight (no double glow blur storms)
   const cardBoxShadow = isActive
     ? (themeId === 'kiswah-noir'
         ? '0 4px 14px rgba(0, 0, 0, 0.5)'
-        : `inset 0 1px 0 ${theme.tokens['--card-sheen-line'] || 'rgba(255, 255, 255, 0.2)'}, 0 4px 16px var(--accent-glow)`)
-    : 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 8px rgba(0, 0, 0, 0.25)';
+        : (fluidAnimations
+            ? '0 4px 16px var(--accent-glow)'
+            : '0 2px 8px rgba(0, 0, 0, 0.35)'))
+    : '0 2px 8px rgba(0, 0, 0, 0.25)';
 
   return (
     <div
@@ -57,7 +66,7 @@ export const ThemePreviewCard = memo<ThemePreviewCardProps>(({
       )}
       style={{
         contentVisibility: 'auto',
-        containIntrinsicSize: 'auto 231px',
+        containIntrinsicSize: '160px',
         contain: 'layout style paint',
         borderRadius: theme.signature ? theme.signature.radius : '16px',
         padding: '10px 10px',
@@ -113,7 +122,9 @@ export const ThemePreviewCard = memo<ThemePreviewCardProps>(({
         className="w-full overflow-hidden p-2 sm:p-2.5 flex flex-col justify-between min-h-[115px] sm:min-h-[120px] pointer-events-none border"
         style={{
           borderRadius: theme.signature ? theme.signature.radius : '12px',
-          background: `radial-gradient(ellipse 100% 60% at 50% -10%, ${theme.tokens['--accent-soft']} 0%, transparent 70%), linear-gradient(180deg, ${theme.tokens['--bg-base']} 0%, ${theme.tokens['--bg-elev']} 100%)`,
+          background: fluidAnimations
+            ? `radial-gradient(ellipse 100% 60% at 50% -10%, ${theme.tokens['--accent-soft']} 0%, transparent 70%), linear-gradient(180deg, ${theme.tokens['--bg-base']} 0%, ${theme.tokens['--bg-elev']} 100%)`
+            : theme.tokens['--bg-base'],
           borderColor: theme.tokens['--border'],
         }}
       >
@@ -221,43 +232,37 @@ export const ThemePreviewCard = memo<ThemePreviewCardProps>(({
       </div>
 
       {/* Signature Navbar Architecture Micro-Badge */}
-      {(() => {
-        const overrideConfig = getNavbarOverrideConfig();
-        const isLocked = overrideConfig.enabled;
-        return (
-          <div
-            className="mt-2 flex items-center gap-1.5 px-2 py-1 rounded-md text-[9.5px] font-semibold w-full shrink-0 select-none pointer-events-none transition-opacity"
-            style={{
-              background: theme.tokens['--surface-2'],
-              color: theme.tokens['--accent-text'],
-              border: `1px solid ${theme.tokens['--border']}`,
-              borderLeft: `2.5px solid ${theme.tokens['--accent']}`,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              opacity: isLocked ? 0.65 : 1,
-            }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full shrink-0"
-              style={{
-                background: theme.tokens['--accent'],
-                boxShadow: theme.id === 'kiswah-noir' ? 'none' : `0 0 5px ${theme.tokens['--accent-glow']}`,
-              }}
-            />
-            <span className="truncate tracking-tight font-medium inline-flex items-center gap-1 min-w-0">
-              <span>Dock:</span>
-              <strong className="font-bold truncate">{NAVBAR_VARIANT_NAMES[THEME_NAVBAR_VARIANT[themeId]]}</strong>
-              {isLocked && (
-                <span className="inline-flex items-center gap-0.5 text-[8px] font-bold opacity-85 shrink-0">
-                  <Lock className="w-2.5 h-2.5" />
-                  <span>(locked)</span>
-                </span>
-              )}
+      <div
+        className="mt-2 flex items-center gap-1.5 px-2 py-1 rounded-md text-[9.5px] font-semibold w-full shrink-0 select-none pointer-events-none transition-opacity"
+        style={{
+          background: theme.tokens['--surface-2'],
+          color: theme.tokens['--accent-text'],
+          border: `1px solid ${theme.tokens['--border']}`,
+          borderLeft: `2.5px solid ${theme.tokens['--accent']}`,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          opacity: isDockLocked ? 0.65 : 1,
+        }}
+      >
+        <span
+          className="w-1.5 h-1.5 rounded-full shrink-0"
+          style={{
+            background: theme.tokens['--accent'],
+            boxShadow: theme.id === 'kiswah-noir' || !fluidAnimations ? 'none' : `0 0 5px ${theme.tokens['--accent-glow']}`,
+          }}
+        />
+        <span className="truncate tracking-tight font-medium inline-flex items-center gap-1 min-w-0">
+          <span>Dock:</span>
+          <strong className="font-bold truncate">{dockStyle}</strong>
+          {isDockLocked && (
+            <span className="inline-flex items-center gap-0.5 text-[8px] font-bold opacity-85 shrink-0">
+              <Lock className="w-2.5 h-2.5" />
+              <span>(locked)</span>
             </span>
-          </div>
-        );
-      })()}
+          )}
+        </span>
+      </div>
 
       {/* Description Footer */}
       <p className="text-[10px] text-muted-foreground/90 mt-2 line-clamp-2 leading-tight">
@@ -279,6 +284,7 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
   className,
 }) => {
   const { currentTheme, setTheme, themes } = useAppTheme();
+  const { animationEnabled } = useSettings();
   const { toast } = useToast();
 
   const [overrideConfig, setOverrideConfig] = useState(() =>
@@ -354,16 +360,23 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
         </div>
       )}
 
-      {/* 2-Column Grid of Preview Cards */}
+      {/* 2-Column Grid of Preview Cards (Memoized with pure primitive props) */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        {themes.map((theme) => (
-          <ThemePreviewCard
-            key={theme.id}
-            themeId={theme.id}
-            isActive={currentTheme === theme.id}
-            onSelect={handleSelect}
-          />
-        ))}
+        {themes.map((theme) => {
+          const dockVariant = THEME_NAVBAR_VARIANT[theme.id];
+          const dockStyle = NAVBAR_VARIANT_NAMES[dockVariant] || 'Default';
+          return (
+            <ThemePreviewCard
+              key={theme.id}
+              themeId={theme.id}
+              isActive={currentTheme === theme.id}
+              dockStyle={dockStyle}
+              isDockLocked={overrideConfig.enabled}
+              fluidAnimations={animationEnabled}
+              onSelect={handleSelect}
+            />
+          );
+        })}
       </div>
     </div>
   );

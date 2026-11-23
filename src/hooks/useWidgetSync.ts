@@ -124,7 +124,7 @@ export function useWidgetSync() {
     const onPrayerSettingsChanged = () => {
       try {
         import('@/lib/widget-service').then(({ WidgetService }) => {
-          WidgetService.syncAllWidgets().catch(() => {});
+          WidgetService.coalesceSyncWidgets();
         }).catch(() => {});
       } catch {
         // Safe fallback

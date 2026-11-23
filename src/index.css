@@ -101,6 +101,43 @@
     display: none !important;
   }
 
+  /* Reduced-Motion & Fluid-Animations Audit Guards */
+  @media (prefers-reduced-motion: reduce) {
+    .sig-pattern-layer,
+    .sig-motif-layer,
+    .theme-app-pattern,
+    .hero-pattern-layer,
+    .sig-motif-vignette,
+    .kiswa-hero-band,
+    .tasbeeh-bead-anim,
+    .clip-crossfade-layer,
+    .living-logo-crest,
+    .ambient-drift,
+    .dock-morph-indicator,
+    .widget-preview-pulse {
+      animation: none !important;
+      transition: none !important;
+      transform: none !important;
+    }
+  }
+
+  html[data-animations="off"] .tasbeeh-bead-anim,
+  html[data-animations="off"] .clip-crossfade-layer,
+  html[data-animations="off"] .living-logo-crest,
+  html[data-animations="off"] .ambient-drift,
+  html[data-animations="off"] .dock-morph-indicator,
+  html[data-animations="off"] .widget-preview-pulse,
+  .no-animations .tasbeeh-bead-anim,
+  .no-animations .clip-crossfade-layer,
+  .no-animations .living-logo-crest,
+  .no-animations .ambient-drift,
+  .no-animations .dock-morph-indicator,
+  .no-animations .widget-preview-pulse {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
   html[data-animations="off"] .theme-card,
   html[data-animations="off"] .theme-hero-card,
   .no-animations .theme-card,

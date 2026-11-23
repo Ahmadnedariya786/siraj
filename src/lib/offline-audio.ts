@@ -6,10 +6,12 @@
  */
 
 import { downloadManager } from './download-manager';
+import { getReciterById } from './quran-reciters';
 
 export const OFFLINE_AUDIO_CACHE_NAME = 'noor-offline-quran-audio-v1';
 export const OFFLINE_AYAHS_STORAGE_KEY = 'noor_downloaded_ayahs_v1';
 export const OFFLINE_SURAHS_STORAGE_KEY = 'noor_downloaded_surahs_v1';
+export const MAX_OFFLINE_AUDIO_BYTES = 512 * 1024 * 1024; // Strict 512 MB LRU Cap
 
 export interface DownloadedSurahMeta {
   surahNumber: number;
@@ -93,6 +95,9 @@ export async function cacheAyahAudio(
   if (typeof window === 'undefined' || !('caches' in window)) {
     throw new Error('CacheStorage not supported on this device');
   }
+
+  // Enforce 512 MB LRU cap before caching new audio
+  await enforceOfflineAudioLRU(50_000).catch(() => {});
 
   const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
   const primaryUrl = getAyahAudioUrl(subfolder, surah, ayah);
@@ -237,4 +242,197 @@ export async function resolveAudioPlaybackUrl(onlineUrl: string): Promise<string
   }
 
   return onlineUrl;
+}
+
+export interface ReciterStorageMeta {
+  reciterId: string;
+  name: string;
+  size: number;
+  count: number;
+}
+
+/**
+ * Computes exact storage breakdown of all offline Quran audio across
+ * IndexedDB (full surahs) and CacheStorage (individual ayahs).
+ */
+export async function getOfflineAudioStorageDetails(): Promise<{
+  totalBytes: number;
+  totalSurahs: number;
+  recitersCount: number;
+  topReciters: ReciterStorageMeta[];
+  allReciters: ReciterStorageMeta[];
+}> {
+  const reciterMap = new Map<string, { size: number; count: number }>();
+  let totalBytes = 0;
+  let totalSurahs = 0;
+
+  // 1. Gather from IndexedDB downloadManager
+  try {
+    const downloadedSurahs = await downloadManager.listDownloaded();
+    for (const item of downloadedSurahs) {
+      totalBytes += item.size;
+      totalSurahs++;
+      const existing = reciterMap.get(item.reciterId) || { size: 0, count: 0 };
+      existing.size += item.size;
+      existing.count += 1;
+      reciterMap.set(item.reciterId, existing);
+    }
+  } catch (err) {
+    console.warn('[OfflineAudio] listDownloaded error:', err);
+  }
+
+  // 2. Gather from localStorage ayah map
+  try {
+    const raw = localStorage.getItem(OFFLINE_AYAHS_STORAGE_KEY);
+    if (raw) {
+      const map = JSON.parse(raw);
+      if (map && typeof map === 'object') {
+        for (const key of Object.keys(map)) {
+          const entry = map[key];
+          if (entry && typeof entry.size === 'number') {
+            totalBytes += entry.size;
+            const rId = entry.reciterId || 'alafasy';
+            const existing = reciterMap.get(rId) || { size: 0, count: 0 };
+            existing.size += entry.size;
+            reciterMap.set(rId, existing);
+          }
+        }
+      }
+    }
+  } catch {
+    // Safe storage parse
+  }
+
+  const allReciters: ReciterStorageMeta[] = [];
+  for (const [rId, data] of reciterMap.entries()) {
+    const info = getReciterById(rId);
+    allReciters.push({
+      reciterId: rId,
+      name: info?.name || rId,
+      size: data.size,
+      count: data.count,
+    });
+  }
+
+  allReciters.sort((a, b) => b.size - a.size);
+  const topReciters = allReciters.slice(0, 3);
+
+  return {
+    totalBytes,
+    totalSurahs,
+    recitersCount: allReciters.length,
+    topReciters,
+    allReciters,
+  };
+}
+
+/**
+ * 1-Tap Per-Reciter deletion: completely removes all downloaded audio
+ * for a specific reciter from IndexedDB, CacheStorage, and storage maps.
+ */
+export async function deleteReciterAudio(reciterId: string): Promise<number> {
+  let freedBytes = 0;
+
+  // 1. Remove from downloadManager
+  try {
+    const downloaded = await downloadManager.listDownloaded();
+    for (const item of downloaded) {
+      if (item.reciterId === reciterId) {
+        freedBytes += item.size;
+        await downloadManager.removeSurah(reciterId, item.surahNumber).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('[OfflineAudio] Error removing surahs from downloadManager:', err);
+  }
+
+  // 2. Purge matching ayahs from localStorage
+  try {
+    const rawAyahs = localStorage.getItem(OFFLINE_AYAHS_STORAGE_KEY);
+    if (rawAyahs) {
+      const map = JSON.parse(rawAyahs);
+      const remaining: Record<string, any> = {};
+      for (const k of Object.keys(map)) {
+        if (map[k]?.reciterId === reciterId) {
+          freedBytes += map[k].size || 0;
+        } else {
+          remaining[k] = map[k];
+        }
+      }
+      localStorage.setItem(OFFLINE_AYAHS_STORAGE_KEY, JSON.stringify(remaining));
+    }
+  } catch {
+    // Safe storage catch
+  }
+
+  // 3. Purge matching surahs from localStorage
+  try {
+    const rawSurahs = localStorage.getItem(OFFLINE_SURAHS_STORAGE_KEY);
+    if (rawSurahs) {
+      const map = JSON.parse(rawSurahs);
+      const remaining: Record<string, any> = {};
+      for (const k of Object.keys(map)) {
+        if (map[k]?.reciterId === reciterId) {
+          freedBytes += map[k].totalBytes || 0;
+        } else {
+          remaining[k] = map[k];
+        }
+      }
+      localStorage.setItem(OFFLINE_SURAHS_STORAGE_KEY, JSON.stringify(remaining));
+    }
+  } catch {
+    // Safe storage catch
+  }
+
+  window.dispatchEvent(new CustomEvent('cache-updated'));
+  return freedBytes;
+}
+
+/**
+ * Strict 512 MB LRU Eviction Cap:
+ * Calculates aggregate offline audio size; if total + incomingBytes exceeds 512 MB,
+ * evicts oldest cached recitations until total is within safe headroom (< 450 MB).
+ */
+export async function enforceOfflineAudioLRU(incomingBytes = 0): Promise<number> {
+  let freedBytes = 0;
+  const targetThreshold = 450 * 1024 * 1024; // 450 MB headroom
+  const details = await getOfflineAudioStorageDetails();
+  let currentTotal = details.totalBytes + incomingBytes;
+
+  if (currentTotal <= MAX_OFFLINE_AUDIO_BYTES) {
+    return 0;
+  }
+
+  console.warn(
+    `[OfflineAudioLRU] Storage ${Math.round(currentTotal / 1024 / 1024)}MB exceeds 512MB cap. Evicting oldest entries...`
+  );
+
+  // Evict oldest recorded surahs from metadata
+  try {
+    const rawSurahs = localStorage.getItem(OFFLINE_SURAHS_STORAGE_KEY);
+    if (rawSurahs) {
+      const map = JSON.parse(rawSurahs);
+      const entries = Object.keys(map).map((k) => ({
+        key: k,
+        ...map[k],
+      }));
+      // Sort oldest first
+      entries.sort((a, b) => (a.downloadedAt || 0) - (b.downloadedAt || 0));
+
+      for (const entry of entries) {
+        if (currentTotal <= targetThreshold) break;
+        await downloadManager.removeSurah(entry.reciterId, entry.surahNumber).catch(() => {});
+        delete map[entry.key];
+        const bytes = entry.totalBytes || 0;
+        freedBytes += bytes;
+        currentTotal -= bytes;
+      }
+      localStorage.setItem(OFFLINE_SURAHS_STORAGE_KEY, JSON.stringify(map));
+    }
+  } catch (e) {
+    console.warn('[OfflineAudioLRU] Error during LRU eviction:', e);
+  }
+
+  window.dispatchEvent(new CustomEvent('cache-updated'));
+  return freedBytes;
 }

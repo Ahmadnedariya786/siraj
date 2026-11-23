@@ -163,6 +163,7 @@ const GlobalRadioPlayer = lazy(() => import("@/components/GlobalRadioPlayer").th
 const GlobalQuranPlayer = lazy(() => import("@/components/GlobalQuranPlayer").then(m => ({ default: m.GlobalQuranPlayer })));
 const GlobalNasheedPlayer = lazy(() => import("@/components/GlobalNasheedPlayer").then(m => ({ default: m.GlobalNasheedPlayer })));
 import { EidChecklistNotification } from "@/components/EidChecklistNotification";
+import { primeNonCriticalMetadata } from "@/lib/startup-deferral";
 import { FitranaCalculatorNotification } from "@/components/FitranaCalculatorNotification";
 
 // Lazy load critical components
@@ -429,6 +430,7 @@ function AppShell() {
   useEffect(() => {
     initQazaRolloverListeners();
     preloadRouteChunks();
+    primeNonCriticalMetadata();
   }, []);
 
   // Sync native Android window and WebView background color immediately on startup

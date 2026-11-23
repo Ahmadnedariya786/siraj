@@ -314,6 +314,56 @@ export async function ensureFontsReady(): Promise<boolean> {
 }
 
 /**
+ * AudioBuffer LRU Cache (Strict Cap of 10 entries)
+ * Evicts oldest decoded AudioBuffer to prevent memory leaks on continuous reel generations.
+ */
+export class AudioBufferLRU {
+  private cache = new Map<string, AudioBuffer>();
+  private readonly maxEntries: number;
+
+  constructor(maxEntries = 10) {
+    this.maxEntries = maxEntries;
+  }
+
+  get(key: string): AudioBuffer | undefined {
+    const val = this.cache.get(key);
+    if (val) {
+      // Refresh recency
+      this.cache.delete(key);
+      this.cache.set(key, val);
+    }
+    return val;
+  }
+
+  set(key: string, buffer: AudioBuffer): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxEntries) {
+      // Evict oldest entry (first key in Map iterator)
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    this.cache.set(key, buffer);
+  }
+
+  has(key: string): boolean {
+    return this.cache.has(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  size(): number {
+    return this.cache.size;
+  }
+}
+
+export const decodedAudioBufferLRU = new AudioBufferLRU(10);
+
+/**
  * SAFEGUARD 2 — CORS-Safe Multi-Tier Audio Fetching & Main-Thread Yielding
  * 4-Tier CDN Chain: Offline Cache -> EveryAyah Primary -> EveryAyah Mirror / Islamic Network -> Fallback Reciter (Alafasy)
  */
@@ -324,6 +374,12 @@ export async function fetchAyahAudioBuffer(
   audioContext: AudioContext,
   signal?: AbortSignal
 ): Promise<AudioBuffer> {
+  const cacheKey = `${reciterId}:${surahNumber}:${ayahNumber}`;
+  const cachedBuffer = decodedAudioBufferLRU.get(cacheKey);
+  if (cachedBuffer) {
+    return cachedBuffer;
+  }
+
   const candidateUrls = getCandidateAudioUrls(reciterId, surahNumber, ayahNumber);
   let arrayBuffer: ArrayBuffer | null = null;
 
@@ -415,7 +471,9 @@ export async function fetchAyahAudioBuffer(
 
   // 3. Decode in AudioContext with 10ms yield to prevent UI freeze
   await new Promise((resolve) => setTimeout(resolve, 10));
-  return await audioContext.decodeAudioData(arrayBuffer);
+  const decoded = await audioContext.decodeAudioData(arrayBuffer);
+  decodedAudioBufferLRU.set(cacheKey, decoded);
+  return decoded;
 }
 
 /**
@@ -2647,6 +2705,9 @@ export async function renderAyahImageCard(params: {
     subtitleLang: params.subtitleLang,
   });
   ctx.drawImage(offscreen, 0, 0);
+  // Release offscreen canvas memory immediately
+  offscreen.width = 0;
+  offscreen.height = 0;
 
   // 3. Draw Watermark & Frame
   drawClipOverlay(ctx, dims.width, dims.height, 1.0);
@@ -2660,6 +2721,11 @@ export async function renderAyahImageCard(params: {
   });
 
   const dataUrl = canvas.toDataURL('image/png');
+
+  // Explicitly release main card canvas memory
+  canvas.width = 0;
+  canvas.height = 0;
+
   return { blob, dataUrl, width: dims.width, height: dims.height };
 }
 
@@ -3112,12 +3178,19 @@ export async function renderRecitationVideoClip(params: {
       // Audio nodes already disconnected
     }
     try {
-      renderCanvas.width = 1;
-      renderCanvas.height = 1;
-      textLayerCanvas.width = 1;
-      textLayerCanvas.height = 1;
-      prevTextLayerCanvas.width = 1;
-      prevTextLayerCanvas.height = 1;
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+    } catch (_recErr) {
+      // Recorder already stopped
+    }
+    try {
+      renderCanvas.width = 0;
+      renderCanvas.height = 0;
+      textLayerCanvas.width = 0;
+      textLayerCanvas.height = 0;
+      prevTextLayerCanvas.width = 0;
+      prevTextLayerCanvas.height = 0;
     } catch (_wErr) {
       // Canvas dimensions already shrunk
     }

@@ -127,6 +127,11 @@ import { getMaghribIhtiyatMin, setMaghribIhtiyatMin } from '@/lib/prayer-times';
 import { AladhanAPI } from '@/lib/aladhan-api';
 import { getStorageStats, clearAllBooks, formatFileSize } from '@/lib/ebooks-storage';
 import { downloadManager } from '@/lib/download-manager';
+import {
+  getOfflineAudioStorageDetails,
+  deleteReciterAudio,
+  type ReciterStorageMeta,
+} from '@/lib/offline-audio';
 import { getStorageBreakdown, clearTemporaryCache, type StorageBreakdown } from '@/lib/cache-manager';
 import { notificationManager, type NotificationPreferences } from '@/lib/notification-manager';
 import { unifiedNotifications } from '@/lib/unified-notifications';
@@ -215,6 +220,12 @@ const SettingsSubPage: React.FC = () => {
   const [storageStats, setStorageStats] = useState({ totalBooks: 0, totalSize: 0 });
   const [storageBreakdown, setStorageBreakdown] = useState<StorageBreakdown | null>(null);
   const [quranDownloads, setQuranDownloads] = useState({ count: 0, size: 0, reciters: 0 });
+  const [audioStorageDetails, setAudioStorageDetails] = useState<{
+    totalBytes: number;
+    totalSurahs: number;
+    recitersCount: number;
+    topReciters: ReciterStorageMeta[];
+  } | null>(null);
   const [hijriOffset, setHijriOffset] = useState('0');
   const [showClearCacheDialog, setShowClearCacheDialog] = useState(false);
   const [showClearQuranDialog, setShowClearQuranDialog] = useState(false);
@@ -291,15 +302,21 @@ const SettingsSubPage: React.FC = () => {
 
     getStorageStats().then(setStorageStats);
     getStorageBreakdown().then(setStorageBreakdown).catch(() => {});
+    const refreshAudioDetails = () => {
+      getOfflineAudioStorageDetails().then(setAudioStorageDetails).catch(() => {});
+    };
+    refreshAudioDetails();
 
     const handleCacheUpdated = () => {
       getStorageBreakdown().then(setStorageBreakdown).catch(() => {});
       getStorageStats().then(setStorageStats).catch(() => {});
+      refreshAudioDetails();
     };
     const handleMadhabUpdated = () => {
       setMadhabState(getMadhab());
     };
     window.addEventListener('noor-cache-updated', handleCacheUpdated);
+    window.addEventListener('cache-updated', handleCacheUpdated);
     window.addEventListener('madhab-changed', handleMadhabUpdated);
     window.addEventListener('prayer-method-changed', handleMadhabUpdated);
 
@@ -922,6 +939,26 @@ const SettingsSubPage: React.FC = () => {
     const stats = await getStorageStats();
     setStorageStats(stats);
     toast({ title: 'E-books deleted' });
+  };
+
+  const handleDeleteReciter = async (reciterId: string, reciterName: string) => {
+    try {
+      const freed = await deleteReciterAudio(reciterId);
+      getOfflineAudioStorageDetails().then(setAudioStorageDetails).catch(() => {});
+      const downloaded = await downloadManager.listDownloaded();
+      const reciterIds = new Set(downloaded.map((it) => it.reciterId));
+      setQuranDownloads({
+        count: downloaded.length,
+        size: downloaded.reduce((acc, it) => acc + it.size, 0),
+        reciters: reciterIds.size,
+      });
+      toast({
+        title: `Deleted audio for ${reciterName}`,
+        description: `Freed ${formatFileSize(freed)} of storage.`,
+      });
+    } catch {
+      toast({ title: 'Could not delete reciter audio', variant: 'destructive' });
+    }
   };
 
   const handleNotificationToggle = (key: keyof NotificationPreferences, checked: boolean) => {
@@ -1765,9 +1802,47 @@ const SettingsSubPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-sm font-semibold border-t border-[var(--border)] pt-2">
                 <span className="text-[var(--text-primary)]">Offline Quran Audio</span>
                 <span className="text-[var(--accent)] text-xs sm:text-sm font-medium">
-                  {quranDownloads.reciters} reciter{quranDownloads.reciters !== 1 ? "s" : ""} • {quranDownloads.count} surah{quranDownloads.count !== 1 ? "s" : ""} • {formatFileSize(quranDownloads.size)}
+                  {audioStorageDetails
+                    ? `${audioStorageDetails.recitersCount} reciter${audioStorageDetails.recitersCount !== 1 ? "s" : ""} • ${audioStorageDetails.totalSurahs} surah${audioStorageDetails.totalSurahs !== 1 ? "s" : ""} • ${formatFileSize(audioStorageDetails.totalBytes)}`
+                    : `${quranDownloads.reciters} reciters • ${formatFileSize(quranDownloads.size)}`}
                 </span>
               </div>
+
+              {/* Top 3 Cached Reciters Breakdown with 1-Tap Delete */}
+              {audioStorageDetails && audioStorageDetails.topReciters.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-[var(--border)]/40">
+                  <div className="flex items-center justify-between text-xs font-bold text-[var(--text-secondary)]">
+                    <span>Top Cached Reciters</span>
+                    <span className="text-[10px] font-mono text-[var(--accent-text)]">512 MB LRU Cap</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {audioStorageDetails.topReciters.slice(0, 3).map((r) => (
+                      <div
+                        key={r.reciterId}
+                        className="flex items-center justify-between p-2 rounded-xl text-xs transition-colors"
+                        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="font-bold text-[var(--text-primary)] truncate">{r.name}</p>
+                          <p className="text-[10px] text-[var(--text-secondary)]">
+                            {r.count} surah{r.count !== 1 ? 's' : ''} • {formatFileSize(r.size)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteReciter(r.reciterId, r.name)}
+                          className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 rounded-lg shrink-0"
+                          title={`Delete all downloaded audio for ${r.name}`}
+                          aria-label={`Delete all downloaded audio for ${r.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-sm font-semibold border-t border-[var(--border)] pt-2">
                 <span className="text-[var(--text-primary)]">Downloaded E-books</span>
                 <span className="text-[var(--accent)] text-xs sm:text-sm font-medium">{formatFileSize(storageStats.totalSize)} ({storageStats.totalBooks} files)</span>

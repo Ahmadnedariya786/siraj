@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
 import { AppBar } from "@/components/AppBar";
 import { useLanguage } from "@/contexts/LanguageContext-new";
+import { useSettings } from "@/contexts/SettingsContext";
 import { TASBEEH_I18N } from "@/lib/home-prayer-i18n";
 
 export interface ChainStep {
@@ -93,6 +94,7 @@ type FeedbackMode = 'all' | 'vibrate' | 'silent';
 const Tasbeeh = () => {
   const navigate = useNavigate();
   const { t, language, isRTL } = useLanguage();
+  const { animationEnabled } = useSettings();
   const tasbeehPack = TASBEEH_I18N[language] || TASBEEH_I18N.en;
   const [count, setCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -936,7 +938,7 @@ const Tasbeeh = () => {
 
               {/* 7 3D Gemstone Beads along the wire */}
               {beadsData.map((bead) => (
-                <g key={bead.id} style={{ transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
+                <g key={bead.id} style={{ transition: animationEnabled ? 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none' }}>
                   {/* Lead bead ambient aura */}
                   {bead.isLead && (
                     <circle cx={bead.cx} cy={bead.cy} r={12} fill="var(--accent)" opacity={0.32} />
@@ -994,8 +996,7 @@ const Tasbeeh = () => {
                   strokeLinecap="round"
                   transform="rotate(-90 118 118)"
                   style={{
-                    transition: 'stroke-dashoffset 0.3s ease-out',
-                    filter: 'drop-shadow(0 0 6px var(--accent-glow))',
+                    transition: animationEnabled ? 'stroke-dashoffset 0.3s ease-out' : 'none',
                   }}
                 />
                 {/* Comet Tip Orb */}
@@ -1042,9 +1043,9 @@ const Tasbeeh = () => {
                 {/* Center Count Readout */}
                 <motion.span
                   key={count}
-                  initial={{ scale: 0.85 }}
+                  initial={{ scale: animationEnabled ? 0.85 : 1 }}
                   animate={{ scale: 1 }}
-                  transition={{ duration: 0.12 }}
+                  transition={{ duration: animationEnabled ? 0.12 : 0 }}
                   className="text-5xl sm:text-6xl font-extrabold tracking-tight tabular-nums select-none pointer-events-none"
                   style={{
                     color: 'var(--accent-text)',

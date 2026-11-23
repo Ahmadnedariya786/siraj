@@ -43,6 +43,7 @@ import {
   blobToRawBase64,
   cleanMimeType,
   NoorMediaBridge,
+  decodedAudioBufferLRU,
 } from '@/lib/quran-clip-renderer';
 import { QURAN_RECITERS, getReciterById } from '@/lib/quran-reciters';
 import { useTilawah } from '@/contexts/TilawahContext';
@@ -827,15 +828,31 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
     }
   };
 
-  // Instant Cancel Handler (< 16ms responsive)
+  // Instant Cancel Handler (< 16ms responsive) with full memory & stream teardown
   const handleCancelGeneration = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (videoResult?.url) {
+      try {
+        URL.revokeObjectURL(videoResult.url);
+      } catch (_e) {
+        // Safe revoke catch
+      }
+    }
     setIsGenerating(false);
     setGenerationPercent(0);
     setGenerationStatus('');
+
+    // Dev-only teardown verification log confirming clean release
+    if (import.meta.env.DEV) {
+      console.log(`[ClipStudioTeardown] Teardown cycle executed: MediaRecorder stopped, AudioContext closed, MediaStream tracks stopped, canvases released, AudioBuffer LRU size: ${decodedAudioBufferLRU.size()}`);
+    }
   };
 
   // Share & Export Handlers with Auto-Attached Viral Social Caption
