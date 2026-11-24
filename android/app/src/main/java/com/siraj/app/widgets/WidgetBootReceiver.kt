@@ -35,8 +35,8 @@ class WidgetBootReceiver : BroadcastReceiver() {
         // WorkManager + SharedPreferences I/O won't ANR on slow devices.
         val pendingResult = goAsync()
         try {
-            // Start widget foreground service for step/location monitoring
-            WidgetForegroundService.start(context)
+            // Ensure noisy persistent widget monitor foreground service remains stopped
+            WidgetForegroundService.stop(context)
 
             // Reschedule next prayer alarm if we have data
             val prayerPayload = WidgetPrefs.getPrayerPayload(context)

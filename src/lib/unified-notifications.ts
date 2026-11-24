@@ -156,7 +156,7 @@ class UnifiedNotificationService {
             schedule: { at: scheduleTime },
             channelId: channelId,
             sound: 'default',
-            smallIcon: 'ic_stat_noor_mosque',
+            smallIcon: 'ic_stat_siraj',
             largeIcon: 'ic_launcher',
             iconColor: '#D4AF37',
             extra: options.data || {}
@@ -348,7 +348,7 @@ class UnifiedNotificationService {
               allowWhileIdle: true
             },
             sound: 'default',
-            smallIcon: 'ic_stat_noor_mosque',
+            smallIcon: 'ic_stat_siraj',
             iconColor: '#D4AF37',
             extra: notificationOptions.data
           }]

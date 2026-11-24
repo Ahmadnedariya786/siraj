@@ -88,7 +88,12 @@ public final class NativeAdhanScheduler {
      * power-saving restrictions including Doze and App Standby.
      */
     public static void scheduleAlarm(Context context, ScheduledAdhan alarm, boolean persist) {
-        if (alarm.triggerAtMillis <= System.currentTimeMillis()) {
+        // Strict Future-Only Guard (MANDATORY): triggerAtMs > now + 5000ms (1000ms for test alarm)
+        long minThreshold = (alarm.id == 9901 || alarm.id == 99999)
+                ? System.currentTimeMillis() + 1000L
+                : System.currentTimeMillis() + 5000L;
+        if (alarm.triggerAtMillis <= minThreshold) {
+            Log.d(TAG, "Skipping past/non-future alarm: " + alarm.prayerName + " (trigger=" + alarm.triggerAtMillis + ", minThreshold=" + minThreshold + ")");
             removePersistedAlarm(context, alarm.id);
             return;
         }
@@ -172,6 +177,15 @@ public final class NativeAdhanScheduler {
     }
 
     public static void removeAlarm(Context context, int alarmId) {
+        try {
+            AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (alarmManager != null) {
+                PendingIntent pendingIntent = createPendingIntent(context, alarmId, null, null, false, false);
+                alarmManager.cancel(pendingIntent);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed to cancel AlarmManager pending intent for alarm " + alarmId, t);
+        }
         removePersistedAlarm(context, alarmId);
     }
 

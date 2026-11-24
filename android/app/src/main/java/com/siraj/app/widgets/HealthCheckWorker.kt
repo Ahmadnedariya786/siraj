@@ -75,11 +75,8 @@ class HealthCheckWorker(
                 }
             }
 
-            // 6. Restart foreground service if dead but widgets exist
-            if (!fgRunning && totalWidgets > 0) {
-                Log.w(TAG, "Foreground service dead with active widgets, restarting")
-                WidgetForegroundService.start(ctx)
-            }
+            // 6. Ensure persistent widget monitor foreground service remains stopped
+            WidgetForegroundService.stop(ctx)
 
             // 7. If no widgets at all, clean up
             if (totalWidgets == 0) {

@@ -109,17 +109,32 @@ public class AdhanAlarmReceiver extends BroadcastReceiver {
             return;
         }
 
+        int alarmId = intent.getIntExtra(EXTRA_ALARM_ID, -1);
+        String prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME);
+        String prayerTime = intent.getStringExtra("prayerTime");
+        String adhanUrl = intent.getStringExtra(EXTRA_ADHAN_URL);
+        boolean overrideSilent = intent.getBooleanExtra(EXTRA_OVERRIDE_SILENT, false);
+        boolean maxVolume = intent.getBooleanExtra(EXTRA_MAX_VOLUME, false);
+
+        // Native 60-Second Dedup Guard: Ignore duplicate broadcasts for the same non-test prayer
+        String prayerKey = (prayerName != null) ? prayerName.toLowerCase(java.util.Locale.ROOT) : "unknown";
+        boolean isTest = (alarmId == 99999 || alarmId == 9901 || "test".equalsIgnoreCase(prayerKey));
+        if (!isTest) {
+            android.content.SharedPreferences dedupPrefs = context.getSharedPreferences("prayer_alarm_dedup", Context.MODE_PRIVATE);
+            long lastFired = dedupPrefs.getLong("last_fired_" + prayerKey, 0L);
+            long now = System.currentTimeMillis();
+            if (now - lastFired < 60_000L) {
+                Log.d(TAG, "Duplicate broadcast for " + prayerKey + " within 60s ignored (" + (now - lastFired) + "ms ago)");
+                return;
+            }
+            dedupPrefs.edit().putLong("last_fired_" + prayerKey, now).apply();
+        }
+
         // Acquire WakeLock BEFORE starting the service to prevent Doze race condition
         acquireWakeLock(context);
 
         // Trigger haptic feedback for adhan notification
         triggerHapticFeedback(context);
-
-        int alarmId = intent.getIntExtra(EXTRA_ALARM_ID, -1);
-        String prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME);
-        String adhanUrl = intent.getStringExtra(EXTRA_ADHAN_URL);
-        boolean overrideSilent = intent.getBooleanExtra(EXTRA_OVERRIDE_SILENT, false);
-        boolean maxVolume = intent.getBooleanExtra(EXTRA_MAX_VOLUME, false);
 
         if (alarmId > -1) {
             NativeAdhanScheduler.removeAlarm(context, alarmId);
@@ -129,6 +144,9 @@ public class AdhanAlarmReceiver extends BroadcastReceiver {
         playbackIntent.setAction(AdhanPlaybackService.ACTION_PLAY);
         playbackIntent.putExtra(EXTRA_ALARM_ID, alarmId);
         playbackIntent.putExtra(EXTRA_PRAYER_NAME, prayerName);
+        if (prayerTime != null && !prayerTime.isEmpty()) {
+            playbackIntent.putExtra("prayerTime", prayerTime);
+        }
         playbackIntent.putExtra(EXTRA_ADHAN_URL, adhanUrl);
         playbackIntent.putExtra(AdhanPlaybackService.EXTRA_OVERRIDE_SILENT, overrideSilent);
         playbackIntent.putExtra(AdhanPlaybackService.EXTRA_MAX_VOLUME, maxVolume);

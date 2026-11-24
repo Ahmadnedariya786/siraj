@@ -584,6 +584,48 @@ const SettingsSubPage: React.FC = () => {
     toast({ title: `${prayerName} notification ${enabled ? 'enabled' : 'disabled'}` });
   };
 
+function getNextUpcomingPrayerInfo(): { name: string; time: string } {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('cached_prayer_times') : null;
+    if (raw) {
+      const timesObj = JSON.parse(raw);
+      if (timesObj && typeof timesObj === 'object') {
+        const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
+        const names = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+        const nowMs = Date.now();
+        for (let i = 0; i < keys.length; i++) {
+          const val = timesObj[keys[i]];
+          if (val) {
+            const d = new Date(val);
+            if (!isNaN(d.getTime()) && d.getTime() > nowMs) {
+              let h = d.getHours();
+              const m = d.getMinutes().toString().padStart(2, '0');
+              const ampm = h >= 12 ? 'PM' : 'AM';
+              h = h % 12;
+              if (h === 0) h = 12;
+              return { name: names[i], time: `${h}:${m} ${ampm}` };
+            }
+          }
+        }
+        if (timesObj.fajr) {
+          const d = new Date(timesObj.fajr);
+          if (!isNaN(d.getTime())) {
+            let h = d.getHours();
+            const m = d.getMinutes().toString().padStart(2, '0');
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12;
+            if (h === 0) h = 12;
+            return { name: 'Fajr', time: `${h}:${m} ${ampm}` };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.debug('[OSNotif] getNextUpcomingPrayerInfo fallback:', err);
+  }
+  return { name: 'Dhuhr', time: '12:30 PM' };
+}
+
   // Real-Time OS Notification Diagnostics & Testers
   const [osNotificationStatus, setOsNotificationStatus] = useState<{
     notifications: boolean | null;
@@ -618,6 +660,16 @@ const SettingsSubPage: React.FC = () => {
           console.debug('[OSNotif] bridge canScheduleExactAlarms failed:', err);
         }
       }
+      if (typeof bridge.getNativeScheduledAlarmCount === 'function') {
+        try {
+          const nativeCount = Number(bridge.getNativeScheduledAlarmCount());
+          if (!isNaN(nativeCount) && nativeCount >= 0) {
+            count = nativeCount;
+          }
+        } catch (err) {
+          console.debug('[OSNotif] bridge getNativeScheduledAlarmCount failed:', err);
+        }
+      }
     }
 
     if (notifAllowed === null && typeof LocalNotifications !== 'undefined') {
@@ -629,7 +681,7 @@ const SettingsSubPage: React.FC = () => {
       }
     }
 
-    if (typeof LocalNotifications !== 'undefined') {
+    if (count === 0 && typeof LocalNotifications !== 'undefined') {
       try {
         const pending = await LocalNotifications.getPending();
         count = pending.notifications.length;
@@ -655,13 +707,12 @@ const SettingsSubPage: React.FC = () => {
 
   const handleTestDrawerNow = async () => {
     setIsTestingDrawer(true);
-    const pName = 'Fajr';
-    const pTime = '05:15 AM';
+    const { name: pName, time: pTime } = getNextUpcomingPrayerInfo();
     const hadith = getPrayerHadith(pName, hadithLang);
     const cleanRef = stripTrailingHadithRef(hadith.translation, hadith.reference);
     const rakah = PRAYER_RAKAH_BREAKDOWN[pName] || '2 Sunnah • 2 Fardh';
 
-    // 1. Native AndroidBridge trigger on channel siraj_prayers_v3
+    // Single-Pipeline: on native Android use AndroidBridge exclusively (no duplicate LocalNotifications!)
     const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : undefined;
     if (bridge && typeof bridge.triggerTestPrayerNotification === 'function') {
       try {
@@ -670,32 +721,32 @@ const SettingsSubPage: React.FC = () => {
       } catch (err) {
         console.warn('Native test prayer notification bridge failed:', err);
       }
+    } else {
+      // Web / Non-Bridge Fallback: Capacitor LocalNotifications
+      try {
+        await localNotifications.ensureHadithChannel();
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: 9901,
+              title: `🕌 ${pName} Prayer • ${pTime}`,
+              body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
+              largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
+              summaryText: `${pName} Prayer • Siraj`,
+              channelId: 'siraj_prayers_v3',
+              schedule: { at: new Date(Date.now() + 500), allowWhileIdle: true },
+              sound: 'default',
+              smallIcon: 'ic_stat_siraj',
+              iconColor: '#D4AF37',
+            },
+          ],
+        });
+      } catch (err) {
+        console.warn('LocalNotifications test schedule failed:', err);
+      }
     }
 
-    // 2. Capacitor LocalNotifications trigger on channel siraj_prayers_v3
-    try {
-      await localNotifications.ensureHadithChannel();
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            id: 99999,
-            title: `🕌 ${pName} Prayer • ${pTime}`,
-            body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
-            largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
-            summaryText: `${pName} Prayer • Siraj`,
-            channelId: 'siraj_prayers_v3',
-            schedule: { at: new Date(Date.now() + 500), allowWhileIdle: true },
-            sound: 'default',
-            smallIcon: 'ic_stat_siraj',
-            iconColor: '#D4AF37',
-          },
-        ],
-      });
-    } catch (err) {
-      console.warn('LocalNotifications test schedule failed:', err);
-    }
-
-    // 3. Log into Notification History
+    // Log into Notification History
     try {
       const raw = localStorage.getItem('notification-history');
       const list = raw ? JSON.parse(raw) : [];
@@ -724,14 +775,14 @@ const SettingsSubPage: React.FC = () => {
   };
 
   const handleTest5sAlarm = async () => {
-    const pName = 'Fajr';
-    const pTime = '05:15 AM';
+    const { name: pName, time: pTime } = getNextUpcomingPrayerInfo();
     const hadith = getPrayerHadith(pName, hadithLang);
     const cleanRef = stripTrailingHadithRef(hadith.translation, hadith.reference);
     const rakah = PRAYER_RAKAH_BREAKDOWN[pName] || '2 Sunnah • 2 Fardh';
 
     setAlarmCountdown(5);
 
+    // Single-Pipeline: on native Android use AndroidBridge exclusively (no duplicate LocalNotifications!)
     const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : undefined;
     if (bridge && typeof bridge.scheduleTest5sAlarm === 'function') {
       try {
@@ -739,28 +790,29 @@ const SettingsSubPage: React.FC = () => {
       } catch (err) {
         console.warn('Bridge scheduleTest5sAlarm failed:', err);
       }
-    }
-
-    try {
-      await localNotifications.ensureHadithChannel();
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            id: 99998,
-            title: `⏰ [Alarm Clock] ${pName} Prayer • ${pTime}`,
-            body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
-            largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
-            summaryText: `${pName} Prayer • Siraj`,
-            channelId: 'siraj_prayers_v3',
-            schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true },
-            sound: 'default',
-            smallIcon: 'ic_stat_siraj',
-            iconColor: '#D4AF37',
-          },
-        ],
-      });
-    } catch (err) {
-      console.warn('LocalNotifications 5s alarm schedule failed:', err);
+    } else {
+      // Web / Non-Bridge Fallback: Capacitor LocalNotifications (no [Alarm Clock] debug tag!)
+      try {
+        await localNotifications.ensureHadithChannel();
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: 9901,
+              title: `🕌 ${pName} Prayer • ${pTime}`,
+              body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
+              largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
+              summaryText: `${pName} Prayer • Siraj`,
+              channelId: 'siraj_prayers_v3',
+              schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true },
+              sound: 'default',
+              smallIcon: 'ic_stat_siraj',
+              iconColor: '#D4AF37',
+            },
+          ],
+        });
+      } catch (err) {
+        console.warn('LocalNotifications 5s alarm schedule failed:', err);
+      }
     }
 
     // Log to Notification History
@@ -769,7 +821,7 @@ const SettingsSubPage: React.FC = () => {
       const list = raw ? JSON.parse(raw) : [];
       list.unshift({
         type: 'prayer',
-        title: `⏰ [5s Alarm Test] ${pName} Prayer • ${pTime}`,
+        title: `🕌 ${pName} Prayer • ${pTime}`,
         body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
         timestamp: Date.now() + 5000,
       });
@@ -1636,7 +1688,7 @@ const SettingsSubPage: React.FC = () => {
                   <div className="mt-1 flex items-center gap-1">
                     <Bell className="w-3 h-3 text-[var(--accent-text)] shrink-0" />
                     <span className="text-xs font-mono font-bold truncate">
-                      {osNotificationStatus.pendingCount} Alerts
+                      {osNotificationStatus.pendingCount} Active
                     </span>
                   </div>
                   <span className="mt-1.5 text-[9.5px] text-[var(--text-secondary)] truncate">
@@ -1652,11 +1704,11 @@ const SettingsSubPage: React.FC = () => {
                   size="sm"
                   disabled={isTestingDrawer}
                   onClick={handleTestDrawerNow}
-                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all"
+                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all whitespace-nowrap"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
                 >
                   <Bell className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
-                  <span className="truncate">Test Drawer Now</span>
+                  <span className="truncate text-[12px] font-bold">Test Drawer</span>
                 </Button>
 
                 <Button
@@ -1664,12 +1716,12 @@ const SettingsSubPage: React.FC = () => {
                   size="sm"
                   disabled={alarmCountdown !== null}
                   onClick={handleTest5sAlarm}
-                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all"
+                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all whitespace-nowrap"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
                 >
                   <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
-                  <span className="truncate">
-                    {alarmCountdown !== null ? `Firing in ${alarmCountdown}s...` : 'Test 5s Alarm (Lock)'}
+                  <span className="truncate text-[12px] font-bold">
+                    {alarmCountdown !== null ? `Firing in ${alarmCountdown}s...` : 'Test 5s Alarm'}
                   </span>
                 </Button>
               </div>
@@ -1966,7 +2018,7 @@ const SettingsSubPage: React.FC = () => {
                     {activeRemindersCount} of 8 Reminders Active
                   </h3>
                   <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                    Spiritual reminders & daily Sunnah alerts
+                    Spiritual & Sunnah alerts
                   </p>
                 </div>
               </div>

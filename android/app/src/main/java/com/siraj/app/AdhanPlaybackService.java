@@ -85,7 +85,11 @@ public class AdhanPlaybackService extends Service {
         boolean overrideSilent = intent != null && intent.getBooleanExtra(EXTRA_OVERRIDE_SILENT, false);
         boolean maxVolume = intent != null && intent.getBooleanExtra(EXTRA_MAX_VOLUME, false);
 
-        startForeground(NOTIFICATION_ID, createNotification(prayerName));
+        int alarmId = intent != null ? intent.getIntExtra(AdhanAlarmReceiver.EXTRA_ALARM_ID, -1) : -1;
+        int notifId = (alarmId == 99999 || alarmId == 9901) ? 9901 : getPrayerNotificationId(prayerName);
+        String prayerTime = intent != null ? intent.getStringExtra("prayerTime") : null;
+
+        startForeground(notifId, createNotification(prayerName, prayerTime));
 
         // Release the WakeLock now that startForeground() has been called.
         // This closes the Doze race-condition window opened by AdhanAlarmReceiver.
@@ -470,7 +474,47 @@ public class AdhanPlaybackService extends Service {
         return bitmap;
     }
 
-    private Notification createNotification(String prayerName) {
+    public static int getPrayerNotificationId(String prayerName) {
+        if (prayerName == null) return 9901;
+        switch (prayerName.toLowerCase(Locale.ROOT).trim()) {
+            case "fajr": return 1001;
+            case "dhuhr":
+            case "jummah": return 1002;
+            case "asr": return 1003;
+            case "maghrib": return 1004;
+            case "isha": return 1005;
+            default: return 9901;
+        }
+    }
+
+    public static String getPrayerArabicName(String prayerName) {
+        if (prayerName == null) return "الصلاة";
+        switch (prayerName.toLowerCase(Locale.ROOT).trim()) {
+            case "fajr": return "صلاة الفجر";
+            case "sunrise": return "صلاة الشروق";
+            case "dhuhr": return "صلاة الظهر";
+            case "jummah": return "صلاة الجمعة";
+            case "asr": return "صلاة العصر";
+            case "maghrib": return "صلاة المغرب";
+            case "isha": return "صلاة العشاء";
+            default: return "الصلاة";
+        }
+    }
+
+    public static String getPrayerRakahSummary(String prayerName) {
+        if (prayerName == null) return "Obligatory Prayer";
+        switch (prayerName.toLowerCase(Locale.ROOT).trim()) {
+            case "fajr": return "2 Sunnah • 2 Fard";
+            case "dhuhr": return "4 Sunnah • 4 Fard • 2 Sunnah";
+            case "jummah": return "4 Sunnah • 2 Fard • 4 Sunnah";
+            case "asr": return "4 Sunnah • 4 Fard";
+            case "maghrib": return "3 Fard • 2 Sunnah";
+            case "isha": return "4 Fard • 2 Sunnah • 3 Witr";
+            default: return "Obligatory Prayer";
+        }
+    }
+
+    private Notification createNotification(String prayerName, String prayerTime) {
         Intent openIntent = new Intent(this, MainActivity.class);
         openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int openFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
@@ -482,16 +526,18 @@ public class AdhanPlaybackService extends Service {
         stopIntent.setAction(ACTION_STOP);
         PendingIntent stopPendingIntent = PendingIntent.getService(this, 1, stopIntent, stopFlags);
 
-        String arabic = getPrayerArabic(prayerName);
-        String currentTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+        String arabic = getPrayerArabicName(prayerName);
+        String displayTime = (prayerTime != null && !prayerTime.trim().isEmpty())
+                ? prayerTime.trim()
+                : new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
         String normalizedName = prayerName != null && !prayerName.isEmpty()
                 ? prayerName.substring(0, 1).toUpperCase(Locale.ROOT) + prayerName.substring(1).toLowerCase(Locale.ROOT)
                 : "Prayer";
 
-        String title = "🕌 " + normalizedName + " • " + arabic + " (" + currentTime + ")";
+        String title = "🕌 " + normalizedName + " • " + arabic + " (" + displayTime + ")";
         String subText = "حي على الصلاة • Hayya 'ala-s-Salah";
         String summaryLine = getPrayerSummaryLine(prayerName);
-        String rakahGuide = getPrayerRakahGuide(prayerName);
+        String rakahGuide = getPrayerRakahSummary(prayerName);
         String hadith = getPrayerHadithQuote(prayerName);
 
         String bigText = "✨ Hayya 'ala-s-Salah • Hayya 'ala-l-Falah (Come to Prayer, Come to Success)\n"
@@ -508,7 +554,7 @@ public class AdhanPlaybackService extends Service {
                         .setBigContentTitle(title)
                         .setSummaryText(subText)
                         .bigText(bigText))
-                .setSmallIcon(R.drawable.ic_stat_noor_mosque)
+                .setSmallIcon(R.drawable.ic_stat_siraj)
                 .setLargeIcon(largeIconBitmap)
                 .setColor(0xFFD4AF37) // Royal Burnished Gold
                 .setColorized(true)
@@ -519,8 +565,8 @@ public class AdhanPlaybackService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .addAction(R.drawable.ic_stat_noor_mosque, "✓ Open & Log Prayer", contentIntent)
-                .addAction(R.drawable.ic_stat_noor_mosque, "🔇 Silence Adhan", stopPendingIntent)
+                .addAction(R.drawable.ic_stat_siraj, "✓ Log Prayer", contentIntent)
+                .addAction(R.drawable.ic_stat_siraj, "🔇 Silence", stopPendingIntent)
                 .build();
     }
 

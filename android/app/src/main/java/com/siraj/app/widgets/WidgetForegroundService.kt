@@ -47,21 +47,22 @@ class WidgetForegroundService : Service() {
         private const val MIN_TIME_BETWEEN_LOCATION_UPDATES_MS = 300000L // 5 min
 
         @JvmStatic fun start(context: Context) {
-            val intent = Intent(context, WidgetForegroundService::class.java)
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not start WidgetForegroundService from background context: ${e.message}")
-            }
+            // No-op: Persistent movement-monitoring foreground service disabled to eliminate battery drain
+            // and remove the noisy "Widget monitor active / Tracking movement for prayer time" notification.
+            // Widgets update autonomously via scheduled alarms, periodic workers, and explicit broadcasts.
+            stop(context)
         }
 
         @JvmStatic fun stop(context: Context) {
-            val intent = Intent(context, WidgetForegroundService::class.java)
-            context.stopService(intent)
+            try {
+                val intent = Intent(context, WidgetForegroundService::class.java)
+                context.stopService(intent)
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                nm?.cancel(NOTIFICATION_ID)
+                setRunning(false)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error stopping WidgetForegroundService: ${e.message}")
+            }
         }
 
         /**
@@ -128,14 +129,22 @@ class WidgetForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        // Immediately dismiss any foreground notification and self-terminate
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.cancel(NOTIFICATION_ID)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error removing foreground notification: ${e.message}")
         }
-        setRunning(true)
-        return START_STICKY
+        setRunning(false)
+        stopSelf()
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

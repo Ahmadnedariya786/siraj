@@ -763,68 +763,51 @@ public class MainActivity extends BridgeActivity {
                         runOnUiThread(() -> {
                             try {
                                 final String pName = (prayerName != null && !prayerName.trim().isEmpty()) ? prayerName : "Fajr";
-                                final String pTime = (prayerTime12h != null && !prayerTime12h.trim().isEmpty()) ? prayerTime12h : "05:15 AM";
+                                final String pTime = (prayerTime12h != null && !prayerTime12h.trim().isEmpty()) ? prayerTime12h : "";
                                 final String channelId = "siraj_prayers_v3";
 
                                 NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                                 if (nm == null) return;
 
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    NotificationChannel channel = nm.getNotificationChannel(channelId);
-                                    if (channel == null) {
-                                        channel = new NotificationChannel(
-                                                channelId,
-                                                "Prayer Notifications",
-                                                NotificationManager.IMPORTANCE_HIGH
-                                        );
-                                        channel.setDescription("Authentic prayer time alerts and daily Hadith guidance for all 5 prayers");
-                                        channel.enableLights(true);
-                                        channel.enableVibration(true);
-                                        channel.setShowBadge(true);
-                                        channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
-                                        nm.createNotificationChannel(channel);
-                                    }
-                                }
+                                createDefaultNotificationChannel();
 
                                 Intent openAppIntent = new Intent(MainActivity.this, MainActivity.class);
                                 openAppIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                                 PendingIntent contentPi = PendingIntent.getActivity(
                                         MainActivity.this,
-                                        7701,
+                                        9901,
                                         openAppIntent,
                                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
                                 );
 
-                                String title = pName + " Prayer • " + pTime;
-                                String rakah = "2 Sunnah • 2 Fardh (4 Rak'ah)";
-                                if ("Dhuhr".equalsIgnoreCase(pName) || "Jumu'ah".equalsIgnoreCase(pName)) {
-                                    rakah = "4 Sunnah • 4 Fardh • 2 Sunnah (10 Rak'ah)";
-                                } else if ("Asr".equalsIgnoreCase(pName)) {
-                                    rakah = "4 Sunnah • 4 Fardh (8 Rak'ah)";
-                                } else if ("Maghrib".equalsIgnoreCase(pName)) {
-                                    rakah = "3 Fardh • 2 Sunnah • 2 Nafl (7 Rak'ah)";
-                                } else if ("Isha".equalsIgnoreCase(pName)) {
-                                    rakah = "4 Fardh • 2 Sunnah • 3 Witr (9 Rak'ah)";
-                                }
+                                String arabic = AdhanPlaybackService.getPrayerArabicName(pName);
+                                String displayTime = (pTime != null && !pTime.isEmpty()) ? pTime : new java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(new java.util.Date());
+                                String title = "🕌 " + pName + " • " + arabic + " (" + displayTime + ")";
+                                String rakah = AdhanPlaybackService.getPrayerRakahSummary(pName);
                                 String hadith = PrayerHadithHelper.getPrayerHadith(MainActivity.this, pName);
-                                String bigText = "🕌 Hayya 'alas-Salah — Time for " + pName + " (" + pTime + ")\n"
-                                        + "📿 " + rakah + "\n"
+                                String bigText = "✨ Hayya 'alas-Salah • Hayya 'ala-l-Falah\n"
+                                        + "📿 Rak'aat: " + rakah + "\n"
                                         + hadith;
 
+                                android.graphics.Bitmap largeIconBitmap = AdhanPlaybackService.createPrayerEmblemBitmap(pName);
+
                                 NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, channelId)
-                                        .setSmallIcon(R.drawable.ic_stat_noor_mosque)
+                                        .setSmallIcon(R.drawable.ic_stat_siraj)
+                                        .setLargeIcon(largeIconBitmap)
                                         .setColor(0xFFD4AF37)
+                                        .setColorized(true)
                                         .setContentTitle(title)
-                                        .setContentText("It is now time for " + pName + " prayer (" + pTime + "). Tap to open.")
+                                        .setContentText(rakah + " — Tap to log prayer")
                                         .setSubText("Siraj")
                                         .setStyle(new NotificationCompat.BigTextStyle().bigText(bigText))
                                         .setPriority(NotificationCompat.PRIORITY_HIGH)
-                                        .setDefaults(NotificationCompat.DEFAULT_ALL)
+                                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                                         .setAutoCancel(true)
-                                        .setContentIntent(contentPi);
+                                        .setContentIntent(contentPi)
+                                        .addAction(R.drawable.ic_stat_siraj, "✓ Log Prayer", contentPi);
 
-                                nm.notify(7701, builder.build());
-                                Log.i(TAG, "Triggered test prayer notification for: " + pName);
+                                nm.notify(9901, builder.build());
+                                Log.i(TAG, "Triggered test prayer notification for: " + pName + " (ID 9901)");
                             } catch (Throwable t) {
                                 Log.w(TAG, "Failed to trigger test prayer notification", t);
                             }
@@ -888,12 +871,28 @@ public class MainActivity extends BridgeActivity {
                     }
 
                     @android.webkit.JavascriptInterface
+                    public int getNativeScheduledAlarmCount() {
+                        try {
+                            return NativeAdhanScheduler.getScheduledCount(MainActivity.this);
+                        } catch (Throwable t) {
+                            return 0;
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
                     public void scheduleTest5sAlarm(final String prayerName, final String prayerTime12h) {
                         try {
                             final String pName = (prayerName != null && !prayerName.trim().isEmpty()) ? prayerName : "Fajr";
                             NativeAdhanScheduler.setEnabled(MainActivity.this, true);
+                            NativeAdhanScheduler.removeAlarm(MainActivity.this, 9901);
+                            NativeAdhanScheduler.removeAlarm(MainActivity.this, 99999);
+                            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                            if (nm != null) {
+                                nm.cancel(9901);
+                                nm.cancel(99999);
+                            }
                             NativeAdhanScheduler.ScheduledAdhan testAlarm = new NativeAdhanScheduler.ScheduledAdhan(
-                                    99999,
+                                    9901,
                                     System.currentTimeMillis() + 5000L,
                                     pName,
                                     "/audio/adhan-makkah.mp3",
@@ -901,7 +900,7 @@ public class MainActivity extends BridgeActivity {
                                     false
                             );
                             NativeAdhanScheduler.scheduleAlarm(MainActivity.this, testAlarm, false);
-                            Log.i(TAG, "Scheduled 5-second test alarm for prayer: " + pName);
+                            Log.i(TAG, "Scheduled 5-second test alarm for prayer: " + pName + " (ID 9901)");
                         } catch (Throwable t) {
                             Log.w(TAG, "Failed to schedule 5s test alarm", t);
                         }
@@ -1260,22 +1259,15 @@ public class MainActivity extends BridgeActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == EXACT_ALARM_PERMISSION_REQUEST) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (canScheduleExactAlarms()) {
-                    // Permission granted - start widget foreground service
-                    WidgetForegroundService.start(this);
-                }
-            }
+            WidgetForegroundService.stop(this);
         }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        // Start widget foreground service when exact alarms are allowed
-        if (canScheduleExactAlarms()) {
-            WidgetForegroundService.start(this);
-        }
+        // Ensure noisy persistent widget monitor foreground service is stopped
+        WidgetForegroundService.stop(this);
 
         // Auto-resume APK installation if returning from "Install unknown apps" settings
         if (otaReadyApkFile != null && otaReadyApkFile.exists()) {

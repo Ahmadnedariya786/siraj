@@ -312,19 +312,9 @@
             </intent-filter>
         </receiver>
 
-        <!-- Adhan and Prayer alarm receivers -->
+        <!-- Adhan and Prayer alarm receiver (single authoritative receiver) -->
         <receiver
             android:name=".AdhanAlarmReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.siraj.app.ACTION_ADHAN_TRIGGER" />
-                <action android:name="com.siraj.app.ACTION_PRAYER_ALARM" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".PrayerAlarmReceiver"
             android:enabled="true"
             android:exported="false">
             <intent-filter>

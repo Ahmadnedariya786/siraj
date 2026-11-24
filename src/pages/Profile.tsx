@@ -347,22 +347,40 @@ const Profile: React.FC = () => {
 
         if (isDenied) {
           updates['notifications'] = 'DENIED';
-        } else if (typeof LocalNotifications !== 'undefined' && LocalNotifications.getPending) {
-          let pending = await LocalNotifications.getPending();
-          if ((!pending || !pending.notifications || pending.notifications.length === 0) && !isDenied) {
+        } else {
+          // Check native AndroidBridge first
+          const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : null;
+          let nativeCount: number | null = null;
+          if (bridge && typeof bridge.getNativeScheduledAlarmCount === 'function') {
             try {
-              const { localNotifications } = await import('@/lib/local-notifications');
-              await localNotifications.schedulePrayerNotificationsFromAPI();
-              pending = await LocalNotifications.getPending();
+              const nc = Number(bridge.getNativeScheduledAlarmCount());
+              if (!isNaN(nc) && nc > 0) {
+                nativeCount = nc;
+              }
             } catch {
-              // Safe background catch
+              nativeCount = null;
             }
           }
-          updates['notifications'] = pending?.notifications?.length !== undefined && pending.notifications.length > 0
-            ? String(pending.notifications.length)
-            : '5';
-        } else {
-          updates['notifications'] = '5';
+
+          if (nativeCount !== null) {
+            updates['notifications'] = String(nativeCount);
+          } else if (typeof LocalNotifications !== 'undefined' && LocalNotifications.getPending) {
+            let pending = await LocalNotifications.getPending();
+            if ((!pending || !pending.notifications || pending.notifications.length === 0) && !isDenied) {
+              try {
+                const { localNotifications } = await import('@/lib/local-notifications');
+                await localNotifications.schedulePrayerNotificationsFromAPI();
+                pending = await LocalNotifications.getPending();
+              } catch {
+                // Safe background catch
+              }
+            }
+            updates['notifications'] = pending?.notifications?.length !== undefined && pending.notifications.length > 0
+              ? String(pending.notifications.length)
+              : '5';
+          } else {
+            updates['notifications'] = '5';
+          }
         }
       } catch {
         updates['notifications'] = '0';

@@ -28,7 +28,7 @@ const LOCATION_STORAGE_KEY = 'location-storage';
 const PRAYER_NOTIFICATIONS_ENABLED_KEY = 'prayer-notifications-enabled';
 const PRAYER_ALARM_ENABLED_KEY = 'prayer-alarm-enabled';
 const LAST_SCHEDULE_SIGNATURE_KEY = 'last-prayer-notification-signature';
-const SCHEDULE_WINDOW_DAYS = 30;
+const SCHEDULE_WINDOW_DAYS = 2; // 48-hour rolling schedule cap (today + tomorrow)
 
 if (localStorage.getItem(PRAYER_NOTIFICATIONS_ENABLED_KEY) === null) {
   localStorage.setItem(PRAYER_NOTIFICATIONS_ENABLED_KEY, 'true');
@@ -350,7 +350,8 @@ export class LocalNotificationManager {
           const prayerDate = new Date(targetDate);
           prayerDate.setHours(hours, minutes, 0, 0);
 
-          if (prayerDate <= now) {
+          // Strict Future-Only Guard: triggerAtMs > now + 5000ms
+          if (prayerDate.getTime() <= now.getTime() + 5000) {
             continue;
           }
 
@@ -375,7 +376,7 @@ export class LocalNotificationManager {
               repeats: false,
             },
             sound: 'default',
-            smallIcon: 'ic_stat_noor_mosque',
+            smallIcon: 'ic_stat_siraj',
             largeIcon: 'ic_launcher',
             iconColor: '#D4AF37',
             extra: {
@@ -420,21 +421,19 @@ export class LocalNotificationManager {
         }
       }
 
-      if (notifications.length > 0) {
-        await LocalNotifications.schedule({
-          notifications
-        });
+      if (Capacitor.isNativePlatform()) {
+        // Native Android Single-Pipeline: NativeAdhanScheduler is the sole scheduler for Fard prayers.
+        // Wipe all legacy/stale Capacitor prayer notifications to eliminate duplicate firing & 146 alarm spam.
+        await this.clearPrayerNotifications(false);
 
-        if (Capacitor.isNativePlatform()) {
-          if (this.isPrayerAlarmEnabled()) {
-            try {
-              await nativeAdhan.schedule(nativeAlarms, true);
-            } catch (error) {
-              console.warn('Failed to schedule native adhan alarms:', error);
-            }
-          } else {
-            await nativeAdhan.clear();
+        if (this.isPrayerAlarmEnabled() && nativeAlarms.length > 0) {
+          try {
+            await nativeAdhan.schedule(nativeAlarms, true);
+          } catch (error) {
+            console.warn('Failed to schedule native adhan alarms:', error);
           }
+        } else {
+          await nativeAdhan.clear();
         }
 
         localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
@@ -443,12 +442,19 @@ export class LocalNotificationManager {
           this.syncWithServiceWorker(syncTimings);
         }
       } else {
-        localStorage.removeItem(LAST_SCHEDULE_SIGNATURE_KEY);
-        if (Capacitor.isNativePlatform()) {
-          await nativeAdhan.clear();
+        // Web / browser platform:
+        if (notifications.length > 0) {
+          await LocalNotifications.schedule({
+            notifications
+          });
+          localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
+          if (Object.keys(syncTimings).length > 0) {
+            this.syncWithServiceWorker(syncTimings);
+          }
+        } else {
+          localStorage.removeItem(LAST_SCHEDULE_SIGNATURE_KEY);
         }
       }
-
     } catch {
       // Handled non-critical error during prayer notification scheduling from API
     }
@@ -484,7 +490,8 @@ export class LocalNotificationManager {
         const toggleKey = prayerToggleMap[prayer.name];
         if (toggleKey && !adhanConfig[toggleKey]) continue;
 
-        if (prayer.date > now) {
+        // Strict Future-Only Guard: triggerAtMs > now + 5000ms
+        if (prayer.date.getTime() > now.getTime() + 5000) {
           const notificationId = this.getNotificationId(prayer.name, prayer.date);
 
           const displayName = getPrayerDisplayName(prayer.name, prayer.date);
@@ -499,7 +506,7 @@ export class LocalNotificationManager {
               repeats: false,
             },
             sound: 'default',
-            smallIcon: 'ic_stat_noor_mosque',
+            smallIcon: 'ic_stat_siraj',
             largeIcon: 'ic_launcher',
             iconColor: '#D4AF37',
             extra: {
@@ -523,11 +530,43 @@ export class LocalNotificationManager {
         }
       }
 
-      // Schedule all notifications
-      if (notifications.length > 0) {
-        await LocalNotifications.schedule({
-          notifications
-        });
+      if (Capacitor.isNativePlatform()) {
+        // Native Android Single-Pipeline: NativeAdhanScheduler is the sole scheduler for Fard prayers.
+        // Wipe all legacy/stale Capacitor prayer notifications to eliminate duplicate firing & 146 alarm spam.
+        await this.clearPrayerNotifications(false);
+
+        const nativeAlarms: NativeAdhanAlarm[] = [];
+        for (const prayer of prayerTimes) {
+          const key = prayerToggleMap[prayer.name];
+          if (key && !adhanConfig[key]) continue;
+
+          if (prayer.date.getTime() > now.getTime() + 5000) {
+            const validPrayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
+            if (!validPrayerNames.includes(prayer.name as typeof validPrayerNames[number])) {
+              console.warn(`Invalid prayer name "${prayer.name}", skipping native alarm`);
+              continue;
+            }
+
+            nativeAlarms.push({
+              id: this.getNotificationId(prayer.name, prayer.date),
+              triggerAt: prayer.date.getTime(),
+              prayerName: prayer.name,
+              adhanUrl: await getAdhanUrlForPrayer(prayer.name as PrayerName),
+              overrideSilent: adhanService.getAdhanConfig().overrideSilentMode,
+              maxVolume: adhanService.getAdhanConfig().playAtMaxVolume,
+            });
+          }
+        }
+
+        if (this.isPrayerAlarmEnabled() && nativeAlarms.length > 0) {
+          try {
+            await nativeAdhan.schedule(nativeAlarms, true);
+          } catch (error) {
+            console.warn('Failed to schedule native adhan alarms:', error);
+          }
+        } else {
+          await nativeAdhan.clear();
+        }
 
         // Sync with Service Worker
         const swTimings: Record<string, { time: string }> = {};
@@ -535,39 +574,18 @@ export class LocalNotificationManager {
           swTimings[p.name.toLowerCase()] = { time: p.time };
         }
         this.syncWithServiceWorker(swTimings);
+      } else {
+        // Web / browser platform:
+        if (notifications.length > 0) {
+          await LocalNotifications.schedule({
+            notifications
+          });
 
-        // Native Alarm scheduling (Audio)
-        if (Capacitor.isNativePlatform()) {
-          const nativeAlarms: NativeAdhanAlarm[] = [];
-          for (const prayer of prayerTimes) {
-            const key = prayerToggleMap[prayer.name];
-            if (key && !adhanConfig[key]) continue;
-
-            if (prayer.date > now) {
-              const validPrayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
-              if (!validPrayerNames.includes(prayer.name as typeof validPrayerNames[number])) {
-                console.warn(`Invalid prayer name "${prayer.name}", skipping native alarm`);
-                continue;
-              }
-
-              nativeAlarms.push({
-                id: this.getNotificationId(prayer.name, prayer.date),
-                triggerAt: prayer.date.getTime(),
-                prayerName: prayer.name,
-                adhanUrl: await getAdhanUrlForPrayer(prayer.name as PrayerName),
-                overrideSilent: adhanService.getAdhanConfig().overrideSilentMode,
-                maxVolume: adhanService.getAdhanConfig().playAtMaxVolume,
-              });
-            }
+          const swTimings: Record<string, { time: string }> = {};
+          for (const p of prayerTimes) {
+            swTimings[p.name.toLowerCase()] = { time: p.time };
           }
-
-          if (this.isPrayerAlarmEnabled()) {
-            try {
-              await nativeAdhan.schedule(nativeAlarms, true);
-            } catch (error) {
-              console.warn('Failed to schedule native adhan alarms:', error);
-            }
-          }
+          this.syncWithServiceWorker(swTimings);
         }
       }
     } catch {
@@ -609,7 +627,7 @@ export class LocalNotificationManager {
             repeats: false,
           },
           sound: 'default',
-          smallIcon: 'ic_stat_noor_mosque',
+          smallIcon: 'ic_stat_siraj',
           largeIcon: 'ic_launcher',
           iconColor: '#D4AF37',
           extra: {
@@ -662,11 +680,11 @@ export class LocalNotificationManager {
   /**
    * Clear all prayer notifications
    */
-  async clearPrayerNotifications(): Promise<void> {
+  async clearPrayerNotifications(clearNative: boolean = true): Promise<void> {
     try {
       const pending = await LocalNotifications.getPending();
       const prayerNotificationIds = pending.notifications
-        .filter(n => n.extra?.type === 'prayer_reminder')
+        .filter(n => n.extra?.type === 'prayer_reminder' || n.channelId === 'siraj_prayers_v3' || n.id >= 1000 || n.id === 9901 || n.id === 99999 || n.id === 99998)
         .map(n => n.id);
 
       if (prayerNotificationIds.length > 0) {
@@ -680,7 +698,7 @@ export class LocalNotificationManager {
     } catch (error) {
       console.error('Failed to clear prayer notifications:', error);
     } finally {
-      if (Capacitor.isNativePlatform()) {
+      if (clearNative && Capacitor.isNativePlatform()) {
         await nativeAdhan.clear();
       }
     }
@@ -788,7 +806,7 @@ export class LocalNotificationManager {
             repeats: false,
           },
           sound: 'default',
-          smallIcon: 'ic_stat_noor_mosque',
+          smallIcon: 'ic_stat_siraj',
           largeIcon: 'ic_launcher',
           iconColor: '#D4AF37',
           extra: {
