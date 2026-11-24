@@ -47,17 +47,19 @@ class UnifiedNotificationService {
 
   // Ensure high-importance notification channel exists on Android 8.0+ (API 26+)
   private async ensureChannelCreated(): Promise<string> {
-    const channelId = 'noor_notifications_channel';
+    const channelId = 'siraj_prayers_v3';
     if (this.isCapacitor) {
       try {
         await LocalNotifications.createChannel({
           id: channelId,
-          name: 'Siraj Notifications',
-          description: 'Prayer times and daily spiritual reminders',
+          name: 'Siraj Prayer Notifications',
+          description: 'Authentic prayer time alerts and daily Hadith guidance for all 5 prayers',
           importance: 5, // High importance (shows heads-up banner + sound)
           visibility: 1, // Visible on lock screen
           sound: 'default',
           vibration: true,
+          lights: true,
+          lightColor: '#D4AF37',
         });
       } catch (err) {
         console.warn('Failed to create notification channel:', err);

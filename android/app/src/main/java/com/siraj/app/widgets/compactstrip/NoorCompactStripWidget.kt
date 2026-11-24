@@ -30,6 +30,7 @@ class NoorCompactStripWidget : AppWidgetProvider() {
 
     companion object {
         private const val TAG = "NoorCompactStripWidget"
+        const val ACTION_WIDGET_REFRESH = "com.siraj.app.WIDGET_REFRESH"
 
         private fun getDefaultPrayerPayload(): PrayerPayload {
             val now = System.currentTimeMillis()
@@ -122,8 +123,28 @@ class NoorCompactStripWidget : AppWidgetProvider() {
                 views.setTextColor(R.id.widget_city_name, subCol)
                 views.setTextColor(R.id.widget_btn_refresh, accentCol)
 
-                // 5. Populate 6 Prayer Slots
-                val prayerEntries = payload.prayers
+                // 5. Populate 6 Prayer Slots across Days
+                val now = System.currentTimeMillis()
+                val allDayPrayers = mutableListOf<Pair<PrayerEntry, com.siraj.app.widgets.DayPrayerSchedule?>>()
+                if (payload.upcomingDays.isNotEmpty()) {
+                    for (day in payload.upcomingDays) {
+                        for (p in day.prayers) {
+                            allDayPrayers.add(Pair(p, day))
+                        }
+                    }
+                } else {
+                    for (p in payload.prayers) {
+                        allDayPrayers.add(Pair(p, null))
+                    }
+                }
+
+                val nextPair = allDayPrayers.firstOrNull { it.first.time > now }
+                    ?: allDayPrayers.lastOrNull()
+                    ?: Pair(payload.prayers[0], null)
+                val targetPrayerName = nextPair.first.name.lowercase()
+                val activeDay = nextPair.second
+
+                val prayerEntries = activeDay?.prayers ?: payload.prayers
                 fun getSlotTime(name: String, fallback: String): String {
                     val match = prayerEntries.firstOrNull { entry ->
                         entry.name.contains(name, ignoreCase = true) ||
@@ -132,9 +153,6 @@ class NoorCompactStripWidget : AppWidgetProvider() {
                     }
                     return match?.formattedTime?.replace(" AM", "")?.replace(" PM", "")?.trim() ?: fallback
                 }
-
-                val nextIdx = payload.nextPrayerIndex.coerceIn(0, prayerEntries.size - 1)
-                val targetPrayerName = prayerEntries.getOrNull(nextIdx)?.name?.lowercase() ?: "asr"
 
                 val isFriday = gregDisplay.startsWith("Fri", ignoreCase = true) || payload.gregorianDate.startsWith("Fri", ignoreCase = true)
                 views.setTextViewText(R.id.widget_name_dhuhr, if (isFriday) "JUMA" else "DHUHR")
@@ -162,15 +180,16 @@ class NoorCompactStripWidget : AppWidgetProvider() {
                     }
                 }
 
-                // 6. On-Widget ↻ Refresh PendingIntent
-                val refreshIntent = Intent(context, WidgetAlarmReceiver::class.java).apply {
-                    action = WidgetAlarmReceiver.ACTION_REFRESH_ALL
+                // 6. On-Widget ↻ Refresh PendingIntent (Explicit broadcast)
+                val refreshIntent = Intent(context, NoorCompactStripWidget::class.java).apply {
+                    action = ACTION_WIDGET_REFRESH
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
                 }
                 val refreshPi = PendingIntent.getBroadcast(
                     context,
-                    203,
+                    1000 + appWidgetId,
                     refreshIntent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 views.setOnClickPendingIntent(R.id.widget_btn_refresh, refreshPi)
 
@@ -188,6 +207,28 @@ class NoorCompactStripWidget : AppWidgetProvider() {
                 mgr.updateAppWidget(appWidgetId, views)
             } catch (t: Throwable) {
                 Log.e(TAG, "Error updating NoorCompactStripWidget $appWidgetId", t)
+            }
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        val action = intent.action ?: return
+        if (action == ACTION_WIDGET_REFRESH ||
+            action == Intent.ACTION_TIME_CHANGED ||
+            action == Intent.ACTION_TIMEZONE_CHANGED ||
+            action == Intent.ACTION_DATE_CHANGED) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                updateWidget(context, appWidgetManager, appWidgetId)
+            } else {
+                val componentName = android.content.ComponentName(context, NoorCompactStripWidget::class.java)
+                val ids = appWidgetManager.getAppWidgetIds(componentName)
+                ids.forEach { updateWidget(context, appWidgetManager, it) }
+            }
+            WidgetPrefs.getPrayerPayload(context)?.let {
+                WidgetAlarmScheduler.scheduleNextPrayerAlarm(context, it)
             }
         }
     }

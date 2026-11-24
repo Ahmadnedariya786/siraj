@@ -33,6 +33,7 @@ class NoorCircularClockWidget : AppWidgetProvider() {
 
     companion object {
         private const val TAG = "NoorCircularClockWidget"
+        const val ACTION_WIDGET_REFRESH = "com.siraj.app.WIDGET_REFRESH"
 
         private fun getDefaultPrayerPayload(): PrayerPayload {
             val now = System.currentTimeMillis()
@@ -90,43 +91,89 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                 val style = WidgetStyleHelper.parseConfig(context)
                 val now = System.currentTimeMillis()
 
-                val prayers = payload.prayers
-                val nextIdx = payload.nextPrayerIndex.coerceIn(0, prayers.size - 1)
-                val nextPrayer = prayers.getOrNull(nextIdx) ?: prayers[0]
+                // ─── Resolve Live State from 7-Day Precomputed Schedule ───
+                var isSunriseMakruh = false
+                var isZawaalMakruh = false
+                var isSunsetMakruh = false
+                var makruhWindowLabel = ""
+                var makruhEndFormatted = ""
+                var makruhStartMs = 0L
+                var makruhEndMs = 0L
 
-                // ─── Real-Time Makruh Waqt Check ───
-                val isSunriseMakruh = payload.makruhSunriseStartMs > 0L && now in payload.makruhSunriseStartMs until payload.makruhSunriseEndMs
-                val isZawaalMakruh = payload.makruhZawaalStartMs > 0L && now in payload.makruhZawaalStartMs until payload.makruhZawaalEndMs
-                val isSunsetMakruh = payload.makruhSunsetStartMs > 0L && now in payload.makruhSunsetStartMs until payload.makruhSunsetEndMs
+                if (payload.upcomingDays.isNotEmpty()) {
+                    for (day in payload.upcomingDays) {
+                        if (day.makruhSunriseStartMs > 0L && now in day.makruhSunriseStartMs until day.makruhSunriseEndMs) {
+                            isSunriseMakruh = true
+                            makruhWindowLabel = "Sunrise"
+                            makruhEndFormatted = day.makruhSunriseEndFormatted
+                            makruhStartMs = day.makruhSunriseStartMs
+                            makruhEndMs = day.makruhSunriseEndMs
+                            break
+                        }
+                        if (day.makruhZawaalStartMs > 0L && now in day.makruhZawaalStartMs until day.makruhZawaalEndMs) {
+                            isZawaalMakruh = true
+                            makruhWindowLabel = "Zawaal"
+                            makruhEndFormatted = day.makruhZawaalEndFormatted
+                            makruhStartMs = day.makruhZawaalStartMs
+                            makruhEndMs = day.makruhZawaalEndMs
+                            break
+                        }
+                        if (day.makruhSunsetStartMs > 0L && now in day.makruhSunsetStartMs until day.makruhSunsetEndMs) {
+                            isSunsetMakruh = true
+                            makruhWindowLabel = "Sunset"
+                            makruhEndFormatted = day.makruhSunsetEndFormatted
+                            makruhStartMs = day.makruhSunsetStartMs
+                            makruhEndMs = day.makruhSunsetEndMs
+                            break
+                        }
+                    }
+                } else {
+                    isSunriseMakruh = payload.makruhSunriseStartMs > 0L && now in payload.makruhSunriseStartMs until payload.makruhSunriseEndMs
+                    isZawaalMakruh = payload.makruhZawaalStartMs > 0L && now in payload.makruhZawaalStartMs until payload.makruhZawaalEndMs
+                    isSunsetMakruh = payload.makruhSunsetStartMs > 0L && now in payload.makruhSunsetStartMs until payload.makruhSunsetEndMs
+                    if (isSunriseMakruh) {
+                        makruhWindowLabel = "Sunrise"
+                        makruhEndFormatted = payload.makruhSunriseEndFormatted
+                        makruhStartMs = payload.makruhSunriseStartMs
+                        makruhEndMs = payload.makruhSunriseEndMs
+                    } else if (isZawaalMakruh) {
+                        makruhWindowLabel = "Zawaal"
+                        makruhEndFormatted = payload.makruhZawaalEndFormatted
+                        makruhStartMs = payload.makruhZawaalStartMs
+                        makruhEndMs = payload.makruhZawaalEndMs
+                    } else if (isSunsetMakruh) {
+                        makruhWindowLabel = "Sunset"
+                        makruhEndFormatted = payload.makruhSunsetEndFormatted
+                        makruhStartMs = payload.makruhSunsetStartMs
+                        makruhEndMs = payload.makruhSunsetEndMs
+                    }
+                }
+
                 val isMakruh = isSunriseMakruh || isZawaalMakruh || isSunsetMakruh
 
-                val makruhWindowLabel = when {
-                    isSunriseMakruh -> "Sunrise"
-                    isZawaalMakruh -> "Zawaal"
-                    isSunsetMakruh -> "Sunset"
-                    else -> ""
+                // ─── Next Prayer & Previous Prayer Resolution across Days ───
+                val allDayPrayers = mutableListOf<Pair<PrayerEntry, com.siraj.app.widgets.DayPrayerSchedule?>>()
+                if (payload.upcomingDays.isNotEmpty()) {
+                    for (day in payload.upcomingDays) {
+                        for (p in day.prayers) {
+                            allDayPrayers.add(Pair(p, day))
+                        }
+                    }
+                } else {
+                    for (p in payload.prayers) {
+                        allDayPrayers.add(Pair(p, null))
+                    }
                 }
 
-                val makruhEndFormatted = when {
-                    isSunriseMakruh -> payload.makruhSunriseEndFormatted
-                    isZawaalMakruh -> payload.makruhZawaalEndFormatted
-                    isSunsetMakruh -> payload.makruhSunsetEndFormatted
-                    else -> ""
-                }
+                val nextPair = allDayPrayers.firstOrNull { it.first.time > now }
+                    ?: allDayPrayers.lastOrNull()
+                    ?: Pair(payload.prayers[0], null)
 
-                val makruhStartMs = when {
-                    isSunriseMakruh -> payload.makruhSunriseStartMs
-                    isZawaalMakruh -> payload.makruhZawaalStartMs
-                    isSunsetMakruh -> payload.makruhSunsetStartMs
-                    else -> 0L
-                }
+                val nextPairIdx = allDayPrayers.indexOf(nextPair)
+                val prevPrayer = if (nextPairIdx > 0) allDayPrayers[nextPairIdx - 1].first else null
 
-                val makruhEndMs = when {
-                    isSunriseMakruh -> payload.makruhSunriseEndMs
-                    isZawaalMakruh -> payload.makruhZawaalEndMs
-                    isSunsetMakruh -> payload.makruhSunsetEndMs
-                    else -> 0L
-                }
+                val nextPrayer = nextPair.first
+                val activeDay = nextPair.second
 
                 // Compute progress arc percentage
                 val progressPercent: Float
@@ -141,11 +188,7 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                 } else {
                     // NORMAL WAQT: Revert cleanly to user selected theme accent color
                     activeAccentHex = style.accentHex
-                    val prevTime = if (nextIdx > 0) {
-                        prayers[nextIdx - 1].time
-                    } else {
-                        nextPrayer.time - (3 * 3600 * 1000L)
-                    }
+                    val prevTime = prevPrayer?.time ?: (nextPrayer.time - (3 * 3600 * 1000L))
                     val totalDuration = (nextPrayer.time - prevTime).toFloat()
                     progressPercent = if (totalDuration > 0) {
                         ((now - prevTime).toFloat() / totalDuration).coerceIn(0.05f, 1f)
@@ -162,9 +205,10 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                 )
                 views.setImageViewBitmap(R.id.widget_bg_image, dialBitmap)
 
-                // 2. Hijri Date
+                // 2. Hijri Date (from activeDay if available, else style/payload fallback)
                 val candidateHijri = when {
                     style.hijriDateFormatted.isNotBlank() -> style.hijriDateFormatted
+                    activeDay != null && activeDay.hijriDate.isNotBlank() && !activeDay.hijriDate.contains("Siraj", ignoreCase = true) -> activeDay.hijriDate
                     payload.hijriDate.isNotBlank() && !payload.hijriDate.contains("Siraj", ignoreCase = true) -> payload.hijriDate
                     else -> null
                 }
@@ -183,6 +227,15 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                     val countdownText = formatCountdown(remainingMs)
                     val qazaEndTime = if (nextPrayer.formattedEndTime.isNotBlank()) {
                         nextPrayer.formattedEndTime
+                    } else if (activeDay != null) {
+                        when (nextPrayer.name.lowercase()) {
+                            "fajr" -> activeDay.fajrEndFormatted
+                            "dhuhr", "jumu'ah" -> activeDay.dhuhrEndFormatted
+                            "asr" -> activeDay.asrEndFormatted
+                            "maghrib" -> activeDay.maghribEndFormatted
+                            "isha" -> activeDay.ishaEndFormatted
+                            else -> ""
+                        }
                     } else when (nextPrayer.name.lowercase()) {
                         "fajr" -> payload.fajrEndFormatted
                         "dhuhr", "jumu'ah" -> payload.dhuhrEndFormatted
@@ -223,15 +276,16 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                 val scaledClockSp = (28f * style.fontScale / 100f).coerceIn(22f, 36f)
                 views.setTextViewTextSize(R.id.widget_clock, TypedValue.COMPLEX_UNIT_SP, scaledClockSp)
 
-                // 7. On-Widget ↻ Refresh PendingIntent
-                val refreshIntent = Intent(context, WidgetAlarmReceiver::class.java).apply {
-                    action = WidgetAlarmReceiver.ACTION_REFRESH_ALL
+                // 7. On-Widget ↻ Refresh PendingIntent (Explicit Broadcast directly to NoorCircularClockWidget)
+                val refreshIntent = Intent(context, NoorCircularClockWidget::class.java).apply {
+                    action = ACTION_WIDGET_REFRESH
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
                 }
                 val refreshPi = PendingIntent.getBroadcast(
                     context,
-                    202,
+                    3000 + appWidgetId,
                     refreshIntent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 views.setOnClickPendingIntent(R.id.widget_btn_refresh, refreshPi)
 
@@ -264,6 +318,28 @@ class NoorCircularClockWidget : AppWidgetProvider() {
                     val minutes = TimeUnit.MILLISECONDS.toMinutes(remainingMs)
                     if (minutes > 0) "In ${minutes}m" else "In <1m"
                 }
+            }
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        val action = intent.action ?: return
+        if (action == ACTION_WIDGET_REFRESH ||
+            action == Intent.ACTION_TIME_CHANGED ||
+            action == Intent.ACTION_TIMEZONE_CHANGED ||
+            action == Intent.ACTION_DATE_CHANGED) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                updateWidget(context, appWidgetManager, appWidgetId)
+            } else {
+                val componentName = android.content.ComponentName(context, NoorCircularClockWidget::class.java)
+                val ids = appWidgetManager.getAppWidgetIds(componentName)
+                ids.forEach { updateWidget(context, appWidgetManager, it) }
+            }
+            WidgetPrefs.getPrayerPayload(context)?.let {
+                WidgetAlarmScheduler.scheduleNextPrayerAlarm(context, it)
             }
         }
     }

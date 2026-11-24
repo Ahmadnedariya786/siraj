@@ -1352,7 +1352,7 @@ export const AyahStudySheet: React.FC<AyahStudySheetProps> = ({
                     <Loader2 className="w-4 h-4 animate-spin text-[var(--accent)]" />
                     <span>Loading authentic translation...</span>
                   </div>
-                ) : (
+                ) : translationsMap[selectedEdition] ? (
                   <p
                     dir={selectedEdition.startsWith('ur.') ? 'rtl' : 'ltr'}
                     className={`text-sm leading-relaxed ${selectedEdition.startsWith('ur.') ? 'font-urdu text-right text-base' : ''}`}
@@ -1365,9 +1365,36 @@ export const AyahStudySheet: React.FC<AyahStudySheetProps> = ({
                       transition: 'filter 0.25s ease',
                     }}
                   >
-                    {translationsMap[selectedEdition] ||
-                      'Loading verified translation for this edition...'}
+                    {translationsMap[selectedEdition]}
                   </p>
+                ) : (
+                  <div className="py-6 px-4 text-center space-y-3">
+                    <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center bg-[var(--surface-2)] text-[var(--accent-text)] border border-[var(--border)]">
+                      <Download className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--text-primary)]">Translation Offline</h4>
+                      <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xs mx-auto">
+                        Connect to the internet or tap Save Offline to read verified translation for this edition.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={handleDownloadTranslationOffline}
+                      disabled={isDownloadingOffline}
+                      className="rounded-full px-5 py-2 font-bold text-xs shadow-md"
+                      style={{
+                        background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
+                        color: 'var(--on-accent)',
+                      }}
+                    >
+                      <Download className="w-3.5 h-3.5 mr-1.5" />
+                      {isDownloadingOffline ? 'Downloading Pack...' : '⬇️ Download Offline Pack'}
+                    </Button>
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      Or reconnect to the internet to read online
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

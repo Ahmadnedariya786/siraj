@@ -21,6 +21,7 @@ public class AdhanAlarmReceiver extends BroadcastReceiver {
     private static final String TAG = "AdhanAlarmReceiver";
 
     public static final String ACTION_TRIGGER = "com.siraj.app.ACTION_ADHAN_TRIGGER";
+    public static final String ACTION_PRAYER_ALARM = "com.siraj.app.ACTION_PRAYER_ALARM";
     public static final String EXTRA_ALARM_ID = "alarmId";
     public static final String EXTRA_PRAYER_NAME = "prayerName";
     public static final String EXTRA_ADHAN_URL = "adhanUrl";
@@ -95,7 +96,11 @@ public class AdhanAlarmReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent == null || !ACTION_TRIGGER.equals(intent.getAction())) {
+        if (intent == null) {
+            return;
+        }
+        String action = intent.getAction();
+        if (!ACTION_TRIGGER.equals(action) && !ACTION_PRAYER_ALARM.equals(action)) {
             return;
         }
 

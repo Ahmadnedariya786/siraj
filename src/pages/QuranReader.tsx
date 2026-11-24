@@ -35,6 +35,8 @@ import {
   getKnownPageForAyah,
   getMushafLineFormat,
   setMushafLineFormat,
+  fetchMushafPage,
+  getCachedMushafPageSync,
   type MushafLineFormat,
   type InteractivePageData,
 } from '@/lib/interactive-mushaf';
@@ -81,6 +83,7 @@ export default function QuranReader() {
     duration,
   } = useTilawah();
   const [currentPageData, setCurrentPageData] = useState<InteractivePageData | null>(null);
+  const [isPageDataLoading, setIsPageDataLoading] = useState(false);
   const pageDataRef = useRef<InteractivePageData | null>(null);
   const lastObservedVerseRef = useRef<string | null>(null);
 
@@ -198,6 +201,44 @@ export default function QuranReader() {
     setActiveWordPos(pos);
   }, [readerViewMode, isPlaying, currentSurah, currentAyah, playbackTimeMs, duration, verseSegments, currentPageData]);
 
+  // Synchronize currentPageData for Cards Mode or initial load when InteractiveMushafPage is unmounted
+  useEffect(() => {
+    if (currentPageData?.page_number === mushafPageNumber && currentPageData.verses.length > 0) return;
+
+    // Check synchronous cache first
+    const syncData = getCachedMushafPageSync(mushafPageNumber);
+    if (syncData) {
+      setCurrentPageData(syncData);
+      pageDataRef.current = syncData;
+      setIsPageDataLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsPageDataLoading(true);
+
+    fetchMushafPage(mushafPageNumber, showTajweed)
+      .then((data) => {
+        if (isMounted) {
+          if (data) {
+            setCurrentPageData(data);
+            pageDataRef.current = data;
+          }
+          setIsPageDataLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.debug(`[QuranReader] Fallback or offline for page ${mushafPageNumber}:`, err);
+        if (isMounted) {
+          setIsPageDataLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [mushafPageNumber, showTajweed, currentPageData?.page_number, currentPageData?.verses.length]);
+
   useEffect(() => {
     if (readerViewMode !== 'card') return;
     let cancelled = false;
@@ -243,7 +284,7 @@ export default function QuranReader() {
           }
         }
       } catch (e) {
-        console.warn('Card translations load failed', e);
+        console.debug('Card translations load failed', e);
       } finally {
         if (!cancelled) setIsCardTranslationLoading(false);
       }
@@ -1197,20 +1238,38 @@ export default function QuranReader() {
                         ) : isCardTranslationLoading ? (
                           <span className="text-[var(--text-secondary)] italic">Loading translation...</span>
                         ) : (
-                          <span className="text-[var(--text-secondary)] italic">
-                            {v.words.map((w) => w.translation?.text).filter(Boolean).join(' ') || 'Translation unavailable offline'}
+                          <span className="text-[var(--text-secondary)] italic text-[11px] opacity-80">
+                            {v.words.map((w) => w.translation?.text).filter(Boolean).join(' ') ||
+                              'Offline — connect to view translation'}
                           </span>
                         )}
                       </div>
                     </div>
                   );
                 })
-              ) : (
+              ) : isPageDataLoading ? (
                 <div className="text-center py-12 rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
                   <div className="w-8 h-8 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                   <p className="text-xs font-semibold text-[var(--text-secondary)]">
                     Loading Page {mushafPageNumber} Cards...
                   </p>
+                </div>
+              ) : (
+                <div className="text-center py-12 rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-6 space-y-3">
+                  <p className="text-sm font-bold text-[var(--text-primary)]">
+                    Page {mushafPageNumber} Cards Offline
+                  </p>
+                  <p className="text-xs text-[var(--text-secondary)] max-w-xs mx-auto">
+                    Connect to the internet to load Ayah cards for this page or switch back to Mushaf View.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setReaderViewMode('mushaf')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[var(--accent)] text-[var(--on-accent)] shadow-sm active:scale-95 transition-transform"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Switch to Mushaf View</span>
+                  </button>
                 </div>
               )}
             </div>

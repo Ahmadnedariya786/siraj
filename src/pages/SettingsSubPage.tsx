@@ -96,15 +96,18 @@ import {
 } from '@/lib/update-checker';
 import { BUILD_TIME, BUILD_COMMIT } from '@/buildInfo';
 import { NoorLogoCrest } from '@/components/NoorLogoCrest';
-import { triggerInAppPrayerAlert } from '@/components/PrayerReminderBanner';
 import {
   getPrayerHadithLang,
   setPrayerHadithLang,
   getPrayerHadith,
+  stripTrailingHadithRef,
   PRAYER_HADITH_LANG_OPTIONS,
   PRAYER_HADITH_LANG_EVENT,
   type PrayerHadithLang,
 } from '@/lib/prayer-hadith-i18n';
+import { adhanService } from '@/lib/adhan-service';
+import { localNotifications, PRAYER_RAKAH_BREAKDOWN } from '@/lib/local-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { NoorDynamicLogo, NoorLogoVisualPicker, cycleLogoEdition, getSelectedLogoEdition, setSelectedLogoEdition, NOOR_LOGO_EDITIONS, LOGO_EDITION_CHANGE_EVENT, LOGO_EDITION_CHANGED_EVENT } from '@/components/NoorDynamicLogo';
 import { OwnerSecurityModal } from '@/components/OwnerSecurityModal';
 import { OwnerSecurityVaultCard } from '@/components/OwnerSecurityVaultCard';
@@ -550,6 +553,34 @@ const SettingsSubPage: React.FC = () => {
         lang === 'ur' ? 'Urdu (اردو)' : lang === 'gu' ? 'Gujarati (ગુજરાતી)' : 'English'
       }.`,
     });
+  };
+
+  // 5 Fard Prayer Drawer Alert toggles (defaults to ON)
+  const [fardAlerts, setFardAlerts] = useState(() => {
+    const cfg = adhanService.getAdhanConfig();
+    return {
+      Fajr: cfg.fajrEnabled ?? true,
+      Dhuhr: cfg.dhuhrEnabled ?? true,
+      Asr: cfg.asrEnabled ?? true,
+      Maghrib: cfg.maghribEnabled ?? true,
+      Isha: cfg.ishaEnabled ?? true,
+    };
+  });
+
+  const handleFardAlertToggle = (prayerName: 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha', enabled: boolean) => {
+    setFardAlerts((prev) => ({ ...prev, [prayerName]: enabled }));
+    const keyMap: Record<string, 'fajrEnabled' | 'dhuhrEnabled' | 'asrEnabled' | 'maghribEnabled' | 'ishaEnabled'> = {
+      Fajr: 'fajrEnabled',
+      Dhuhr: 'dhuhrEnabled',
+      Asr: 'asrEnabled',
+      Maghrib: 'maghribEnabled',
+      Isha: 'ishaEnabled',
+    };
+    const cfg = adhanService.getAdhanConfig();
+    cfg[keyMap[prayerName]] = enabled;
+    adhanService.saveAdhanConfig(cfg);
+    localNotifications.schedulePrayerNotificationsFromAPI().catch(() => {});
+    toast({ title: `${prayerName} notification ${enabled ? 'enabled' : 'disabled'}` });
   };
 
   // Stealth Owner Security Vault state (revealed via 5-tap on Version 2.3.0 when unlocked)
@@ -1299,6 +1330,36 @@ const SettingsSubPage: React.FC = () => {
         {/* NOTIFICATIONS SECTION */}
         {sectionId === 'notifications' && (
           <div className="space-y-4">
+            {/* 5 Fard Prayer OS Notification Drawer Toggles */}
+            <Card className="p-4 space-y-3 rounded-2xl" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+              <div>
+                <Label className="text-sm font-bold flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-[var(--accent-text)]" />
+                  Daily Fard Prayer Drawer Alerts
+                </Label>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  Authentic Android OS notification drawer alerts on channel siraj_prayers_v3 with Rak'ah info and single Hadith guidance
+                </p>
+              </div>
+              <div className="grid grid-cols-1 divide-y divide-[var(--border)] pt-1">
+                {(['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const).map((pName) => (
+                  <div key={pName} className="flex items-center justify-between py-2.5">
+                    <div>
+                      <span className="text-xs font-bold text-[var(--text-primary)]">{pName}</span>
+                      <p className="text-[11px] text-[var(--text-secondary)]">
+                        {PRAYER_RAKAH_BREAKDOWN[pName] || 'Obligatory Prayer'}
+                      </p>
+                    </div>
+                    <Switch
+                      className="shrink-0"
+                      checked={fardAlerts[pName] ?? true}
+                      onCheckedChange={(c) => handleFardAlertToggle(pName, c)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </Card>
+
             {/* SMART SALAH ALERTS & AUTO-DND CARD */}
             <Card className="p-4 space-y-4 rounded-2xl" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
               <div>
@@ -1726,22 +1787,52 @@ const SettingsSubPage: React.FC = () => {
               <div className="pt-3">
                 <Button
                   variant="outline"
-                  className="w-full rounded-xl"
+                  className="w-full rounded-xl gap-2 font-bold"
                   onClick={async () => {
-                    const res = await unifiedNotifications.testNotification();
+                    const pName = 'Fajr';
+                    const pTime = '05:15 AM';
+                    const hadith = getPrayerHadith(pName, hadithLang);
+                    const cleanRef = stripTrailingHadithRef(hadith.translation, hadith.reference);
+                    const rakah = PRAYER_RAKAH_BREAKDOWN[pName] || '2 Sunnah • 2 Fardh';
+
+                    // 1. Native AndroidBridge trigger on channel siraj_prayers_v3
                     if (typeof window !== 'undefined' && (window as any).AndroidBridge?.triggerTestPrayerNotification) {
                       try {
                         (window as any).AndroidBridge?.setPrayerNotificationLang?.(hadithLang);
-                        (window as any).AndroidBridge.triggerTestPrayerNotification('Fajr', '05:15 AM');
+                        (window as any).AndroidBridge.triggerTestPrayerNotification(pName, pTime);
                       } catch (err) {
                         console.warn('Native test prayer notification bridge failed:', err);
                       }
                     }
-                    triggerInAppPrayerAlert('Fajr', '05:15 AM');
-                    toast({ title: res.success ? '✨ Test Notification & Royal HUD Sent' : 'Notification failed' });
+
+                    // 2. Capacitor LocalNotifications trigger on channel siraj_prayers_v3
+                    try {
+                      await localNotifications.ensureHadithChannel();
+                      await LocalNotifications.schedule({
+                        notifications: [
+                          {
+                            id: 99999,
+                            title: `🕌 ${pName} Prayer • ${pTime}`,
+                            body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
+                            largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
+                            summaryText: `${pName} Prayer • Siraj`,
+                            channelId: 'siraj_prayers_v3',
+                            schedule: { at: new Date(Date.now() + 500), allowWhileIdle: true },
+                            sound: 'default',
+                            smallIcon: 'ic_stat_noor_mosque',
+                            iconColor: '#D4AF37',
+                          },
+                        ],
+                      });
+                    } catch (err) {
+                      console.warn('LocalNotifications test schedule failed:', err);
+                    }
+
+                    toast({ title: '✨ Test Prayer Drawer Notification Sent' });
                   }}
                 >
-                  Send Test Notification
+                  <Bell className="w-4 h-4 text-[var(--accent-text)]" />
+                  Send Test Drawer Notification
                 </Button>
               </div>
             </Card>

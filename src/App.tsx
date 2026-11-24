@@ -181,7 +181,6 @@ import Profile from "./pages/Profile";
 import SettingsSubPage from "./pages/SettingsSubPage";
 import SettingsThemePage from "./pages/SettingsThemePage";
 import ZakatCalculator from "./pages/ZakatCalculator";
-import PrayerReminderBanner from "@/components/PrayerReminderBanner";
 
 // Lazy load secondary/deep route components
 const DashboardWidgets = lazy(() => import("./pages/DashboardWidgets"));
@@ -369,7 +368,6 @@ function AppContent({ splashActive }: { splashActive?: boolean }) {
             <div className="flex flex-col min-h-screen overflow-x-hidden relative" style={{ backgroundColor: 'var(--bg-base)' }}>
               {/* Fixed Single App-Shell Theme Signature Pattern Layer */}
               <div className="theme-app-pattern sig-pattern-layer" aria-hidden="true" />
-              <PrayerReminderBanner />
               <GlobalTilawahBar />
               <div className="flex-shrink-0">
                 <Suspense fallback={null}>

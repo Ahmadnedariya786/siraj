@@ -33,17 +33,31 @@ object WidgetAlarmScheduler {
             val prayers = payload.prayers
             if (prayers.isEmpty()) return
 
-            // Candidate timestamps: Prayer transitions + Makruh Start/End boundaries
+            // Candidate timestamps: Prayer transitions + Makruh Start/End boundaries across all 7 days
             val candidateTimestamps = mutableListOf<Long>()
-            for (p in prayers) {
-                if (p.time > now) candidateTimestamps.add(p.time)
+            if (payload.upcomingDays.isNotEmpty()) {
+                for (day in payload.upcomingDays) {
+                    for (p in day.prayers) {
+                        if (p.time > now) candidateTimestamps.add(p.time)
+                    }
+                    if (day.makruhSunriseStartMs > now) candidateTimestamps.add(day.makruhSunriseStartMs)
+                    if (day.makruhSunriseEndMs > now) candidateTimestamps.add(day.makruhSunriseEndMs)
+                    if (day.makruhZawaalStartMs > now) candidateTimestamps.add(day.makruhZawaalStartMs)
+                    if (day.makruhZawaalEndMs > now) candidateTimestamps.add(day.makruhZawaalEndMs)
+                    if (day.makruhSunsetStartMs > now) candidateTimestamps.add(day.makruhSunsetStartMs)
+                    if (day.makruhSunsetEndMs > now) candidateTimestamps.add(day.makruhSunsetEndMs)
+                }
+            } else {
+                for (p in prayers) {
+                    if (p.time > now) candidateTimestamps.add(p.time)
+                }
+                if (payload.makruhSunriseStartMs > now) candidateTimestamps.add(payload.makruhSunriseStartMs)
+                if (payload.makruhSunriseEndMs > now) candidateTimestamps.add(payload.makruhSunriseEndMs)
+                if (payload.makruhZawaalStartMs > now) candidateTimestamps.add(payload.makruhZawaalStartMs)
+                if (payload.makruhZawaalEndMs > now) candidateTimestamps.add(payload.makruhZawaalEndMs)
+                if (payload.makruhSunsetStartMs > now) candidateTimestamps.add(payload.makruhSunsetStartMs)
+                if (payload.makruhSunsetEndMs > now) candidateTimestamps.add(payload.makruhSunsetEndMs)
             }
-            if (payload.makruhSunriseStartMs > now) candidateTimestamps.add(payload.makruhSunriseStartMs)
-            if (payload.makruhSunriseEndMs > now) candidateTimestamps.add(payload.makruhSunriseEndMs)
-            if (payload.makruhZawaalStartMs > now) candidateTimestamps.add(payload.makruhZawaalStartMs)
-            if (payload.makruhZawaalEndMs > now) candidateTimestamps.add(payload.makruhZawaalEndMs)
-            if (payload.makruhSunsetStartMs > now) candidateTimestamps.add(payload.makruhSunsetStartMs)
-            if (payload.makruhSunsetEndMs > now) candidateTimestamps.add(payload.makruhSunsetEndMs)
 
             candidateTimestamps.sort()
             var triggerAtMs = candidateTimestamps.firstOrNull { it > now } ?: -1L

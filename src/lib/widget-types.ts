@@ -20,6 +20,27 @@ export interface PrayerEntry {
   formattedEndTime?: string;
 }
 
+export interface DayPrayerSchedule {
+  dateKey: string;                 // "2026-11-24"
+  hijriDate: string;               // "9 Jumādā II 1448"
+  gregorianDate: string;           // "Tue, 24 Nov"
+  prayers: PrayerEntry[];          // exactly 6 entries for this day
+  fajrEndFormatted?: string;
+  dhuhrEndFormatted?: string;
+  asrEndFormatted?: string;
+  maghribEndFormatted?: string;
+  ishaEndFormatted?: string;
+  makruhSunriseStartMs: number;
+  makruhSunriseEndMs: number;
+  makruhSunriseEndFormatted: string;
+  makruhZawaalStartMs: number;
+  makruhZawaalEndMs: number;
+  makruhZawaalEndFormatted: string;
+  makruhSunsetStartMs: number;
+  makruhSunsetEndMs: number;
+  makruhSunsetEndFormatted: string;
+}
+
 export interface PrayerPayload {
   prayers: PrayerEntry[];          // exactly 6 entries
   nextPrayerIndex: number;         // 0..5
@@ -50,6 +71,9 @@ export interface PrayerPayload {
   makruhSunsetStartMs?: number;
   makruhSunsetEndMs?: number;
   makruhSunsetEndFormatted?: string;
+
+  // 7-Day Precomputed Schedule for 100% Autonomous Native Refresh
+  upcomingDays?: DayPrayerSchedule[];
 
   // Widget visual settings cache
   surfaceStyle?: string;

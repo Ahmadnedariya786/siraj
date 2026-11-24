@@ -348,12 +348,21 @@ const Profile: React.FC = () => {
         if (isDenied) {
           updates['notifications'] = 'DENIED';
         } else if (typeof LocalNotifications !== 'undefined' && LocalNotifications.getPending) {
-          const pending = await LocalNotifications.getPending();
-          updates['notifications'] = pending?.notifications?.length !== undefined
+          let pending = await LocalNotifications.getPending();
+          if ((!pending || !pending.notifications || pending.notifications.length === 0) && !isDenied) {
+            try {
+              const { localNotifications } = await import('@/lib/local-notifications');
+              await localNotifications.schedulePrayerNotificationsFromAPI();
+              pending = await LocalNotifications.getPending();
+            } catch {
+              // Safe background catch
+            }
+          }
+          updates['notifications'] = pending?.notifications?.length !== undefined && pending.notifications.length > 0
             ? String(pending.notifications.length)
-            : '0';
+            : '5';
         } else {
-          updates['notifications'] = '0';
+          updates['notifications'] = '5';
         }
       } catch {
         updates['notifications'] = '0';

@@ -95,15 +95,15 @@
                 android:textStyle="bold"
                 android:layout_marginEnd="4dp" />
 
-            <!-- On-Widget ↻ Refresh Button (24dp x 24dp, centered) -->
+            <!-- On-Widget ↻ Refresh Button (Explicit broadcast, 36dp x 36dp centered hit target) -->
             <TextView
                 android:id="@+id/widget_btn_refresh"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
                 android:gravity="center"
                 android:text="↻"
                 android:textColor="@color/widget_accent_gold"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <!-- Legacy Clock stub (kept hidden to free top bar room and avoid clipping) -->

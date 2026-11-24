@@ -1248,7 +1248,9 @@ function MosqueFinderContent() {
                     if (navigator.share) {
                       try {
                         await navigator.share({ title: primaryMasjid.name, text: shareText, url: deepLink });
-                      } catch {}
+                      } catch {
+                        // User dismissed native share sheet
+                      }
                     } else if (navigator.clipboard) {
                       navigator.clipboard.writeText(deepLink);
                       toast({ title: "Link Copied", description: "Masjid deep-link copied to clipboard." });

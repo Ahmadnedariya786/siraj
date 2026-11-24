@@ -763,7 +763,7 @@ public class MainActivity extends BridgeActivity {
                             try {
                                 final String pName = (prayerName != null && !prayerName.trim().isEmpty()) ? prayerName : "Fajr";
                                 final String pTime = (prayerTime12h != null && !prayerTime12h.trim().isEmpty()) ? prayerTime12h : "05:15 AM";
-                                final String channelId = "siraj_prayer_reminders";
+                                final String channelId = "siraj_prayers_v3";
 
                                 NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                                 if (nm == null) return;
@@ -773,13 +773,14 @@ public class MainActivity extends BridgeActivity {
                                     if (channel == null) {
                                         channel = new NotificationChannel(
                                                 channelId,
-                                                "Prayer Reminders",
+                                                "Prayer Notifications",
                                                 NotificationManager.IMPORTANCE_HIGH
                                         );
-                                        channel.setDescription("Authentic prayer time alerts and Adhan reminders");
+                                        channel.setDescription("Authentic prayer time alerts and daily Hadith guidance for all 5 prayers");
                                         channel.enableLights(true);
                                         channel.enableVibration(true);
                                         channel.setShowBadge(true);
+                                        channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
                                         nm.createNotificationChannel(channel);
                                     }
                                 }
@@ -794,8 +795,19 @@ public class MainActivity extends BridgeActivity {
                                 );
 
                                 String title = pName + " Prayer • " + pTime;
+                                String rakah = "2 Sunnah • 2 Fardh (4 Rak'ah)";
+                                if ("Dhuhr".equalsIgnoreCase(pName) || "Jumu'ah".equalsIgnoreCase(pName)) {
+                                    rakah = "4 Sunnah • 4 Fardh • 2 Sunnah (10 Rak'ah)";
+                                } else if ("Asr".equalsIgnoreCase(pName)) {
+                                    rakah = "4 Sunnah • 4 Fardh (8 Rak'ah)";
+                                } else if ("Maghrib".equalsIgnoreCase(pName)) {
+                                    rakah = "3 Fardh • 2 Sunnah • 2 Nafl (7 Rak'ah)";
+                                } else if ("Isha".equalsIgnoreCase(pName)) {
+                                    rakah = "4 Fardh • 2 Sunnah • 3 Witr (9 Rak'ah)";
+                                }
                                 String hadith = PrayerHadithHelper.getPrayerHadith(MainActivity.this, pName);
                                 String bigText = "🕌 Hayya 'alas-Salah — Time for " + pName + " (" + pTime + ")\n"
+                                        + "📿 " + rakah + "\n"
                                         + hadith;
 
                                 NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, channelId)
@@ -1896,16 +1908,17 @@ public class MainActivity extends BridgeActivity {
             if (manager != null) {
                 manager.createNotificationChannel(channel);
 
-                // High importance channel for Prayer Hadith Background Notifications
-                NotificationChannel hadithChannel = new NotificationChannel(
-                        "siraj_prayer_hadith_alerts_v2",
-                        "Prayer Hadith Alerts",
+                // High importance channel for Prayer Notifications
+                NotificationChannel prayerChannel = new NotificationChannel(
+                        "siraj_prayers_v3",
+                        "Prayer Notifications",
                         NotificationManager.IMPORTANCE_HIGH);
-                hadithChannel.setDescription("Authentic prayer time alerts and daily Hadith guidance for all 5 prayers");
-                hadithChannel.enableLights(true);
-                hadithChannel.enableVibration(true);
-                hadithChannel.setShowBadge(true);
-                manager.createNotificationChannel(hadithChannel);
+                prayerChannel.setDescription("Authentic prayer time alerts and daily Hadith guidance for all 5 prayers");
+                prayerChannel.enableLights(true);
+                prayerChannel.enableVibration(true);
+                prayerChannel.setShowBadge(true);
+                prayerChannel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
+                manager.createNotificationChannel(prayerChannel);
             }
         }
     }

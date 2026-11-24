@@ -27,7 +27,6 @@ import { PrayerTimesSection } from "@/components/PrayerTimesSection";
 import { getDayWorshipLog, formatDateKey } from "@/lib/worship-log";
 import { getPrayerHistory, getTodayPrayers, type DailyPrayers } from "@/lib/salah-tracker";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
-import { triggerInAppPrayerAlert } from "@/components/PrayerReminderBanner";
 import { parseTimeToSeconds } from "@/lib/makruh-times";
 
 // Lazy load widget components to reduce initial bundle size
@@ -527,9 +526,8 @@ function PremiumDashboardInner({
               // Safe storage fallback
             }
 
-            // Immediately auto-open PrayerReminderBanner with 12h time
+            // Native Android notification trigger if on Android bridge
             const time12h = p.time || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            triggerInAppPrayerAlert(canonicalName, time12h);
 
             // Native Android notification trigger if on Android bridge
             try {

@@ -1005,7 +1005,7 @@ function InteractiveMushafPageComponent({
   }, [pageData, activeFormat, showTajweed, surfaceMode, safeSubPage, blocks, pageNumber]);
 
   // If Classic Scan mode is selected, or if fallback failed to load verses, render classic scan
-  if (surfaceMode === 'classic' || (pageData?.is_fallback && pageData.verses.length === 0)) {
+  if (activeFormat === 15 && (surfaceMode === 'classic' || (pageData?.is_fallback && pageData.verses.length === 0))) {
     const classicMode: MushafReadingMode =
       surfaceMode === 'night' ? 'night' : surfaceMode === 'parchment' ? 'parchment' : 'classic';
     return (
@@ -1014,6 +1014,31 @@ function InteractiveMushafPageComponent({
         pageNumber={pageNumber}
         mushafMode={classicMode}
       />
+    );
+  }
+
+  // If 7L / 13L mode cannot load online data and has no cached verses offline
+  if (activeFormat !== 15 && !loading && (!pageData || pageData.verses.length === 0)) {
+    return (
+      <div className="relative w-full max-w-2xl mx-auto mb-6 select-none text-center py-12 px-4 rounded-3xl bg-[var(--surface)] border border-[var(--border)] space-y-3">
+        <p className="text-sm font-semibold text-[var(--text-primary)]">
+          Page {pageNumber} Offline ({activeFormat}L Layout)
+        </p>
+        <p className="text-xs text-[var(--text-secondary)]">
+          Connect to internet or switch to 15L Standard View to view cached scan images.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            const evt = new CustomEvent('noor-mushaf-format-changed', { detail: { format: 15 } });
+            window.dispatchEvent(evt);
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[var(--accent)] text-[var(--on-accent)] shadow-sm"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>Switch to 15L Standard View</span>
+        </button>
+      </div>
     );
   }
 

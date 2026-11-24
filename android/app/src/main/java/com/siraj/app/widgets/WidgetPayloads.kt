@@ -20,6 +20,82 @@ import org.json.JSONObject
 //    Pushed on app launch, prayer-time change, every 30 min.
 // ─────────────────────────────────────────────────────────────
 
+data class DayPrayerSchedule(
+    val dateKey: String = "",              // "2026-11-24"
+    val hijriDate: String = "",            // "9 Jumādā II 1448"
+    val gregorianDate: String = "",        // "Tue, 24 Nov"
+    val prayers: List<PrayerEntry> = emptyList(), // exactly 6 entries
+    val fajrEndFormatted: String = "",
+    val dhuhrEndFormatted: String = "",
+    val asrEndFormatted: String = "",
+    val maghribEndFormatted: String = "",
+    val ishaEndFormatted: String = "",
+    val makruhSunriseStartMs: Long = 0L,
+    val makruhSunriseEndMs: Long = 0L,
+    val makruhSunriseEndFormatted: String = "",
+    val makruhZawaalStartMs: Long = 0L,
+    val makruhZawaalEndMs: Long = 0L,
+    val makruhZawaalEndFormatted: String = "",
+    val makruhSunsetStartMs: Long = 0L,
+    val makruhSunsetEndMs: Long = 0L,
+    val makruhSunsetEndFormatted: String = ""
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("dateKey", dateKey)
+        put("hijriDate", hijriDate)
+        put("gregorianDate", gregorianDate)
+        put("prayers", JSONArray().also { arr -> prayers.forEach { arr.put(it.toJson()) } })
+        put("fajrEndFormatted", fajrEndFormatted)
+        put("dhuhrEndFormatted", dhuhrEndFormatted)
+        put("asrEndFormatted", asrEndFormatted)
+        put("maghribEndFormatted", maghribEndFormatted)
+        put("ishaEndFormatted", ishaEndFormatted)
+        put("makruhSunriseStartMs", makruhSunriseStartMs)
+        put("makruhSunriseEndMs", makruhSunriseEndMs)
+        put("makruhSunriseEndFormatted", makruhSunriseEndFormatted)
+        put("makruhZawaalStartMs", makruhZawaalStartMs)
+        put("makruhZawaalEndMs", makruhZawaalEndMs)
+        put("makruhZawaalEndFormatted", makruhZawaalEndFormatted)
+        put("makruhSunsetStartMs", makruhSunsetStartMs)
+        put("makruhSunsetEndMs", makruhSunsetEndMs)
+        put("makruhSunsetEndFormatted", makruhSunsetEndFormatted)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject): DayPrayerSchedule {
+            val prayers = mutableListOf<PrayerEntry>()
+            val arr = o.optJSONArray("prayers")
+            if (arr != null) {
+                for (i in 0 until arr.length()) {
+                    try {
+                        prayers.add(PrayerEntry.fromJson(arr.getJSONObject(i)))
+                    } catch (_: Exception) {}
+                }
+            }
+            return DayPrayerSchedule(
+                dateKey = o.optString("dateKey", ""),
+                hijriDate = o.optString("hijriDate", ""),
+                gregorianDate = o.optString("gregorianDate", ""),
+                prayers = prayers,
+                fajrEndFormatted = o.optString("fajrEndFormatted", ""),
+                dhuhrEndFormatted = o.optString("dhuhrEndFormatted", ""),
+                asrEndFormatted = o.optString("asrEndFormatted", ""),
+                maghribEndFormatted = o.optString("maghribEndFormatted", ""),
+                ishaEndFormatted = o.optString("ishaEndFormatted", ""),
+                makruhSunriseStartMs = o.optLong("makruhSunriseStartMs", 0L),
+                makruhSunriseEndMs = o.optLong("makruhSunriseEndMs", 0L),
+                makruhSunriseEndFormatted = o.optString("makruhSunriseEndFormatted", ""),
+                makruhZawaalStartMs = o.optLong("makruhZawaalStartMs", 0L),
+                makruhZawaalEndMs = o.optLong("makruhZawaalEndMs", 0L),
+                makruhZawaalEndFormatted = o.optString("makruhZawaalEndFormatted", ""),
+                makruhSunsetStartMs = o.optLong("makruhSunsetStartMs", 0L),
+                makruhSunsetEndMs = o.optLong("makruhSunsetEndMs", 0L),
+                makruhSunsetEndFormatted = o.optString("makruhSunsetEndFormatted", "")
+            )
+        }
+    }
+}
+
 data class PrayerPayload(
     val prayers: List<PrayerEntry>,    // exactly 6: Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha
     val nextPrayerIndex: Int,           // 0..5
@@ -46,6 +122,7 @@ data class PrayerPayload(
     val makruhSunsetStartMs: Long = 0L,
     val makruhSunsetEndMs: Long = 0L,
     val makruhSunsetEndFormatted: String = "",
+    val upcomingDays: List<DayPrayerSchedule> = emptyList(),
     val surfaceStyle: String = "theme",
     val opacity: Int = 85,
     val accentColorHex: String = "#D4AF37",
@@ -83,6 +160,7 @@ data class PrayerPayload(
         put("makruhSunsetStartMs", makruhSunsetStartMs)
         put("makruhSunsetEndMs", makruhSunsetEndMs)
         put("makruhSunsetEndFormatted", makruhSunsetEndFormatted)
+        put("upcomingDays", JSONArray().also { arr -> upcomingDays.forEach { arr.put(it.toJson()) } })
         put("surfaceStyle", surfaceStyle)
         put("opacity", opacity)
         put("accentColorHex", accentColorHex)
@@ -133,6 +211,16 @@ data class PrayerPayload(
                         return null
                     }
                 }
+
+                val upcomingDays = mutableListOf<DayPrayerSchedule>()
+                val upcomingArr = o.optJSONArray("upcomingDays")
+                if (upcomingArr != null) {
+                    for (i in 0 until upcomingArr.length()) {
+                        try {
+                            upcomingDays.add(DayPrayerSchedule.fromJson(upcomingArr.getJSONObject(i)))
+                        } catch (_: Exception) {}
+                    }
+                }
                 
                 return PrayerPayload(
                     prayers = prayers,
@@ -151,6 +239,16 @@ data class PrayerPayload(
                     maghribEndFormatted = o.optString("maghribEndFormatted", ""),
                     ishaEndFormatted = o.optString("ishaEndFormatted", ""),
                     showQazaEndTime = o.optBoolean("showQazaEndTime", true),
+                    makruhSunriseStartMs = o.optLong("makruhSunriseStartMs", 0L),
+                    makruhSunriseEndMs = o.optLong("makruhSunriseEndMs", 0L),
+                    makruhSunriseEndFormatted = o.optString("makruhSunriseEndFormatted", ""),
+                    makruhZawaalStartMs = o.optLong("makruhZawaalStartMs", 0L),
+                    makruhZawaalEndMs = o.optLong("makruhZawaalEndMs", 0L),
+                    makruhZawaalEndFormatted = o.optString("makruhZawaalEndFormatted", ""),
+                    makruhSunsetStartMs = o.optLong("makruhSunsetStartMs", 0L),
+                    makruhSunsetEndMs = o.optLong("makruhSunsetEndMs", 0L),
+                    makruhSunsetEndFormatted = o.optString("makruhSunsetEndFormatted", ""),
+                    upcomingDays = upcomingDays,
                     surfaceStyle = o.optString("surfaceStyle", "theme"),
                     opacity = o.optInt("opacity", 85),
                     accentColorHex = o.optString("accentColorHex", "#D4AF37"),

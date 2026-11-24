@@ -40,7 +40,7 @@ public class AdhanPlaybackService extends Service {
     public static final String EXTRA_OVERRIDE_SILENT = "com.siraj.app.EXTRA_OVERRIDE_SILENT";
     public static final String EXTRA_MAX_VOLUME = "com.siraj.app.EXTRA_MAX_VOLUME";
 
-    private static final String CHANNEL_ID = "adhan_playback_channel";
+    private static final String CHANNEL_ID = "siraj_prayers_v3";
     private static final int NOTIFICATION_ID = 2102;
     private static final String DEFAULT_ADHAN_URL = "/audio/adhan-makkah.mp3";
 
@@ -531,7 +531,7 @@ public class AdhanPlaybackService extends Service {
 
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Adhan & Prayer Alerts",
+                "Prayer Notifications",
                 NotificationManager.IMPORTANCE_HIGH);
         channel.setDescription(
                 "Shows rich prayer-time notifications and plays the adhan. Disable sound here — the adhan audio is played separately.");

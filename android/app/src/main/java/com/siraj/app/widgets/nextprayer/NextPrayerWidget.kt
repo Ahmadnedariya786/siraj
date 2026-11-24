@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.util.Log
 import android.util.TypedValue
@@ -34,6 +35,7 @@ class NextPrayerWidget : AppWidgetProvider() {
 
     companion object {
         private const val TAG = "NextPrayerWidget"
+        const val ACTION_WIDGET_REFRESH = "com.siraj.app.WIDGET_REFRESH"
 
         private fun getDefaultPrayerPayload(context: Context): PrayerPayload {
             val now = System.currentTimeMillis()
@@ -134,10 +136,30 @@ class NextPrayerWidget : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_location, locDisplay)
                 views.setViewVisibility(R.id.widget_city_container, if (style.showCity) View.VISIBLE else View.GONE)
 
-                // ─── 4. Next Prayer Calculation ───
-                val prayers = payload.prayers
-                val nextIdx = payload.nextPrayerIndex.coerceIn(0, prayers.size - 1)
-                val nextPrayer = prayers.getOrNull(nextIdx) ?: prayers[0]
+                // ─── 4. Next Prayer Calculation across Days ───
+                val allDayPrayers = mutableListOf<Pair<PrayerEntry, com.siraj.app.widgets.DayPrayerSchedule?>>()
+                if (payload.upcomingDays.isNotEmpty()) {
+                    for (day in payload.upcomingDays) {
+                        for (p in day.prayers) {
+                            allDayPrayers.add(Pair(p, day))
+                        }
+                    }
+                } else {
+                    for (p in payload.prayers) {
+                        allDayPrayers.add(Pair(p, null))
+                    }
+                }
+
+                val now = System.currentTimeMillis()
+                val nextPair = allDayPrayers.firstOrNull { it.first.time > now }
+                    ?: allDayPrayers.lastOrNull()
+                    ?: Pair(payload.prayers[0], null)
+
+                val nextPairIdx = allDayPrayers.indexOf(nextPair)
+                val prevPrayer = if (nextPairIdx > 0) allDayPrayers[nextPairIdx - 1].first else null
+
+                val nextPrayer = nextPair.first
+                val activeDay = nextPair.second
 
                 views.setTextViewText(R.id.widget_prayer_name, nextPrayer.name)
                 views.setTextViewText(R.id.widget_prayer_time, nextPrayer.formattedTime)
@@ -145,6 +167,15 @@ class NextPrayerWidget : AppWidgetProvider() {
                 // ─── Qaza End Time Line ───
                 val qazaEndTime = if (nextPrayer.formattedEndTime.isNotBlank()) {
                     nextPrayer.formattedEndTime
+                } else if (activeDay != null) {
+                    when (nextPrayer.name.lowercase()) {
+                        "fajr" -> activeDay.fajrEndFormatted
+                        "dhuhr", "jumu'ah" -> activeDay.dhuhrEndFormatted
+                        "asr" -> activeDay.asrEndFormatted
+                        "maghrib" -> activeDay.maghribEndFormatted
+                        "isha" -> activeDay.ishaEndFormatted
+                        else -> ""
+                    }
                 } else when (nextPrayer.name.lowercase()) {
                     "fajr" -> payload.fajrEndFormatted
                     "dhuhr", "jumu'ah" -> payload.dhuhrEndFormatted
@@ -161,7 +192,6 @@ class NextPrayerWidget : AppWidgetProvider() {
                 }
 
                 // ─── 5. Countdown Pill ───
-                val now = System.currentTimeMillis()
                 val remaining = nextPrayer.time - now
                 val countdownStr = formatCountdown(remaining)
                 views.setTextViewText(R.id.widget_countdown_pill, countdownStr)
@@ -196,16 +226,7 @@ class NextPrayerWidget : AppWidgetProvider() {
 
                 // ─── 8. Safe Horizontal ProgressBar ───
                 try {
-                    val prevTime = if (nextIdx > 0) {
-                        prayers[nextIdx - 1].time
-                    } else {
-                        val cal = java.util.Calendar.getInstance()
-                        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                        cal.set(java.util.Calendar.MINUTE, 0)
-                        cal.set(java.util.Calendar.SECOND, 0)
-                        cal.set(java.util.Calendar.MILLISECOND, 0)
-                        cal.timeInMillis
-                    }
+                    val prevTime = prevPrayer?.time ?: (nextPrayer.time - (3 * 3600 * 1000L))
                     val total = nextPrayer.time - prevTime
                     val progress = if (total > 0) {
                         ((now - prevTime).toFloat() / total.toFloat()).coerceIn(0f, 1f)
@@ -237,15 +258,16 @@ class NextPrayerWidget : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(R.id.widget_root, pi)
 
-                // ─── 13. On-Widget ↻ Refresh Intent ───
-                val refreshIntent = android.content.Intent(context, com.siraj.app.widgets.WidgetAlarmReceiver::class.java).apply {
-                    action = com.siraj.app.widgets.WidgetAlarmReceiver.ACTION_REFRESH_ALL
+                // ─── 13. On-Widget ↻ Refresh Intent (Explicit broadcast) ───
+                val refreshIntent = Intent(context, NextPrayerWidget::class.java).apply {
+                    action = ACTION_WIDGET_REFRESH
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
                 }
                 val refreshPi = PendingIntent.getBroadcast(
                     context,
-                    201,
+                    2000 + appWidgetId,
                     refreshIntent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 views.setOnClickPendingIntent(R.id.widget_btn_refresh, refreshPi)
 
@@ -324,6 +346,28 @@ class NextPrayerWidget : AppWidgetProvider() {
                     val seconds = TimeUnit.MILLISECONDS.toSeconds(remainingMs) - minutes * 60
                     if (minutes > 0) "in ${minutes}m" else "in ${seconds}s"
                 }
+            }
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        val action = intent.action ?: return
+        if (action == ACTION_WIDGET_REFRESH ||
+            action == Intent.ACTION_TIME_CHANGED ||
+            action == Intent.ACTION_TIMEZONE_CHANGED ||
+            action == Intent.ACTION_DATE_CHANGED) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+            if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                updateWidget(context, appWidgetManager, appWidgetId)
+            } else {
+                val componentName = android.content.ComponentName(context, NextPrayerWidget::class.java)
+                val ids = appWidgetManager.getAppWidgetIds(componentName)
+                ids.forEach { updateWidget(context, appWidgetManager, it) }
+            }
+            WidgetPrefs.getPrayerPayload(context)?.let {
+                WidgetAlarmScheduler.scheduleNextPrayerAlarm(context, it)
             }
         }
     }

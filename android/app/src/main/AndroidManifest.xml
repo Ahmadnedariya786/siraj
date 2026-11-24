@@ -172,6 +172,7 @@
                 <action android:name="com.siraj.app.WIDGET_REFRESH" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                 <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                        android:resource="@xml/widget_next_prayer_info" />
@@ -186,6 +187,7 @@
                 <action android:name="com.siraj.app.WIDGET_REFRESH" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                 <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                        android:resource="@xml/widget_circular_clock_info" />
@@ -200,6 +202,7 @@
                 <action android:name="com.siraj.app.WIDGET_REFRESH" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                 <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                        android:resource="@xml/widget_compact_strip_info" />
@@ -309,11 +312,26 @@
             </intent-filter>
         </receiver>
 
-        <!-- Adhan alarm receiver (existing — retained) -->
+        <!-- Adhan and Prayer alarm receivers -->
         <receiver
             android:name=".AdhanAlarmReceiver"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.siraj.app.ACTION_ADHAN_TRIGGER" />
+                <action android:name="com.siraj.app.ACTION_PRAYER_ALARM" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".PrayerAlarmReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.siraj.app.ACTION_ADHAN_TRIGGER" />
+                <action android:name="com.siraj.app.ACTION_PRAYER_ALARM" />
+            </intent-filter>
+        </receiver>
 
         <!-- Short-lived foreground service for adhan audio playback only (existing — retained) -->
         <service

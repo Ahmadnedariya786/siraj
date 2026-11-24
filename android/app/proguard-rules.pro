@@ -5,6 +5,7 @@
 # ── Siraj App Classes ────────────────────────────────────
 # BroadcastReceivers, Services, and Plugins referenced in Manifest
 -keep class com.siraj.app.AdhanAlarmReceiver { *; }
+-keep class com.siraj.app.PrayerAlarmReceiver { *; }
 -keep class com.siraj.app.AdhanPlaybackService { *; }
 -keep class com.siraj.app.NativeAdhanScheduler { *; }
 -keep class com.siraj.app.NativeAdhanScheduler$ScheduledAdhan { *; }

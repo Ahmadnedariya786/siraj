@@ -23,6 +23,7 @@ import i18n from './i18n-new';
 import type {
   PrayerPayload,
   PrayerEntry,
+  DayPrayerSchedule,
   DailyContentPayload,
   AyahContent,
   HadithContent,
@@ -32,20 +33,22 @@ import type {
 // Date & Time Helpers
 // ─────────────────────────────────────────────────────────
 
-function getHijriDateString(): string {
+function getHijriDateString(forDate?: Date): string {
   try {
-    const stored = localStorage.getItem('noor_cached_hijri_date');
-    if (stored && stored.trim() && !stored.includes('Siraj')) {
-      return stored
-        .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
-        .replace(/Jum[aā]d[aā]\s*(al-)?(ula|ūlā|ōlā|ola|1|i)\b/gi, 'Jumādā I')
-        .replace(/Jum[aā]d[aā]\s*(al-)?(akhirah|ākhirah|akhira|thani|thānī|2|ii)\b/gi, 'Jumādā II')
-        .replace(/Rab[iī]ʿ?\s*(al-)?(awwal|1|i)\b/gi, 'Rabīʿ I')
-        .replace(/Rab[iī]ʿ?\s*(al-)?(thani|thānī|akhir|ākhir|2|ii)\b/gi, 'Rabīʿ II')
-        .replace(/\s+(AH|هـ)\.?$/i, '')
-        .replace(/\bBC\b/g, '')
-        .replace(/\bBCE\b/g, '')
-        .trim();
+    if (!forDate) {
+      const stored = localStorage.getItem('noor_cached_hijri_date');
+      if (stored && stored.trim() && !stored.includes('Siraj')) {
+        return stored
+          .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
+          .replace(/Jum[aā]d[aā]\s*(al-)?(ula|ūlā|ōlā|ola|1|i)\b/gi, 'Jumādā I')
+          .replace(/Jum[aā]d[aā]\s*(al-)?(akhirah|ākhirah|akhira|thani|thānī|2|ii)\b/gi, 'Jumādā II')
+          .replace(/Rab[iī]ʿ?\s*(al-)?(awwal|1|i)\b/gi, 'Rabīʿ I')
+          .replace(/Rab[iī]ʿ?\s*(al-)?(thani|thānī|akhir|ākhir|2|ii)\b/gi, 'Rabīʿ II')
+          .replace(/\s+(AH|هـ)\.?$/i, '')
+          .replace(/\bBC\b/g, '')
+          .replace(/\bBCE\b/g, '')
+          .trim();
+      }
     }
     const locale = i18n.language || 'en';
     const fmt = new Intl.DateTimeFormat(locale + '-u-ca-islamic', {
@@ -53,7 +56,7 @@ function getHijriDateString(): string {
       month: 'long',
       year: 'numeric',
     });
-    const formatted = fmt.format(new Date());
+    const formatted = fmt.format(forDate || new Date());
     return formatted
       .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
       .replace(/Jum[aā]d[aā]\s*(al-)?(ula|ūlā|ōlā|ola|1|i)\b/gi, 'Jumādā I')
@@ -223,6 +226,114 @@ export function buildPrayerPayload(
     const makruhSunsetEndMs = ghurubWin?.end.getTime() || sunsetTimeMs;
     const makruhSunsetEndFormatted = ghurubWin?.endFormatted || sunsetFormatted;
 
+    // Precompute 7-Day Schedule (Today + Next 6 Days) for 100% Autonomous Native Refresh
+    const upcomingDays: DayPrayerSchedule[] = [];
+    const locale = i18n.language || 'en';
+
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+      const dayDate = new Date(now.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+      const daySchedule = computeFullPrayerSchedule(dayDate, latitude, longitude, {
+        method: methodName,
+        madhab: activeMadhab,
+        is24h,
+      });
+
+      const dayIsFriday = dayDate.getDay() === 5;
+      const dayFard = daySchedule.fardPrayers;
+      const dayFajr = dayFard.find((p) => p.id === 'fajr');
+      const dayDhuhr = dayFard.find((p) => p.id === 'dhuhr');
+      const dayAsr = dayFard.find((p) => p.id === 'asr');
+      const dayMaghrib = dayFard.find((p) => p.id === 'maghrib');
+      const dayIsha = dayFard.find((p) => p.id === 'isha');
+      const daySunriseTime = daySchedule.sunrise.getTime();
+      const daySunriseFormatted = daySchedule.sunriseFormatted;
+      const daySunsetFormatted = daySchedule.sunnahTimes.sunsetFormatted;
+
+      const dayEntries: PrayerEntry[] = [
+        {
+          name: 'Fajr',
+          time: dayFajr?.startTime.getTime() || dayDate.getTime(),
+          formattedTime: dayFajr?.startTimeFormatted || '--:--',
+          endTime: dayFajr?.endTime?.getTime() || daySunriseTime,
+          formattedEndTime: dayFajr?.endTimeFormatted || daySunriseFormatted,
+        },
+        {
+          name: 'Sunrise',
+          time: daySunriseTime,
+          formattedTime: daySunriseFormatted,
+        },
+        {
+          name: dayIsFriday ? "Jumu'ah" : 'Dhuhr',
+          time: dayDhuhr?.startTime.getTime() || dayDate.getTime(),
+          formattedTime: dayDhuhr?.startTimeFormatted || '--:--',
+          endTime: dayDhuhr?.endTime?.getTime(),
+          formattedEndTime: dayDhuhr?.endTimeFormatted,
+        },
+        {
+          name: 'Asr',
+          time: dayAsr?.startTime.getTime() || dayDate.getTime(),
+          formattedTime: dayAsr?.startTimeFormatted || '--:--',
+          endTime: dayAsr?.endTime?.getTime(),
+          formattedEndTime: dayAsr?.endTimeFormatted,
+        },
+        {
+          name: 'Maghrib',
+          time: dayMaghrib?.startTime.getTime() || dayDate.getTime(),
+          formattedTime: dayMaghrib?.startTimeFormatted || '--:--',
+          endTime: dayMaghrib?.endTime?.getTime(),
+          formattedEndTime: dayMaghrib?.endTimeFormatted,
+        },
+        {
+          name: 'Isha',
+          time: dayIsha?.startTime.getTime() || dayDate.getTime(),
+          formattedTime: dayIsha?.startTimeFormatted || '--:--',
+          endTime: dayIsha?.endTime?.getTime(),
+          formattedEndTime: dayIsha?.endTimeFormatted,
+        },
+      ];
+
+      const dayMakruhState = evaluateMakruhState(
+        daySchedule,
+        dayDate,
+        is24h ? '24h' : '12h'
+      );
+      const dayTulu = dayMakruhState.allWindows.find((w) => w.id === 'tulu');
+      const dayZawal = dayMakruhState.allWindows.find((w) => w.id === 'zawal');
+      const dayGhurub = dayMakruhState.allWindows.find((w) => w.id === 'ghurub');
+
+      const daySunsetMs = daySchedule.sunnahTimes.sunset.getTime();
+
+      const year = dayDate.getFullYear();
+      const month = String(dayDate.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(dayDate.getDate()).padStart(2, '0');
+      const dateKey = `${year}-${month}-${dayNum}`;
+
+      upcomingDays.push({
+        dateKey,
+        hijriDate: dayOffset === 0 ? getHijriDateString() : getHijriDateString(dayDate),
+        gregorianDate: dayDate.toLocaleDateString(locale, {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+        }),
+        prayers: dayEntries,
+        fajrEndFormatted: dayFajr?.endTimeFormatted || daySunriseFormatted,
+        dhuhrEndFormatted: dayDhuhr?.endTimeFormatted || dayAsr?.startTimeFormatted,
+        asrEndFormatted: dayAsr?.endTimeFormatted || daySunsetFormatted,
+        maghribEndFormatted: dayMaghrib?.endTimeFormatted || dayIsha?.startTimeFormatted,
+        ishaEndFormatted: dayIsha?.endTimeFormatted,
+        makruhSunriseStartMs: dayTulu?.start.getTime() || daySunriseTime,
+        makruhSunriseEndMs: dayTulu?.end.getTime() || (daySunriseTime + 20 * 60 * 1000),
+        makruhSunriseEndFormatted: dayTulu?.endFormatted || daySunriseFormatted,
+        makruhZawaalStartMs: dayZawal?.start.getTime() || ((dayDhuhr?.startTime.getTime() || dayDate.getTime()) - 5 * 60 * 1000),
+        makruhZawaalEndMs: dayZawal?.end.getTime() || (dayDhuhr?.startTime.getTime() || dayDate.getTime()),
+        makruhZawaalEndFormatted: dayZawal?.endFormatted || dayDhuhr?.startTimeFormatted || '',
+        makruhSunsetStartMs: dayGhurub?.start.getTime() || (daySunsetMs - 15 * 60 * 1000),
+        makruhSunsetEndMs: dayGhurub?.end.getTime() || daySunsetMs,
+        makruhSunsetEndFormatted: dayGhurub?.endFormatted || daySunsetFormatted,
+      });
+    }
+
     return {
       prayers: entries,
       nextPrayerIndex,
@@ -252,6 +363,9 @@ export function buildPrayerPayload(
       makruhSunsetStartMs,
       makruhSunsetEndMs,
       makruhSunsetEndFormatted,
+
+      // 7-Day Precomputed Schedule for Autonomous Native Refresh
+      upcomingDays,
 
       // Visual styling sync
       surfaceStyle: styleConfig.surfaceStyle,

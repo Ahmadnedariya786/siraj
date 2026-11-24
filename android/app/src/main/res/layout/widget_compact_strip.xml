@@ -64,17 +64,16 @@
                 android:ellipsize="end"
                 android:maxWidth="80dp" />
 
-            <!-- Refresh Button -->
+            <!-- Refresh Button (Explicit broadcast, 32dp x 32dp centered hit target) -->
             <TextView
                 android:id="@+id/widget_btn_refresh"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:gravity="center"
                 android:text="↻"
                 android:textColor="@color/widget_accent_gold"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:paddingStart="6dp"
-                android:paddingEnd="2dp" />
+                android:textSize="13sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <!-- 6-Column Equal-Weight Prayer Row -->

@@ -14,6 +14,7 @@ import { PRAYER_QUOTES } from './prayer-quotes';
 import { getPrayerDisplayName } from './prayer-utils';
 import { calculatePrayerTimes } from './prayer-calculator';
 import { getPrayerHadith, stripTrailingHadithRef } from './prayer-hadith-i18n';
+import { getFallbackLocationByTimezone } from './location-config';
 
 // Task 2: Use SW registration for more robust "Native" notifications
 let swRegistration: ServiceWorkerRegistration | null = null;
@@ -119,8 +120,11 @@ export class LocalNotificationManager {
 
   async checkPermissions(): Promise<boolean> {
     try {
-      const permission = await LocalNotifications.checkPermissions();
-      return permission.display === 'granted';
+      if (Capacitor.isNativePlatform()) {
+        const permission = await LocalNotifications.checkPermissions();
+        return permission.display === 'granted' || permission.display === 'prompt' || permission.display === 'prompt-with-rationale';
+      }
+      return true;
     } catch (error) {
       console.error('Failed to check notification permissions:', error);
       return false;
@@ -175,12 +179,12 @@ export class LocalNotificationManager {
    * Ensure high-importance notification channel exists on Android 8.0+
    */
   async ensureHadithChannel(): Promise<string> {
-    const channelId = 'noor_prayer_hadith_alerts_v2';
+    const channelId = 'siraj_prayers_v3';
     if (Capacitor.isNativePlatform()) {
       try {
         await LocalNotifications.createChannel({
           id: channelId,
-          name: 'Prayer Hadith Alerts',
+          name: 'Siraj Prayer Notifications',
           description: 'Authentic prayer time alerts and daily Hadith guidance for all 5 prayers',
           importance: 5,
           visibility: 1,
@@ -232,19 +236,20 @@ export class LocalNotificationManager {
     }
 
     try {
+      let locationData = { latitude: 23.985, longitude: 72.482, source: 'default' };
       const storedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
-      if (!storedLocation) {
-        return;
-      }
-
-      const locationData = JSON.parse(storedLocation) as {
-        latitude?: number;
-        longitude?: number;
-        source?: string;
-      };
-
-      if (typeof locationData.latitude !== 'number' || typeof locationData.longitude !== 'number') {
-        return;
+      if (storedLocation) {
+        try {
+          const parsed = JSON.parse(storedLocation);
+          if (typeof parsed?.latitude === 'number' && typeof parsed?.longitude === 'number') {
+            locationData = parsed;
+          }
+        } catch {
+          // Safe catch
+        }
+      } else {
+        const fallback = getFallbackLocationByTimezone();
+        locationData = { latitude: fallback.latitude, longitude: fallback.longitude, source: 'timezone-fallback' };
       }
 
       const now = new Date();
@@ -363,7 +368,7 @@ export class LocalNotificationManager {
             body,
             largeBody,
             summaryText: `${prayerName} Prayer • Siraj`,
-            channelId: 'noor_prayer_hadith_alerts_v2',
+            channelId: 'siraj_prayers_v3',
             schedule: {
               at: prayerDate,
               allowWhileIdle: true,
