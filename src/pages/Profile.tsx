@@ -424,7 +424,7 @@ const Profile: React.FC = () => {
   return (
     <div className="min-h-screen bg-transparent pb-4 relative z-10">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-30 bg-[var(--surface)] border-b border-[var(--border)] px-4 pb-3.5 safe-top shadow-sm" style={{ paddingTop: 'calc(var(--safe-top) + 0.875rem)' }}>
+      <header className="sticky top-0 z-30 sticky-glass-header px-4 pb-3.5 safe-top shadow-sm" style={{ paddingTop: 'calc(var(--safe-top) + 0.875rem)' }}>
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

@@ -738,7 +738,7 @@ const Duas = memo(function Duas() {
   };
 
   return (
-    <div className={`min-h-screen bg-background safe-top ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? 'rtl' : 'ltr'} style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
+    <div className={`min-h-screen bg-transparent pb-4 relative z-10 safe-top ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? 'rtl' : 'ltr'} style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
         {/* Header with Row 1 (Back + Title + Font Sizer) and Row 2 (Full-Width Language Bar) */}
         <div className="space-y-3">

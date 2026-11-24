@@ -283,10 +283,10 @@ export const WidgetSettings: React.FC = () => {
   }, [config.surfaceStyle, config.opacity]);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] pb-12">
+    <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 relative z-10">
       {/* Header */}
       <header
-        className="sticky top-0 z-30 bg-[var(--bg-base)] border-b border-[var(--border)] px-4 pb-3.5 safe-top"
+        className="sticky top-0 z-30 sticky-glass-header px-4 pb-3.5 safe-top"
         style={{ paddingTop: 'calc(var(--safe-top) + 0.875rem)' }}
       >
         <div className="max-w-md mx-auto flex items-center gap-3">

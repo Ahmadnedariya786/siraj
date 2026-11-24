@@ -660,14 +660,14 @@ export default function ZakatCalculator({ isEmbedded = false, onBack }: ZakatCal
 
   return (
     <div
-      className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col pb-28"
+      className="min-h-screen bg-transparent text-[var(--text-primary)] flex flex-col pb-4 relative z-10"
       style={{
         fontFamily: isUrdu ? 'var(--font-urdu), serif' : undefined,
       }}
     >
       {/* ── TOP APP BAR (WITH STATUS-BAR & CAMERA SAFE-AREA CLEARANCE) ── */}
       <header
-        className="sticky top-0 z-40 bg-[var(--surface)] border-b border-[var(--border)] px-4 pb-3"
+        className="sticky top-0 z-40 sticky-glass-header px-4 pb-3"
         style={{
           paddingTop: isEmbedded ? '12px' : 'max(calc(env(safe-area-inset-top, 0px) + 16px), 46px)',
         }}

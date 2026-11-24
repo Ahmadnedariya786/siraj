@@ -24,10 +24,10 @@ export function AppBar({
   const navigate = useNavigate();
 
   return (
-    <header className={cn("sticky top-0 z-40 transition-all duration-300 safe-top", className)}
+    <header className={cn("sticky top-0 z-40 transition-all duration-300 safe-top sticky-glass-header", className)}
       style={{
         paddingTop: 'calc(var(--safe-top) + 6px)',
-        background: transparent ? 'transparent' : 'var(--bg-base)',
+        background: transparent ? 'transparent' : undefined,
         borderBottom: '1px solid var(--border)',
       }}
     >

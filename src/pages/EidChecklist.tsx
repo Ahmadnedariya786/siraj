@@ -425,7 +425,7 @@ export default function EidChecklist() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen pb-32" style={{ background: "var(--bg-base)" }}>
+      <div className="min-h-screen pb-4 relative z-10" style={{ background: "transparent" }}>
         <AppBar title={t("eidChecklist") || "Eid Checklist"} showBack={true} />
 
         <div className="max-w-xl mx-auto p-4 space-y-8 mt-2">

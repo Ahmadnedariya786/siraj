@@ -680,7 +680,7 @@ function PremiumDashboardInner({
 
   return (
     <div
-      className="min-h-screen flex flex-col bg-background text-foreground relative overflow-x-hidden"
+      className="min-h-screen flex flex-col bg-transparent text-foreground relative overflow-x-hidden"
     >
       {/* Manual Location Dialog (Portaled to document.body, zero GPU blur) */}
       {showManualLocationDialog && typeof document !== 'undefined' && createPortal(

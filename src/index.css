@@ -880,8 +880,10 @@
 
   #root {
     min-height: 100vh;
+    min-height: 100dvh;
     width: 100%;
     display: block;
+    background: transparent !important;
   }
 
   /* Scroll locked ONLY while splash is visible */
@@ -1047,7 +1049,7 @@
     height: 100dvh;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.065;
+    opacity: 0.09;
     background-color: var(--accent);
     -webkit-mask-image: var(--sig-pattern);
     mask-image: var(--sig-pattern);
@@ -1064,12 +1066,15 @@
   [data-theme="kiswah-noir"] .sig-pattern-layer,
   [data-theme="haramain-noir"] .sig-pattern-layer {
     background-color: var(--sig-thread, #10E8C2) !important;
-    opacity: 0.065 !important;
+    opacity: 0.095 !important;
   }
 
-  /* Theme Signature Cards & Containers with 3D Velvet-Glass Depth */
-  .theme-card {
+  /* Theme Signature Cards & Containers with Balanced Luxury Translucency */
+  .theme-card,
+  .card,
+  [data-card] {
     background-color: var(--surface);
+    background-color: color-mix(in srgb, var(--surface) 82%, transparent);
     border-radius: var(--sig-radius, 18px);
     border: var(--sig-border, 1px solid var(--border));
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
@@ -1078,6 +1083,7 @@
 
   .theme-hero-card {
     background-color: var(--surface);
+    background-color: color-mix(in srgb, var(--surface) 84%, transparent);
     position: relative;
     overflow: hidden;
     border-radius: var(--sig-radius, 26px);
@@ -1088,7 +1094,16 @@
 
   /* Lighter depth for repeated list rows */
   .theme-list-row {
+    background-color: var(--surface-2);
+    background-color: color-mix(in srgb, var(--surface-2) 84%, transparent);
     box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Sticky top header translucent glass styling (ZERO backdrop-filter) */
+  .sticky-glass-header {
+    background-color: var(--bg-base);
+    background-color: color-mix(in srgb, var(--bg-base) 78%, transparent);
+    border-bottom: 1px solid var(--border);
   }
 
   /* Primary action buttons & active badges with soft glow (Part 2A item 3) */

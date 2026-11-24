@@ -407,7 +407,7 @@ const Tafsir = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen pb-20" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+      <div className="min-h-screen pb-4 relative z-10" style={{ background: 'transparent', color: 'var(--text-primary)' }}>
         <AppBar
           title={currentSurahTafsir ? currentSurahTafsir.englishName : selectedSurah ? selectedSurah.englishName : t("tafsir") || "Tafsir"}
           showBack={true}

@@ -62,9 +62,9 @@ const Settings = () => {
   const motionProps = (props: any) => animationEnabled ? props : {};
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] font-sans pb-4 transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-transparent text-[var(--text-primary)] font-sans pb-4 transition-colors duration-300 relative z-10">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-6 pb-6 sticky top-0 z-10 bg-[var(--bg-base)] border-b border-[var(--border)] safe-top" style={{ paddingTop: 'calc(var(--safe-top) + 1.5rem)' }}>
+      <div className="flex items-center justify-between px-6 pb-6 sticky top-0 z-10 sticky-glass-header safe-top" style={{ paddingTop: 'calc(var(--safe-top) + 1.5rem)' }}>
         <div className="flex items-center">
           <button 
             onClick={() => goBackOrFallback(navigate, '/dashboard')}

@@ -6,14 +6,13 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   <div
     ref={ref}
     className={cn(
-      "text-[var(--text-primary)] transition-all duration-300",
+      "card text-[var(--text-primary)] transition-all duration-300",
       className
     )}
     style={{
       borderRadius: 'var(--sig-radius, 18px)',
       border: 'var(--sig-border, 1px solid var(--border))',
       boxShadow: 'var(--sig-glow, 0 10px 30px rgba(0,0,0,0.35))',
-      background: 'linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%)',
       ...style,
     }}
     {...props}

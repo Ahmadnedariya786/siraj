@@ -647,7 +647,7 @@ export default function SurahList() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen relative overflow-hidden bg-[var(--bg-base)] pb-32">
+      <div className="min-h-screen relative overflow-hidden bg-transparent pb-4 relative z-10">
         {/* Subtle geometric pattern backdrop */}
         <div className="absolute top-0 left-0 right-0 h-48 opacity-[0.03] bg-[radial-gradient(circle_at_2px_2px,_var(--accent)_1px,_transparent_0)] bg-[length:32px_32px] pointer-events-none" />
 

@@ -312,7 +312,7 @@ export default function FitranaCalculator() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen pb-32" style={{ background: "var(--bg-base)" }}>
+      <div className="min-h-screen pb-4 relative z-10" style={{ background: "transparent" }}>
         <AppBar title={t("overview") || "Overview"} showBack={true} />
 
         <div className="max-w-lg mx-auto p-4 sm:p-5 space-y-5">

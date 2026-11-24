@@ -200,7 +200,7 @@ const Hadith = () => {
 
   return (
     <PageTransition>
-    <div className="min-h-screen bg-background relative overflow-hidden safe-top" style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
+    <div className="min-h-screen bg-transparent pb-4 relative overflow-hidden safe-top z-10" style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
       {/* Islamic geometric pattern overlay */}
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute inset-0" style={{
@@ -216,7 +216,7 @@ const Hadith = () => {
             variant="ghost"
             size="icon"
             onClick={() => navigate("/hadith/collections")}
-            className="rounded-full backdrop-blur-sm bg-card border border-border/40 shadow-sm"
+            className="rounded-full bg-card border border-border/40 shadow-sm"
           >
             <ArrowLeft className="w-4 h-4 text-foreground/80" />
           </Button>
@@ -233,7 +233,7 @@ const Hadith = () => {
         <ContentLanguageBar fullWidth />
 
         {loading ? (
-          <Card className="p-12 backdrop-blur-sm bg-card border-border/40 shadow-sm">
+          <Card className="p-12 bg-card border-border/40 shadow-sm">
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="relative">
                 <div className="w-16 h-16 rounded-xl bg-[#C9860A]/10 animate-pulse border border-[#C9860A]/20" />

@@ -8,11 +8,10 @@ export const SettingsThemePage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] pb-32"
-      style={{ paddingBottom: '120px' }}
+      className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 relative z-10"
     >
       {/* Sticky Header */}
-      <div className="sticky top-0 z-30 bg-[var(--surface)] border-b border-[var(--border)] px-4 py-3 flex items-center gap-3">
+      <div className="sticky top-0 z-30 sticky-glass-header px-4 py-3 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
           className="p-2 -ml-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"

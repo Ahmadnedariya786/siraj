@@ -262,11 +262,11 @@ function AppRoutes() {
   }, [location.pathname]);
 
   return (
-    <Suspense fallback={<div className="w-full min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }} />}>
+    <Suspense fallback={<div className="w-full min-h-screen bg-transparent" />}>
       <div
         key={location.pathname}
         className={`w-full h-full page-transition-wrapper ${animationEnabled ? "animate-page-enter" : ""}`}
-        style={{ backgroundColor: 'var(--bg-base)' }}
+        style={{ background: 'transparent' }}
       >
         <Routes location={location}>
           <Route path="/" element={<Dashboard />} />
@@ -365,9 +365,10 @@ function AppContent({ splashActive }: { splashActive?: boolean }) {
       <LazyMotionWrapper>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <TilawahProvider>
-            <div className="flex flex-col min-h-screen overflow-x-hidden relative" style={{ backgroundColor: 'var(--bg-base)' }}>
-              {/* Fixed Single App-Shell Theme Signature Pattern Layer */}
-              <div className="theme-app-pattern sig-pattern-layer" aria-hidden="true" />
+            {/* Global Fixed Theme Signature Pattern Canvas (Layer 1) */}
+            <div className="theme-app-pattern sig-pattern-layer" aria-hidden="true" />
+
+            <div className="flex flex-col min-h-screen overflow-x-hidden relative bg-transparent" style={{ position: 'relative', zIndex: 1, background: 'transparent' }}>
               <GlobalTilawahBar />
               <div className="flex-shrink-0">
                 <Suspense fallback={null}>

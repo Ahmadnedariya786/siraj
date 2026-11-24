@@ -7,6 +7,6 @@ interface PageTransitionProps {
 }
 
 export const PageTransition = ({ children, className = "" }: PageTransitionProps) => {
-    return <div className={`w-full h-full ${className}`}>{children}</div>;
+    return <div className={`w-full h-full bg-transparent ${className}`} style={{ background: 'transparent' }}>{children}</div>;
 };
 

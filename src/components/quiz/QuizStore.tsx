@@ -178,11 +178,10 @@ export function QuizStore({ onClose }: QuizStoreProps) {
   };
 
   return (
-    <div className="min-h-screen pb-20" style={{ background: "var(--bg-base)" }}>
+    <div className="min-h-screen pb-4 bg-transparent relative z-10" style={{ background: "transparent" }}>
       {/* Header */}
       <div
-        className="sticky top-0 z-50 border-b safe-top"
-        style={{ background: "var(--bg-base)", borderColor: "var(--border)" }}
+        className="sticky top-0 z-50 sticky-glass-header safe-top"
       >
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">

@@ -71,7 +71,7 @@ export default function SettingsCalculationPage() {
 
   return (
     <LayoutManager activeTab="settings">
-      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] pb-36 overflow-x-hidden select-none">
+      <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 overflow-x-hidden select-none relative z-10">
         <AppBar title="Prayer Calculation" showBack={true} />
 
         <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">

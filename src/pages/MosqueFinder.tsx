@@ -1602,7 +1602,7 @@ class MosqueFinderErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <LayoutManager activeTab="services">
-          <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] pb-36 select-none">
+          <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 select-none relative z-10">
             <AppBar title="Nearby Mosques" showBack={true} />
             <div className="max-w-lg mx-auto px-4 pt-12 text-center space-y-4">
               <span className="text-4xl block">🕌</span>

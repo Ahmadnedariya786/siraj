@@ -495,9 +495,9 @@ const Tasbeeh = () => {
   return (
     <PageTransition>
       <div
-        className={`min-h-screen pb-20 transition-all select-none ${isFullscreen ? 'fixed inset-0 z-40 overflow-y-auto' : ''}`}
+        className={`min-h-screen pb-4 transition-all select-none relative z-10 ${isFullscreen ? 'fixed inset-0 z-40 overflow-y-auto' : ''}`}
         style={{
-          background: 'var(--bg-base)',
+          background: 'transparent',
           color: 'var(--text-primary)',
           paddingBottom: isFullscreen ? '112px' : '96px',
           userSelect: 'none',

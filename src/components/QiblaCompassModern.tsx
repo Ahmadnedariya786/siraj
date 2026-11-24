@@ -532,7 +532,7 @@ export const QiblaCompassModern = () => {
       : '';
 
   return (
-    <div className="flex flex-col h-full min-h-0 relative overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
+    <div className="flex flex-col h-full min-h-0 relative overflow-hidden bg-transparent text-[var(--text-primary)]">
       {/* ── Background Subtle Islamic Pattern ───────────────────── */}
       <div className="absolute inset-0 opacity-[0.035] pointer-events-none">
         <div

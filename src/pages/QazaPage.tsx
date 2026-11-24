@@ -517,7 +517,7 @@ export default function QazaPage() {
 
   return (
     <LayoutManager>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-transparent pb-4 relative z-10">
         <AppBar title={t("qazaTracker") || "Qada Tracker"} />
       
         <div className="max-w-lg mx-auto p-4 space-y-4">
