@@ -20,7 +20,7 @@ import org.json.JSONObject;
  */
 public class LiveCountdownNotificationHelper {
     private static final String TAG = "LiveCountdownNotif";
-    public static final String CHANNEL_ID = "noor_live_prayer_countdown";
+    public static final String CHANNEL_ID = "siraj_countdown_v3";
     public static final int NOTIFICATION_ID = 8801;
 
     public static void createNotificationChannel(Context context) {
@@ -36,6 +36,7 @@ public class LiveCountdownNotificationHelper {
                 channel.setShowBadge(false);
                 channel.enableVibration(false);
                 channel.enableLights(false);
+                channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
                 nm.createNotificationChannel(channel);
             }
         }

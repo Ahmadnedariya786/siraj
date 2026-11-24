@@ -6,6 +6,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import android.appwidget.AppWidgetManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -828,6 +829,82 @@ public class MainActivity extends BridgeActivity {
                                 Log.w(TAG, "Failed to trigger test prayer notification", t);
                             }
                         });
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public boolean areNotificationsEnabled() {
+                        try {
+                            return NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled();
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to check areNotificationsEnabled", t);
+                            return true;
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public boolean canScheduleExactAlarms() {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+                                return am != null && am.canScheduleExactAlarms();
+                            }
+                            return true;
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to check canScheduleExactAlarms", t);
+                            return true;
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public void openNotificationSettings() {
+                        try {
+                            Intent intent = new Intent();
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                intent.setAction(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                                intent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                            } else {
+                                intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                                intent.setData(Uri.fromParts("package", getPackageName(), null));
+                            }
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(intent);
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to open notification settings", t);
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public void openExactAlarmSettings() {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                                intent.setData(Uri.fromParts("package", getPackageName(), null));
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(intent);
+                            }
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to open exact alarm settings", t);
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public void scheduleTest5sAlarm(final String prayerName, final String prayerTime12h) {
+                        try {
+                            final String pName = (prayerName != null && !prayerName.trim().isEmpty()) ? prayerName : "Fajr";
+                            NativeAdhanScheduler.setEnabled(MainActivity.this, true);
+                            NativeAdhanScheduler.ScheduledAdhan testAlarm = new NativeAdhanScheduler.ScheduledAdhan(
+                                    99999,
+                                    System.currentTimeMillis() + 5000L,
+                                    pName,
+                                    "/audio/adhan-makkah.mp3",
+                                    false,
+                                    false
+                            );
+                            NativeAdhanScheduler.scheduleAlarm(MainActivity.this, testAlarm, false);
+                            Log.i(TAG, "Scheduled 5-second test alarm for prayer: " + pName);
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to schedule 5s test alarm", t);
+                        }
                     }
                 }, "AndroidBridge");
             } catch (Throwable t) {
@@ -1919,6 +1996,20 @@ public class MainActivity extends BridgeActivity {
                 prayerChannel.setShowBadge(true);
                 prayerChannel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
                 manager.createNotificationChannel(prayerChannel);
+
+                // Default importance channel for reminders & general notifications
+                NotificationChannel reminderChannel = new NotificationChannel(
+                        "siraj_reminders_v3",
+                        "Siraj Reminders",
+                        NotificationManager.IMPORTANCE_DEFAULT);
+                reminderChannel.setDescription("Reminders and daily Islamic guidance");
+                reminderChannel.enableLights(true);
+                reminderChannel.enableVibration(true);
+                reminderChannel.setShowBadge(true);
+                manager.createNotificationChannel(reminderChannel);
+
+                // Silent ongoing Live Countdown channel
+                LiveCountdownNotificationHelper.createNotificationChannel(this);
             }
         }
     }

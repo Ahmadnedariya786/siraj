@@ -98,6 +98,58 @@ export function openNativeDndSettings(): void {
   }
 }
 
+function extractPrayersList(prayerData?: any): Array<{ name: string; time: number; formattedTime: string }> {
+  if (Array.isArray(prayerData?.prayers) && prayerData.prayers.length > 0) {
+    return prayerData.prayers.map((p: any) => ({
+      name: p.name || '',
+      time: typeof p.time === 'number' ? p.time : (p.time instanceof Date ? p.time.getTime() : 0),
+      formattedTime: p.formattedTime || '',
+    }));
+  }
+
+  let timesObj = prayerData;
+  if (!timesObj || typeof timesObj !== 'object' || !timesObj.fajr) {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('cached_prayer_times') : null;
+      if (raw) timesObj = JSON.parse(raw);
+    } catch {
+      // Safe fallback
+    }
+  }
+
+  const names = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
+
+  if (timesObj && typeof timesObj === 'object') {
+    const result: Array<{ name: string; time: number; formattedTime: string }> = [];
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const val = timesObj[key];
+      if (val) {
+        const d = new Date(val);
+        const timeMs = !isNaN(d.getTime()) ? d.getTime() : 0;
+        let formatted = '';
+        if (timeMs > 0) {
+          let h = d.getHours();
+          const m = d.getMinutes().toString().padStart(2, '0');
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          h = h % 12;
+          if (h === 0) h = 12;
+          formatted = `${h}:${m} ${ampm}`;
+        }
+        result.push({
+          name: names[i],
+          time: timeMs,
+          formattedTime: formatted,
+        });
+      }
+    }
+    if (result.length > 0) return result;
+  }
+
+  return [];
+}
+
 export function syncSmartSalahToNative(config: SmartSalahConfig, prayerData?: any): void {
   try {
     const bridge = (window as any).AndroidBridge;
@@ -115,16 +167,31 @@ export function syncSmartSalahToNative(config: SmartSalahConfig, prayerData?: an
       bridge.setLiveCountdownEnabled(config.liveCountdownEnabled);
     }
 
-    // Configure Auto-DND triggers if prayer schedule is provided
-    if (typeof bridge.configurePrayerAutoDnd === 'function' && prayerData && prayerData.prayers) {
+    const prayersList = extractPrayersList(prayerData);
+    const nowMs = Date.now();
+    let nextPrayer = prayersList.find(p => p.time > nowMs);
+    if (!nextPrayer && prayersList.length > 0) {
+      nextPrayer = {
+        ...prayersList[0],
+        time: prayersList[0].time + 24 * 3600 * 1000,
+      };
+    }
+
+    const summary = prayersList
+      .map(p => `${p.name} ${p.formattedTime}`)
+      .filter(Boolean)
+      .join(' • ');
+
+    // Configure Auto-DND triggers if prayer schedule is available
+    if (typeof bridge.configurePrayerAutoDnd === 'function' && prayersList.length > 0) {
       const isFriday = new Date().getDay() === 5;
       const dndPayload = {
         enabled: config.autoDndEnabled,
         durationMinutes: config.autoDndDuration,
         fridayDurationMinutes: config.autoDndFridayExtended ? 45 : config.autoDndDuration,
-        prayers: (prayerData.prayers || []).map((p: any) => ({
-          name: p.name || '',
-          timeMs: p.time || 0,
+        prayers: prayersList.map((p) => ({
+          name: p.name,
+          timeMs: p.time,
           isFriday,
         })),
       };
@@ -132,13 +199,7 @@ export function syncSmartSalahToNative(config: SmartSalahConfig, prayerData?: an
     }
 
     // Update Live Countdown Notification if enabled
-    if (typeof bridge.updateLivePrayerCountdown === 'function' && prayerData) {
-      const nextIdx = prayerData.nextPrayerIndex || 0;
-      const nextPrayer = prayerData.prayers?.[nextIdx];
-      const summary = (prayerData.prayers || [])
-        .map((p: any) => `${p.name} ${p.formattedTime || ''}`)
-        .join(' • ');
-
+    if (typeof bridge.updateLivePrayerCountdown === 'function') {
       const countdownPayload = {
         enabled: config.liveCountdownEnabled,
         nextPrayerName: nextPrayer?.name || 'Prayer',

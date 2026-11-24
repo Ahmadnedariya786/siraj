@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
@@ -582,6 +582,220 @@ const SettingsSubPage: React.FC = () => {
     adhanService.saveAdhanConfig(cfg);
     localNotifications.schedulePrayerNotificationsFromAPI().catch(() => {});
     toast({ title: `${prayerName} notification ${enabled ? 'enabled' : 'disabled'}` });
+  };
+
+  // Real-Time OS Notification Diagnostics & Testers
+  const [osNotificationStatus, setOsNotificationStatus] = useState<{
+    notifications: boolean | null;
+    exactAlarm: boolean | null;
+    pendingCount: number;
+  }>({
+    notifications: null,
+    exactAlarm: null,
+    pendingCount: 0,
+  });
+  const [isTestingDrawer, setIsTestingDrawer] = useState(false);
+  const [alarmCountdown, setAlarmCountdown] = useState<number | null>(null);
+
+  const refreshOsNotificationStatus = useCallback(async () => {
+    let notifAllowed: boolean | null = null;
+    let exactAllowed: boolean | null = null;
+    let count = 0;
+
+    const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : undefined;
+    if (bridge) {
+      if (typeof bridge.areNotificationsEnabled === 'function') {
+        try {
+          notifAllowed = bridge.areNotificationsEnabled();
+        } catch (err) {
+          console.debug('[OSNotif] bridge areNotificationsEnabled failed:', err);
+        }
+      }
+      if (typeof bridge.canScheduleExactAlarms === 'function') {
+        try {
+          exactAllowed = bridge.canScheduleExactAlarms();
+        } catch (err) {
+          console.debug('[OSNotif] bridge canScheduleExactAlarms failed:', err);
+        }
+      }
+    }
+
+    if (notifAllowed === null && typeof LocalNotifications !== 'undefined') {
+      try {
+        const perm = await LocalNotifications.checkPermissions();
+        notifAllowed = perm.display === 'granted';
+      } catch (err) {
+        console.debug('[OSNotif] LocalNotifications checkPermissions failed:', err);
+      }
+    }
+
+    if (typeof LocalNotifications !== 'undefined') {
+      try {
+        const pending = await LocalNotifications.getPending();
+        count = pending.notifications.length;
+      } catch (err) {
+        console.debug('[OSNotif] LocalNotifications getPending failed:', err);
+      }
+    }
+
+    setOsNotificationStatus({
+      notifications: notifAllowed !== null ? notifAllowed : true,
+      exactAlarm: exactAllowed !== null ? exactAllowed : true,
+      pendingCount: count,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (sectionId === 'notifications') {
+      refreshOsNotificationStatus();
+      window.addEventListener('focus', refreshOsNotificationStatus);
+      return () => window.removeEventListener('focus', refreshOsNotificationStatus);
+    }
+  }, [sectionId, refreshOsNotificationStatus]);
+
+  const handleTestDrawerNow = async () => {
+    setIsTestingDrawer(true);
+    const pName = 'Fajr';
+    const pTime = '05:15 AM';
+    const hadith = getPrayerHadith(pName, hadithLang);
+    const cleanRef = stripTrailingHadithRef(hadith.translation, hadith.reference);
+    const rakah = PRAYER_RAKAH_BREAKDOWN[pName] || '2 Sunnah • 2 Fardh';
+
+    // 1. Native AndroidBridge trigger on channel siraj_prayers_v3
+    const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : undefined;
+    if (bridge && typeof bridge.triggerTestPrayerNotification === 'function') {
+      try {
+        bridge.setPrayerNotificationLang?.(hadithLang);
+        bridge.triggerTestPrayerNotification(pName, pTime);
+      } catch (err) {
+        console.warn('Native test prayer notification bridge failed:', err);
+      }
+    }
+
+    // 2. Capacitor LocalNotifications trigger on channel siraj_prayers_v3
+    try {
+      await localNotifications.ensureHadithChannel();
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id: 99999,
+            title: `🕌 ${pName} Prayer • ${pTime}`,
+            body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
+            largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
+            summaryText: `${pName} Prayer • Siraj`,
+            channelId: 'siraj_prayers_v3',
+            schedule: { at: new Date(Date.now() + 500), allowWhileIdle: true },
+            sound: 'default',
+            smallIcon: 'ic_stat_siraj',
+            iconColor: '#D4AF37',
+          },
+        ],
+      });
+    } catch (err) {
+      console.warn('LocalNotifications test schedule failed:', err);
+    }
+
+    // 3. Log into Notification History
+    try {
+      const raw = localStorage.getItem('notification-history');
+      const list = raw ? JSON.parse(raw) : [];
+      list.unshift({
+        type: 'prayer',
+        title: `🕌 ${pName} Prayer • ${pTime}`,
+        body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
+        timestamp: Date.now(),
+      });
+      if (list.length > 50) list.splice(50);
+      localStorage.setItem('notification-history', JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent('notificationHistoryUpdate', { detail: list }));
+    } catch (err) {
+      console.debug('[OSNotif] Log notification history failed:', err);
+    }
+
+    setTimeout(() => {
+      setIsTestingDrawer(false);
+      refreshOsNotificationStatus();
+    }, 1000);
+
+    toast({
+      title: '✨ Test Notification Delivered to Drawer',
+      description: 'Check your phone’s status bar and swipe down to view the alert.',
+    });
+  };
+
+  const handleTest5sAlarm = async () => {
+    const pName = 'Fajr';
+    const pTime = '05:15 AM';
+    const hadith = getPrayerHadith(pName, hadithLang);
+    const cleanRef = stripTrailingHadithRef(hadith.translation, hadith.reference);
+    const rakah = PRAYER_RAKAH_BREAKDOWN[pName] || '2 Sunnah • 2 Fardh';
+
+    setAlarmCountdown(5);
+
+    const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : undefined;
+    if (bridge && typeof bridge.scheduleTest5sAlarm === 'function') {
+      try {
+        bridge.scheduleTest5sAlarm(pName, pTime);
+      } catch (err) {
+        console.warn('Bridge scheduleTest5sAlarm failed:', err);
+      }
+    }
+
+    try {
+      await localNotifications.ensureHadithChannel();
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id: 99998,
+            title: `⏰ [Alarm Clock] ${pName} Prayer • ${pTime}`,
+            body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
+            largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
+            summaryText: `${pName} Prayer • Siraj`,
+            channelId: 'siraj_prayers_v3',
+            schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true },
+            sound: 'default',
+            smallIcon: 'ic_stat_siraj',
+            iconColor: '#D4AF37',
+          },
+        ],
+      });
+    } catch (err) {
+      console.warn('LocalNotifications 5s alarm schedule failed:', err);
+    }
+
+    // Log to Notification History
+    try {
+      const raw = localStorage.getItem('notification-history');
+      const list = raw ? JSON.parse(raw) : [];
+      list.unshift({
+        type: 'prayer',
+        title: `⏰ [5s Alarm Test] ${pName} Prayer • ${pTime}`,
+        body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
+        timestamp: Date.now() + 5000,
+      });
+      if (list.length > 50) list.splice(50);
+      localStorage.setItem('notification-history', JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent('notificationHistoryUpdate', { detail: list }));
+    } catch (err) {
+      console.debug('[OSNotif] Log notification history failed:', err);
+    }
+
+    let rem = 5;
+    const interval = setInterval(() => {
+      rem -= 1;
+      if (rem <= 0) {
+        clearInterval(interval);
+        setAlarmCountdown(null);
+        refreshOsNotificationStatus();
+      } else {
+        setAlarmCountdown(rem);
+      }
+    }, 1000);
+
+    toast({
+      title: '⏰ 5s OS Alarm Scheduled!',
+      description: 'Lock phone NOW to test lock-screen notification & alarm delivery.',
+    });
   };
 
   // Stealth Owner Security Vault state (revealed via 5-tap on Version 2.3.0 when unlocked)
@@ -1331,6 +1545,136 @@ const SettingsSubPage: React.FC = () => {
         {/* NOTIFICATIONS SECTION */}
         {sectionId === 'notifications' && (
           <div className="space-y-4">
+            {/* Real-time OS Notification Diagnostic Strip & Quick Testers */}
+            <Card
+              className="p-4 space-y-3.5 rounded-2xl border"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs font-bold uppercase tracking-wider text-[var(--accent-text)] flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" />
+                    Android OS Drawer Status
+                  </Label>
+                  <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                    Live system notification delivery & exact alarm status
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={refreshOsNotificationStatus}
+                  title="Refresh status"
+                  className="p-1.5 rounded-lg border text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* 3 Metric Pills */}
+              <div className="grid grid-cols-3 gap-2">
+                {/* OS Notification Status */}
+                <div
+                  className="p-2.5 rounded-xl border flex flex-col justify-between"
+                  style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
+                >
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">OS Drawer</span>
+                  <div className="mt-1 flex items-center gap-1">
+                    <span
+                      className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                        osNotificationStatus.notifications ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'
+                      }`}
+                    />
+                    <span className="text-xs font-bold truncate">
+                      {osNotificationStatus.notifications ? 'Allowed' : 'Blocked'}
+                    </span>
+                  </div>
+                  {!osNotificationStatus.notifications && (
+                    <button
+                      type="button"
+                      onClick={() => (window as any).AndroidBridge?.openNotificationSettings?.()}
+                      className="mt-1.5 text-[10px] text-[var(--accent-text)] underline text-left font-semibold"
+                    >
+                      Enable in OS →
+                    </button>
+                  )}
+                </div>
+
+                {/* Exact Alarm Status */}
+                <div
+                  className="p-2.5 rounded-xl border flex flex-col justify-between"
+                  style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
+                >
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">Exact Alarms</span>
+                  <div className="mt-1 flex items-center gap-1">
+                    <span
+                      className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                        osNotificationStatus.exactAlarm ? 'bg-emerald-500' : 'bg-amber-500'
+                      }`}
+                    />
+                    <span className="text-xs font-bold truncate">
+                      {osNotificationStatus.exactAlarm ? 'Active' : 'Standard'}
+                    </span>
+                  </div>
+                  {!osNotificationStatus.exactAlarm && (
+                    <button
+                      type="button"
+                      onClick={() => (window as any).AndroidBridge?.openExactAlarmSettings?.()}
+                      className="mt-1.5 text-[10px] text-[var(--accent-text)] underline text-left font-semibold"
+                    >
+                      Grant Exact →
+                    </button>
+                  )}
+                </div>
+
+                {/* Scheduled Count */}
+                <div
+                  className="p-2.5 rounded-xl border flex flex-col justify-between"
+                  style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
+                >
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium">Scheduled</span>
+                  <div className="mt-1 flex items-center gap-1">
+                    <Bell className="w-3 h-3 text-[var(--accent-text)] shrink-0" />
+                    <span className="text-xs font-mono font-bold truncate">
+                      {osNotificationStatus.pendingCount} Alerts
+                    </span>
+                  </div>
+                  <span className="mt-1.5 text-[9.5px] text-[var(--text-secondary)] truncate">
+                    Auto-refreshed
+                  </span>
+                </div>
+              </div>
+
+              {/* 2 Side-by-side Test Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isTestingDrawer}
+                  onClick={handleTestDrawerNow}
+                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+                >
+                  <Bell className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
+                  <span className="truncate">Test Drawer Now</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={alarmCountdown !== null}
+                  onClick={handleTest5sAlarm}
+                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+                >
+                  <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
+                  <span className="truncate">
+                    {alarmCountdown !== null ? `Firing in ${alarmCountdown}s...` : 'Test 5s Alarm (Lock)'}
+                  </span>
+                </Button>
+              </div>
+            </Card>
+
             {/* 5 Fard Prayer OS Notification Drawer Toggles */}
             <Card className="p-4 space-y-3 rounded-2xl" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
               <div>
@@ -1783,58 +2127,6 @@ const SettingsSubPage: React.FC = () => {
                   checked={notificationPrefs.bedtimeDuaReminders ?? true}
                   onCheckedChange={(c) => handleNotificationToggle('bedtimeDuaReminders', c)}
                 />
-              </div>
-
-              <div className="pt-3">
-                <Button
-                  variant="outline"
-                  className="w-full rounded-xl gap-2 font-bold"
-                  onClick={async () => {
-                    const pName = 'Fajr';
-                    const pTime = '05:15 AM';
-                    const hadith = getPrayerHadith(pName, hadithLang);
-                    const cleanRef = stripTrailingHadithRef(hadith.translation, hadith.reference);
-                    const rakah = PRAYER_RAKAH_BREAKDOWN[pName] || '2 Sunnah • 2 Fardh';
-
-                    // 1. Native AndroidBridge trigger on channel siraj_prayers_v3
-                    if (typeof window !== 'undefined' && (window as any).AndroidBridge?.triggerTestPrayerNotification) {
-                      try {
-                        (window as any).AndroidBridge?.setPrayerNotificationLang?.(hadithLang);
-                        (window as any).AndroidBridge.triggerTestPrayerNotification(pName, pTime);
-                      } catch (err) {
-                        console.warn('Native test prayer notification bridge failed:', err);
-                      }
-                    }
-
-                    // 2. Capacitor LocalNotifications trigger on channel siraj_prayers_v3
-                    try {
-                      await localNotifications.ensureHadithChannel();
-                      await LocalNotifications.schedule({
-                        notifications: [
-                          {
-                            id: 99999,
-                            title: `🕌 ${pName} Prayer • ${pTime}`,
-                            body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
-                            largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
-                            summaryText: `${pName} Prayer • Siraj`,
-                            channelId: 'siraj_prayers_v3',
-                            schedule: { at: new Date(Date.now() + 500), allowWhileIdle: true },
-                            sound: 'default',
-                            smallIcon: 'ic_stat_noor_mosque',
-                            iconColor: '#D4AF37',
-                          },
-                        ],
-                      });
-                    } catch (err) {
-                      console.warn('LocalNotifications test schedule failed:', err);
-                    }
-
-                    toast({ title: '✨ Test Prayer Drawer Notification Sent' });
-                  }}
-                >
-                  <Bell className="w-4 h-4 text-[var(--accent-text)]" />
-                  Send Test Drawer Notification
-                </Button>
               </div>
             </Card>
           </div>

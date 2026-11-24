@@ -561,6 +561,9 @@ export function usePrayerTimes(): UsePrayerTimesReturn {
       memoryCachedDateKey = getLocalDatePartKey(times.fajr);
       try {
         localStorage.setItem('cached_prayer_times', JSON.stringify(times));
+        import('@/lib/smart-salah').then(({ syncSmartSalahToNative, loadSmartSalahConfig }) => {
+          syncSmartSalahToNative(loadSmartSalahConfig(), times);
+        }).catch(() => {});
       } catch {
         // Safe storage fallback
       }
