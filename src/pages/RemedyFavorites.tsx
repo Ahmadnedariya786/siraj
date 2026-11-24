@@ -128,7 +128,7 @@ export default function RemedyFavorites() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background pb-32">
+      <div className="min-h-screen bg-transparent pb-4 relative z-10">
         <AppBar title={t("favoriteRemedies") || "Favorite Remedies"} showBack={true} />
         
         <div className="px-5 pt-4 space-y-4">

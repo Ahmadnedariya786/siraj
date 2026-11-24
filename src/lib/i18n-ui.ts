@@ -296,7 +296,7 @@ const UI_DICTIONARIES: Record<LanguageCode, AppUIStrings> = {
     qazaTracker: 'Qaza Tracker',
     qazaTrackerSub: 'Missed prayer makeup',
     quranAudio: 'Quran Audio',
-    quranAudioSub: '289 reciters (MP3Quran) • HD audio',
+    quranAudioSub: '289 reciters (MP3Quran) • HD',
     nasheeds: 'Nasheeds',
     nasheedsSub: '400 vocals-only tracks',
     liveMecca: 'Live Mecca',

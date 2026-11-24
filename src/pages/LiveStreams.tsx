@@ -64,8 +64,8 @@ export default function LiveStreams() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background safe-top" style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5" style={{ paddingBottom: '148px' }}>
+    <div className="min-h-screen bg-transparent safe-top relative z-10" style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5 pb-4">
 
         {/* Page Header */}
         <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>

@@ -1001,9 +1001,9 @@ const SettingsSubPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] pb-4">
+    <div className="min-h-screen bg-transparent pb-4 relative z-10">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-[var(--surface)] border-b border-[var(--border)] px-4 pb-3.5 safe-top" style={{ paddingTop: 'calc(var(--safe-top) + 0.875rem)' }}>
+      <header className="sticky top-0 z-30 bg-[var(--surface)] border-b border-[var(--border)] px-4 pb-3.5 safe-top shadow-sm" style={{ paddingTop: 'calc(var(--safe-top) + 0.875rem)' }}>
         <div className="max-w-md mx-auto flex items-center gap-3">
           <button
             onClick={() => navigate('/profile', { replace: true })}
@@ -1027,7 +1027,7 @@ const SettingsSubPage: React.FC = () => {
       </header>
 
       {/* Main Content Body */}
-      <main className="max-w-md mx-auto px-4 pt-5 space-y-5" style={{ paddingBottom: 'calc(156px + var(--tilawah-dock-space, 0px))' }}>
+      <div className="max-w-md mx-auto px-4 pt-5 space-y-5 pb-4">
         {/* APPEARANCE SECTION */}
         {sectionId === 'appearance' && (
           <div className="space-y-4">
@@ -2400,7 +2400,7 @@ const SettingsSubPage: React.FC = () => {
                       Deep X-Ray Diagnostics
                     </Label>
                     <span className="text-[10px] text-muted-foreground/80">
-                      6-layer diagnostic engine & flight recorder
+                      6-layer diagnostic & flight recorder
                     </span>
                   </div>
                 </div>
@@ -3249,7 +3249,7 @@ const SettingsSubPage: React.FC = () => {
             </p>
           </div>
         )}
-      </main>
+      </div>
 
       {/* Owner Security Modal for Protected Actions */}
       <OwnerSecurityModal

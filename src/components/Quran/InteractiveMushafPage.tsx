@@ -1584,7 +1584,7 @@ function InteractiveMushafPageComponent({
                   onPageTurnRequestRef.current?.(pageNumber - 1);
                 }
               }}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+              className={`px-2.5 py-1 rounded-xl border text-xs font-bold transition-all shrink-0 ${
                 safeSubPage <= 1 && pageNumber <= 1
                   ? 'opacity-40 cursor-not-allowed border-transparent'
                   : 'active:scale-95'
@@ -1606,7 +1606,7 @@ function InteractiveMushafPageComponent({
               ← Prev 7 Lines
             </button>
             <span
-              className="font-bold text-xs px-2.5 py-1 rounded-full border shadow-sm"
+              className="font-bold text-[11px] px-2.5 py-1 rounded-full border shadow-sm truncate max-w-[130px] text-center"
               style={
                 readingMode === 'paper'
                   ? {
@@ -1621,7 +1621,7 @@ function InteractiveMushafPageComponent({
                     }
               }
             >
-              Part {safeSubPage} of {totalParts7L} • 7-Line Large Print
+              Part {safeSubPage} of {totalParts7L}
             </span>
             <button
               type="button"
@@ -1635,7 +1635,7 @@ function InteractiveMushafPageComponent({
                   onPageTurnRequestRef.current?.(pageNumber + 1);
                 }
               }}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+              className={`px-2.5 py-1 rounded-xl border text-xs font-bold transition-all shrink-0 ${
                 safeSubPage >= totalParts7L && pageNumber >= 604
                   ? 'opacity-40 cursor-not-allowed border-transparent'
                   : 'active:scale-95'

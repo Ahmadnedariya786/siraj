@@ -156,7 +156,7 @@ export default function NamesOfAllah() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen pb-20" style={{ background: "var(--bg-base)" }}>
+      <div className="min-h-screen pb-4 relative z-10" style={{ background: "transparent" }}>
         <AppBar title={t("namesOfAllahFull") || "99 Names of Allah"} showBack />
 
         <div className="max-w-lg mx-auto px-5 pt-4 space-y-6">

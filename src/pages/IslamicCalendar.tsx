@@ -510,7 +510,7 @@ export default function IslamicCalendar() {
   };
 
   return (
-    <div className="min-h-screen px-4 pb-20 safe-top" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', paddingTop: 'calc(var(--safe-top) + 1.5rem)' }}>
+    <div className="min-h-screen px-4 pb-4 safe-top relative z-10" style={{ background: 'transparent', color: 'var(--text-primary)', paddingTop: 'calc(var(--safe-top) + 1.5rem)' }}>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-3">

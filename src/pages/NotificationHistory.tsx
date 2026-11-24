@@ -220,7 +220,7 @@ export default function NotificationHistory() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] pb-24">
+    <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 relative z-10">
       <AppBar
         title={t("notificationHistory") || "Notification History"}
         showBack={true}

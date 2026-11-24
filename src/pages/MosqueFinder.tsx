@@ -964,7 +964,7 @@ function MosqueFinderContent() {
 
   return (
     <LayoutManager activeTab="services">
-      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] pb-36 select-none overflow-x-hidden">
+      <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 select-none overflow-x-hidden relative z-10">
         <AppBar title="Nearby Mosques" showBack={true} />
 
         <div className="max-w-lg mx-auto px-4 pt-3.5 space-y-3.5">

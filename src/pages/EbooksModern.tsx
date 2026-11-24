@@ -441,7 +441,7 @@ export default function EbooksModern() {
   }
   
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+    <div className="min-h-screen relative z-10" style={{ background: 'transparent', color: 'var(--text-primary)' }}>
       {/* Header */}
       <header
         className="sticky top-0 z-40 border-b safe-top"

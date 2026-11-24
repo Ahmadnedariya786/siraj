@@ -7,7 +7,7 @@ export default function DashboardWidgets() {
   const { t } = useLanguage();
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background pb-32">
+      <div className="min-h-screen bg-transparent pb-4 relative z-10">
         <AppBar title={t("customizeDashboard") || "Customize Dashboard"} showBack />
         <div className="p-4">
           <WidgetCustomizer />

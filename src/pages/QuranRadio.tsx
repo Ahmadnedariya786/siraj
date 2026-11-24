@@ -515,7 +515,7 @@ const QuranRadio = () => {
   const heroPlaying = globalRadio.isPlaying;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg-base)", paddingBottom: "calc(180px + env(safe-area-inset-bottom, 0px))" }}>
+    <div className="min-h-screen relative z-10" style={{ background: "transparent", paddingBottom: "16px" }}>
       {/* ── Functional sticky bar ── */}
       <div
         className="sticky top-0 z-40 border-b safe-top"

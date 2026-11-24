@@ -609,7 +609,7 @@ export default function IslamicRemedies() {
 
   return (
     <PageTransition>
-      <div className={`min-h-screen bg-background pb-32 ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
+      <div className={`min-h-screen bg-transparent pb-4 relative z-10 ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
         <AppBar
           title={strings.title}
           showBack={true}

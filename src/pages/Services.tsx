@@ -154,7 +154,7 @@ export default function Services() {
 
     return (
         <PageTransition>
-            <div className="min-h-screen bg-[var(--bg-base)] pb-36 transition-colors duration-300">
+            <div className="min-h-screen bg-transparent pb-4 transition-colors duration-300 relative z-10">
                 {/* No back button on root bottom-nav tab */}
                 <AppBar title={ui.services} showBack={false} />
 

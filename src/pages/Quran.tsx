@@ -211,7 +211,7 @@ const Quran = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-[var(--bg-base)] pb-32">
+      <div className="min-h-screen bg-transparent pb-4 relative z-10">
         <AppBar title={t('quran')} showBack />
 
         <div className="max-w-lg mx-auto px-5 py-4 space-y-6">
@@ -326,7 +326,7 @@ const Quran = () => {
           )}
 
           {/* Search Header */}
-          <div className="sticky top-[4.5rem] z-30 bg-[var(--bg-base)] py-2 -mx-5 px-5 border-b border-[var(--border)]">
+          <div className="sticky top-[4.5rem] z-30 bg-[var(--surface)] py-2 -mx-5 px-5 border-b border-[var(--border)] shadow-sm">
             <div className="relative group">
               <div className="absolute start-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] group-focus-within:text-[var(--accent)] transition-colors">
                 <Search className="w-4 h-4" />

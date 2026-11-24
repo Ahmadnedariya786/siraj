@@ -989,15 +989,20 @@ export function formatReleaseDate(isoString?: string | null): string {
 }
 
 /**
- * Format timestamp into standard UTC representation for clear diagnostics:
- * "YYYY-MM-DD HH:MM:SS UTC"
+ * Format timestamp into standard representation for clear diagnostics:
+ * "D MMM, HH:mm" (e.g. "24 Nov, 03:37")
  */
 export function formatDateTime(isoString?: string | null): string {
   if (!isoString || isoString.toLowerCase() === 'unknown') return 'unknown';
   try {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return isoString;
-    return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC').replace('Z', ' UTC');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month}, ${hours}:${minutes}`;
   } catch {
     // Handled date formatting fallback
     return isoString;

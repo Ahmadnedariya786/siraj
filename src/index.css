@@ -86,15 +86,11 @@
   }
 
   /* Lite Mode: When Fluid Animations is OFF, hide decorative patterns and flatten card depth */
-  html[data-animations="off"] .sig-pattern-layer,
   html[data-animations="off"] .sig-motif-layer,
-  html[data-animations="off"] .theme-app-pattern,
   html[data-animations="off"] .hero-pattern-layer,
   html[data-animations="off"] .sig-motif-vignette,
   html[data-animations="off"] .kiswa-hero-band,
-  .no-animations .sig-pattern-layer,
   .no-animations .sig-motif-layer,
-  .no-animations .theme-app-pattern,
   .no-animations .hero-pattern-layer,
   .no-animations .sig-motif-vignette,
   .no-animations .kiswa-hero-band {
@@ -1012,7 +1008,7 @@
   /* ── Guarded Signature Layers (Part 1 item 4, 5 & Part 2) ── */
   .sig-pattern-layer {
     pointer-events: none;
-    opacity: 0.035; /* <= 0.05 cap on bg-base */
+    opacity: 0.065;
     background-color: var(--accent);
     -webkit-mask-image: var(--sig-pattern);
     mask-image: var(--sig-pattern);
@@ -1048,9 +1044,10 @@
     inset: 0;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.035; /* <= 0.05 cap on bg-base */
+    opacity: 0.065;
     background-color: var(--accent);
     -webkit-mask-image: var(--sig-pattern);
     mask-image: var(--sig-pattern);
@@ -1066,8 +1063,8 @@
   [data-theme="haramain-noir"] .theme-app-pattern,
   [data-theme="kiswah-noir"] .sig-pattern-layer,
   [data-theme="haramain-noir"] .sig-pattern-layer {
-    background-color: var(--sig-thread, #D4AF37) !important;
-    opacity: 0.04 !important; /* <= 0.05 cap */
+    background-color: var(--sig-thread, #10E8C2) !important;
+    opacity: 0.065 !important;
   }
 
   /* Theme Signature Cards & Containers with 3D Velvet-Glass Depth */

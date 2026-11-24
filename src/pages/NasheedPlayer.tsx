@@ -236,7 +236,7 @@ export default function NasheedPlayer() {
 
     return (
         <PageTransition>
-            <div className="min-h-screen bg-background pb-48">
+            <div className="min-h-screen bg-transparent pb-4 relative z-10">
                 <AppBar title={t("islamicNasheeds") || "Islamic Nasheeds"} showBack={true} />
 
                 <div className="px-4 pt-4 pb-6 space-y-4">

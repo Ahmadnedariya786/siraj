@@ -463,7 +463,7 @@ export default function QuranAudio() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background pb-32">
+      <div className="min-h-screen bg-transparent pb-4 relative z-10">
         <AppBar title="Quran Audio" showBack />
 
         <div className="max-w-lg mx-auto px-5 py-4 space-y-6">

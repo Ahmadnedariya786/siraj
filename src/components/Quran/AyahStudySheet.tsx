@@ -1295,7 +1295,7 @@ export const AyahStudySheet: React.FC<AyahStudySheetProps> = ({
             <div className="space-y-3">
               {/* Header with Edition Selector & Offline Download Action */}
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar flex-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar flex-1 min-w-0">
                   {TRANSLATION_EDITIONS.map((ed) => {
                     const isSelected = selectedEdition === ed.id;
                     return (

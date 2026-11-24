@@ -292,7 +292,7 @@ export default function PrayerStats() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] pb-32">
+      <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 relative z-10">
         <AppBar title={wj.pageTitle} showBack={true} />
 
         <div className="max-w-2xl mx-auto px-3.5 sm:px-4 pt-3 space-y-4">

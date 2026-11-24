@@ -693,11 +693,13 @@ export default function QuranReader() {
   return (
     <PageTransition>
       <div
-        className="min-h-screen relative overflow-hidden bg-[var(--bg-base)]"
+        className="min-h-screen relative overflow-hidden bg-transparent"
         style={{
           paddingBottom: isTilawahActive
-            ? 'calc(165px + env(safe-area-inset-bottom, 0px))'
-            : 'calc(96px + env(safe-area-inset-bottom, 0px))',
+            ? 'calc(135px + env(safe-area-inset-bottom, 0px))'
+            : readerViewMode !== 'card' && lineFormat === 7 && totalParts7L > 1
+            ? 'calc(98px + env(safe-area-inset-bottom, 0px))'
+            : 'calc(62px + env(safe-area-inset-bottom, 0px))',
         }}
       >
         {/* TOP READER CONTROL BAR */}
@@ -1286,6 +1288,51 @@ export default function QuranReader() {
             paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
           }}
         >
+          {/* 7-Line Large Print Subpage Stepper: Stacked cleanly ABOVE the page navigation bar */}
+          {readerViewMode !== 'card' && lineFormat === 7 && totalParts7L > 1 && (
+            <div
+              className="border-b px-2.5 py-1.5 flex items-center justify-between gap-1.5 text-xs max-w-2xl mx-auto"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+            >
+              <button
+                type="button"
+                disabled={mushafPageNumber <= 1 && safeSubPage7L <= 1}
+                onClick={handlePrevPage}
+                className="px-2.5 py-1 rounded-lg border text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shrink-0"
+                style={{
+                  background: 'var(--surface)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                ← Prev 7 Lines
+              </button>
+              <span
+                className="font-bold text-[11px] px-2.5 py-0.5 rounded-full border shadow-sm truncate max-w-[130px] text-center"
+                style={{
+                  background: 'var(--surface)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                Part {safeSubPage7L} of {totalParts7L}
+              </span>
+              <button
+                type="button"
+                disabled={mushafPageNumber >= 604 && safeSubPage7L >= totalParts7L}
+                onClick={handleNextPage}
+                className="px-2.5 py-1 rounded-lg border text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shrink-0"
+                style={{
+                  background: 'var(--surface)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                Next 7 Lines →
+              </button>
+            </div>
+          )}
+
           <div className="max-w-2xl mx-auto px-2 py-1.5 flex items-center justify-between gap-1.5">
             {/* ‹ Prev Page */}
             <button
