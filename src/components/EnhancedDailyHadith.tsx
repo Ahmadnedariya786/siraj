@@ -692,14 +692,14 @@ export function EnhancedDailyHadith() {
 
         {/* Narrator & Source Strip (Sanitized: hides Unknown narrator completely) */}
         {activeNarrator ? (
-          <div className="flex items-center justify-between text-xs px-1 text-[var(--text-secondary)] font-medium">
-            <div className={`flex items-center gap-1.5 min-w-0 truncate bidi-plaintext ${isRtl ? "flex-row-reverse" : ""}`} style={{ unicodeBidi: 'plaintext' }}>
+          <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1.5 text-xs px-1 text-[var(--text-secondary)] font-medium">
+            <div className={`flex items-center gap-1.5 min-w-0 bidi-plaintext ${isRtl ? "flex-row-reverse" : ""}`} style={{ unicodeBidi: 'plaintext' }}>
               <span className={`text-[var(--accent)] font-semibold shrink-0 inline-block ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? "rtl" : "ltr"} style={{ unicodeBidi: 'isolate' }}>
                 {contentLang === 'ur' ? 'راوی:' : contentLang === 'gu' ? 'વર્ણનકર્તા:' : contentLang === 'hi' ? 'वर्णनकर्ता:' : 'Narrator:'}
               </span>
-              <span className={`text-[var(--text-primary)] font-medium truncate ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{translatedNarrator || activeNarrator}</span>
+              <span className={`text-[var(--text-primary)] font-medium ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{translatedNarrator || activeNarrator}</span>
             </div>
-            <div className="inline-flex items-center gap-1 font-mono text-[11px] text-[var(--accent-text)] bg-[var(--accent-soft)] px-2 py-0.5 rounded-md border border-[var(--border)] shrink-0 ml-2">
+            <div className="inline-flex items-center gap-1 font-mono text-[11px] text-[var(--accent-text)] bg-[var(--accent-soft)] px-2 py-0.5 rounded-md border border-[var(--border)] shrink-0">
               <span>{hadith.source}</span>
             </div>
           </div>

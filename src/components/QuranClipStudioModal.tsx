@@ -34,6 +34,7 @@ import {
   stripTashkeel,
   ensureFontsReady,
   drawProceduralScene,
+  resolveSceneForAyah,
   prerenderAyahOffscreenCanvas,
   drawClipOverlay,
   renderAyahImageCard,
@@ -137,6 +138,15 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
     blob: Blob;
     dataUrl: string;
   } | null>(null);
+
+  // Dedicated In-Modal Top Toast (Never covers bottom CTA buttons)
+  const [modalToast, setModalToast] = useState<string | null>(null);
+  const showModalToast = useCallback((msg: string, durationMs = 3500) => {
+    setModalToast(msg);
+    setTimeout(() => {
+      setModalToast((cur) => (cur === msg ? null : cur));
+    }, durationMs);
+  }, []);
 
   // Live Canvas Preview
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -442,11 +452,8 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
     const msg = count === 1
       ? `✨ Smart Range: Ayah ${fromAyah} selected (~${totalEstSec}s reel)`
       : `✨ Smart Range: Ayahs ${fromAyah}–${targetTo} (${count} Ayahs, ~${totalEstSec}s reel)`;
-    setSmartRangeNotice(msg);
-    setTimeout(() => {
-      setSmartRangeNotice((cur) => (cur === msg ? null : cur));
-    }, 4500);
-  }, [fromAyah, toAyah, totalAyahsInSurah, versesData, surahNumber, handleToAyahChange]);
+    showModalToast(msg, 4500);
+  }, [fromAyah, toAyah, totalAyahsInSurah, versesData, surahNumber, handleToAyahChange, showModalToast]);
 
   // Opening Arabic Snippets for Stepper Previews
   const fromSnippet = useMemo(() => {
@@ -488,7 +495,7 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
   // Live Canvas Preview Animation Loop (with 700ms Scene Cross-Fade & Ayah Cycling)
   useEffect(() => {
     // PAUSE PREVIEW rAF DURING VIDEO GENERATION OR PLAYBACK (Saves GPU & CPU memory)
-    if (isGenerating || videoResult) return;
+    if (isGenerating || (activeTab === 'video' && videoResult)) return;
 
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
@@ -499,12 +506,12 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
     // Load fonts first
     ensureFontsReady();
 
-    const dims = ASPECT_RATIO_PRESETS[aspectRatio].video;
+    const dims = activeTab === 'image'
+      ? ASPECT_RATIO_PRESETS[aspectRatio].image
+      : ASPECT_RATIO_PRESETS[aspectRatio].video;
+
     canvas.width = dims.width;
     canvas.height = dims.height;
-
-    const startTime = performance.now();
-    let isRunning = true;
 
     // Pre-render offscreen text canvases for each ayah & sub-segment in the selected range
     const targetAyahs =
@@ -519,6 +526,42 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
               surahNumber,
             },
           ];
+
+    if (activeTab === 'image') {
+      // Synchronous static Ayah Image Card rendering
+      const targetAyah = targetAyahs[0];
+      let targetSceneId: SceneId = sceneId;
+      if (targetSceneId === 'auto-meaning') {
+        const res = resolveSceneForAyah(
+          targetAyah.textUthmani,
+          targetAyah.translation || '',
+          surahNumber,
+          targetAyah.ayahNumber
+        );
+        targetSceneId = res.sceneId;
+      }
+
+      drawProceduralScene(ctx, targetSceneId, dims.width, dims.height, 0, 1.04);
+
+      const offscreen = prerenderAyahOffscreenCanvas({
+        width: dims.width,
+        height: dims.height,
+        ayah: targetAyah,
+        surahNameArabic,
+        surahNameEnglish,
+        withTashkeel,
+        subtitleLang,
+      });
+      ctx.drawImage(offscreen, 0, 0);
+      offscreen.width = 0;
+      offscreen.height = 0;
+
+      drawClipOverlay(ctx, dims.width, dims.height, 1.0);
+      return;
+    }
+
+    const startTime = performance.now();
+    let isRunning = true;
 
     const offscreens: HTMLCanvasElement[] = [];
     const segmentOffscreens = new Map<string, HTMLCanvasElement>();
@@ -891,12 +934,38 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${cite}]
   };
 
   const handleShareImage = async () => {
-    if (!imageResult) {
-      await handleGenerateImage();
+    let targetBlob = imageResult?.blob;
+    if (!targetBlob) {
+      setIsGenerating(true);
+      try {
+        const targetAyah = selectedAyahsList[0] || {
+          ayahNumber: fromAyah,
+          textUthmani: versesData[fromAyah]?.textUthmani || '',
+          translation: subtitleLang !== 'none' ? versesData[fromAyah]?.translations?.[subtitleLang] : undefined,
+          surahNumber,
+        };
+        const rendered = await renderAyahImageCard({
+          surahNumber,
+          surahNameArabic,
+          surahNameEnglish,
+          ayah: targetAyah,
+          aspectRatio,
+          sceneId,
+          withTashkeel,
+          subtitleLang,
+        });
+        targetBlob = rendered.blob;
+        setImageResult({ blob: rendered.blob, dataUrl: rendered.dataUrl });
+      } catch (renderErr) {
+        console.warn('[QuranClipStudio] Image render notice:', renderErr);
+        toast.error('Could not render image');
+        return;
+      } finally {
+        setIsGenerating(false);
+      }
     }
-    const filename = `noor-ayah-s${surahNumber}-a${fromAyah}.png`;
-    const targetBlob = imageResult?.blob;
     if (!targetBlob) return;
+    const filename = `siraj-ayah-s${surahNumber}-a${fromAyah}.png`;
 
     const cleanSurahName = surahNameEnglish.replace(/[^a-zA-Z0-9]/g, '');
     const firstTranslation = selectedAyahsList[0]?.translation ? `"${selectedAyahsList[0].translation}"\n\n` : '';
@@ -1035,7 +1104,7 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
       }}
     >
       <div
-        className="w-full max-w-lg max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden"
+        className="w-full max-w-lg max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden relative"
         style={{
           background: 'var(--surface)',
           borderColor: 'var(--border)',
@@ -1075,7 +1144,7 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
                 } catch {
                   // Ignore storage error
                 }
-                toast.info(next ? 'Auto-save to Gallery: ON' : 'Auto-save to Gallery: OFF');
+                showModalToast(next ? '✨ Auto-save to Gallery: ON' : 'Auto-save to Gallery: OFF');
               }}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-all ${
                 autoSaveToGallery
@@ -1099,6 +1168,28 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
             </button>
           </div>
         </div>
+
+        {/* TOP-FLOATING IN-MODAL TOAST BANNER (Right below header, never covers footer CTA buttons) */}
+        {modalToast && (
+          <div
+            className="absolute top-[58px] left-3 right-3 z-50 flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[var(--accent)]/50 shadow-2xl text-xs font-semibold text-[var(--accent-text)] bg-[var(--surface)] animate-in fade-in slide-in-from-top-2 duration-200 pointer-events-auto"
+            style={{
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 8px var(--accent-glow, rgba(212,175,55,0.2))',
+            }}
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1 truncate">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+              <span className="truncate">{modalToast}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalToast(null)}
+              className="p-1 rounded text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* SCROLLABLE BODY */}
         <div
@@ -1139,14 +1230,24 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
           {/* 2. LIVE PREVIEW CANVAS */}
           <div className="relative rounded-2xl border border-[var(--border)] overflow-hidden bg-black flex items-center justify-center">
             {videoResult && activeTab === 'video' ? (
-              <video
-                src={videoResult.url}
-                controls
-                autoPlay
-                loop
-                playsInline
-                className="w-full max-h-[220px] object-contain mx-auto bg-black"
-              />
+              <div
+                className={`w-full flex items-center justify-center max-h-[220px] ${
+                  aspectRatio === '9:16'
+                    ? 'aspect-[9/16]'
+                    : aspectRatio === '1:1'
+                    ? 'aspect-square'
+                    : 'aspect-[16/9]'
+                }`}
+              >
+                <video
+                  src={videoResult.url}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  className="w-full h-full object-contain max-h-[220px] bg-black"
+                />
+              </div>
             ) : (
               <div
                 className={`w-full flex items-center justify-center max-h-[220px] ${
@@ -1714,28 +1815,6 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
           </div>
         )}
 
-        {/* FLOATING SMART RANGE TOAST (Stacked neatly ABOVE footer CTA bar) */}
-        {smartRangeNotice && (
-          <div
-            className="absolute left-3 right-3 z-30 flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[var(--accent)]/50 shadow-2xl text-xs font-semibold text-[var(--accent-text)] animate-in fade-in slide-in-from-bottom-2 duration-200"
-            style={{
-              background: 'var(--surface)',
-              bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))',
-            }}
-          >
-            <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
-              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
-              <span className="truncate">{smartRangeNotice}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSmartRangeNotice(null)}
-              className="p-1 rounded text-muted-foreground hover:text-foreground shrink-0"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        )}
 
         {/* BOTTOM ACTION BAR */}
         <div className="p-3 sm:p-4 border-t border-[var(--border)] bg-[var(--surface)] shrink-0 flex items-center gap-2">

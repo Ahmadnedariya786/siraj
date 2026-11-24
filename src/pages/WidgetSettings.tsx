@@ -356,12 +356,12 @@ export const WidgetSettings: React.FC = () => {
               type="button"
               onClick={() => handlePinWidget('circular_clock')}
               disabled={pinningType === 'circular_clock'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-medium border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer text-[11.5px]"
+              style={{ fontSize: '11.5px', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
               <div className="flex items-center gap-1.5 min-w-0 truncate">
                 <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-                <span className="truncate">{strings.pinCircularClock}</span>
+                <span className="truncate">{strings.pinCircularClock.replace(/^\+\s*/, '')}</span>
               </div>
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
                 2×2
@@ -372,12 +372,12 @@ export const WidgetSettings: React.FC = () => {
               type="button"
               onClick={() => handlePinWidget('compact_strip')}
               disabled={pinningType === 'compact_strip'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-medium border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer text-[11.5px]"
+              style={{ fontSize: '11.5px', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
               <div className="flex items-center gap-1.5 min-w-0 truncate">
                 <StretchHorizontal className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-                <span className="truncate">{strings.pinCompactStrip}</span>
+                <span className="truncate">{strings.pinCompactStrip.replace(/^\+\s*/, '')}</span>
               </div>
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
                 4×1
@@ -388,12 +388,12 @@ export const WidgetSettings: React.FC = () => {
               type="button"
               onClick={() => handlePinWidget('daily_ayah')}
               disabled={pinningType === 'daily_ayah'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-medium border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer text-[11.5px]"
+              style={{ fontSize: '11.5px', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
               <div className="flex items-center gap-1.5 min-w-0 truncate">
                 <BookOpen className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-                <span className="truncate">{strings.pinDailyAyah}</span>
+                <span className="truncate">{strings.pinDailyAyah.replace(/^\+\s*/, '')}</span>
               </div>
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
                 4×2
@@ -404,12 +404,12 @@ export const WidgetSettings: React.FC = () => {
               type="button"
               onClick={() => handlePinWidget('daily_hadith')}
               disabled={pinningType === 'daily_hadith'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-medium border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer text-[11.5px]"
+              style={{ fontSize: '11.5px', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
               <div className="flex items-center gap-1.5 min-w-0 truncate">
                 <Scroll className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-                <span className="truncate">{strings.pinDailyHadith}</span>
+                <span className="truncate">{strings.pinDailyHadith.replace(/^\+\s*/, '')}</span>
               </div>
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
                 4×2
@@ -420,12 +420,12 @@ export const WidgetSettings: React.FC = () => {
               type="button"
               onClick={() => handlePinWidget('quran_progress')}
               disabled={pinningType === 'quran_progress'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-medium border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer text-[11.5px]"
+              style={{ fontSize: '11.5px', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
               <div className="flex items-center gap-1.5 min-w-0 truncate">
                 <TrendingUp className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-                <span className="truncate">{strings.pinQuranProgress}</span>
+                <span className="truncate">{strings.pinQuranProgress.replace(/^\+\s*/, '')}</span>
               </div>
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
                 2×2
@@ -436,12 +436,12 @@ export const WidgetSettings: React.FC = () => {
               type="button"
               onClick={() => handlePinWidget('tasbeeh')}
               disabled={pinningType === 'tasbeeh'}
-              className="rounded-xl font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer"
-              style={{ fontSize: '0.73rem', padding: '8px 8px', whiteSpace: 'nowrap' }}
+              className="rounded-xl font-medium border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] hover:border-[var(--accent)]/50 active:scale-95 transition-all flex items-center justify-between gap-1.5 cursor-pointer text-[11.5px]"
+              style={{ fontSize: '11.5px', padding: '8px 8px', whiteSpace: 'nowrap' }}
             >
               <div className="flex items-center gap-1.5 min-w-0 truncate">
                 <CircleDot className="w-3.5 h-3.5 text-[var(--accent-text)] flex-shrink-0" />
-                <span className="truncate">{strings.pinTasbeeh}</span>
+                <span className="truncate">{strings.pinTasbeeh.replace(/^\+\s*/, '')}</span>
               </div>
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] shrink-0">
                 2×2
@@ -634,10 +634,10 @@ export const WidgetSettings: React.FC = () => {
                           {item.label}
                         </div>
                         <div
-                          className="text-[10px] font-mono font-semibold tabular-nums mt-0.5"
+                          className="text-[10px] font-mono font-semibold tabular-nums mt-0.5 whitespace-nowrap"
                           style={{ color: activePreset.textHex }}
                         >
-                          {item.time}
+                          {item.time.replace(/\s*(?:AM|PM|am|pm)/i, '').trim()}
                         </div>
                       </div>
                     ))}
@@ -756,13 +756,13 @@ export const WidgetSettings: React.FC = () => {
                           {slot.label}
                         </span>
                         <span
-                          className="text-[10px] font-mono font-bold tabular-nums mt-0.5"
+                          className="text-[10px] font-mono font-bold tabular-nums mt-0.5 whitespace-nowrap"
                           style={{
                             color: activePreset.textHex,
                             fontSize: `${0.65 * (config.fontScale / 100)}rem`,
                           }}
                         >
-                          {slot.time}
+                          {slot.time.replace(/\s*(?:AM|PM|am|pm)/i, '').trim()}
                         </span>
                       </div>
                     );

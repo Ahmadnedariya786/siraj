@@ -68,6 +68,7 @@ import {
   cleanStackTrace,
   subscribeDiagnostics,
   recordBreadcrumb,
+  TOTAL_HEALTH_CHECKS,
   type DiagnosticEvent,
   type FlightBreadcrumb,
   type DeepHealthScanReport,
@@ -2478,7 +2479,7 @@ const SettingsSubPage: React.FC = () => {
                             : 'text-[var(--success)]'
                           : 'text-amber-500'
                       }`}>
-                        {healthScanReport ? `${healthScanReport.passedCount}/${healthScanReport.totalChecks}` : '8 Ready'}
+                        {healthScanReport ? `${healthScanReport.passedCount}/${healthScanReport.totalChecks}` : `${TOTAL_HEALTH_CHECKS} Ready`}
                       </div>
                       <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
                         Health Scan
@@ -2504,7 +2505,7 @@ const SettingsSubPage: React.FC = () => {
                   {isScanningHealth ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Scanning 8 Subsystems...</span>
+                      <span>Scanning {TOTAL_HEALTH_CHECKS} Subsystems...</span>
                     </>
                   ) : (
                     <>
@@ -2756,7 +2757,7 @@ const SettingsSubPage: React.FC = () => {
                           : 'text-[var(--danger)]'
                       }`} />
                       <span className="text-xs font-semibold text-foreground">
-                        8 Subsystem Checks ({healthScanReport.passedCount}/{healthScanReport.totalChecks} Passed)
+                        {healthScanReport.totalChecks} Subsystem Checks ({healthScanReport.passedCount}/{healthScanReport.totalChecks} Passed)
                       </span>
                     </div>
                     {isChecklistExpanded ? (

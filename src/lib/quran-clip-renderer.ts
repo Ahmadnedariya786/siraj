@@ -66,6 +66,14 @@ import {
   stripLeadingBismillah,
   type VisualSegment,
 } from './ayah-meaning-scene-engine';
+
+export {
+  resolveSceneForAyah,
+  resolveSceneJourney,
+  resolveAyahVisualTimeline,
+  stripLeadingBismillah,
+  type VisualSegment,
+};
 import { beginHeavyOperation, endHeavyOperation } from './diagnostics-engine';
 
 export interface ClipAyahTimelineItem {

@@ -992,8 +992,10 @@ export function initDiagnosticsEngine(): void {
 }
 
 // -------------------------------------------------------------
-// Active 8-Point "Deep Health Scanner"
+// Active Deep Health Scanner (11 Subsystem Checks)
 // -------------------------------------------------------------
+
+export const TOTAL_HEALTH_CHECKS = 11;
 
 export const REQUIRED_THEME_TOKENS = [
   '--bg-base',
@@ -1589,7 +1591,7 @@ export async function generateAiDiagnosticReport(existingScan?: DeepHealthScanRe
   }
 
   md += `---\n\n`;
-  md += `## 2. 8-POINT SUBSYSTEM HEALTH SCAN (${scan.passedCount}/${scan.totalChecks} PASSED)\n\n`;
+  md += `## 2. ${scan.totalChecks}-POINT SUBSYSTEM HEALTH SCAN (${scan.passedCount}/${scan.totalChecks} PASSED)\n\n`;
 
   scan.checks.forEach((chk, idx) => {
     const symbol = chk.status === 'PASS' ? '✓ [PASS]' : chk.status === 'WARN' ? '⚠ [WARN]' : '✕ [FAIL]';
