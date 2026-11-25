@@ -221,18 +221,12 @@ export const GlobalPrayerAlarm = () => {
 
       localStorage.setItem(PRAYER_TIMES_KEY, JSON.stringify(cachedData));
 
-      // Push to native adhan scheduler if available
+      // Push to native adhan scheduler via single authoritative API schedule path
       try {
         const { Capacitor } = await import('@capacitor/core');
         if (Capacitor.isNativePlatform()) {
           const { localNotifications } = await import('@/lib/local-notifications');
-          await localNotifications.schedulePrayerNotifications(
-            prayerTimes.map(p => ({
-              name: p.name,
-              time: p.time,
-              date: new Date()
-            }))
-          );
+          await localNotifications.schedulePrayerNotificationsFromAPI();
         }
       } catch (err) {
         console.warn('Failed to schedule native background alarms', err);
@@ -316,11 +310,13 @@ export const GlobalPrayerAlarm = () => {
         duration: 30000,
       });
 
-      localNotifications.showNativeNotification(
-        `${displayPrayerName} Prayer Time`,
-        `It is time for ${displayPrayerName} prayer.`,
-        { url: '/dashboard', tag: 'prayer-alarm' }
-      );
+      if (!Capacitor.isNativePlatform()) {
+        localNotifications.showNativeNotification(
+          `${displayPrayerName} Prayer Time`,
+          `It is time for ${displayPrayerName} prayer.`,
+          { url: '/dashboard', tag: 'prayer-alarm' }
+        );
+      }
 
       emitPlaybackState(true, displayPrayerName);
 
@@ -346,11 +342,13 @@ export const GlobalPrayerAlarm = () => {
       duration: 10000,
     });
 
-    localNotifications.showNativeNotification(
-      `${prayerName} Prayer Coming Up`,
-      `${prayerName} prayer will begin in ${minutesBefore} minutes`,
-      { url: '/dashboard', tag: 'prayer-reminder' }
-    );
+    if (!Capacitor.isNativePlatform()) {
+      localNotifications.showNativeNotification(
+        `${prayerName} Prayer Coming Up`,
+        `${prayerName} prayer will begin in ${minutesBefore} minutes`,
+        { url: '/dashboard', tag: 'prayer-reminder' }
+      );
+    }
   }, []);
 
   const checkPrayerTime = useCallback(() => {

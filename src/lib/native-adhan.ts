@@ -5,6 +5,7 @@ export interface NativeAdhanAlarm {
   id: number;
   triggerAt: number;
   prayerName: string;
+  prayerTime?: string;
   adhanUrl: string;
   overrideSilent?: boolean;
   maxVolume?: boolean;

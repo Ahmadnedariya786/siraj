@@ -798,7 +798,6 @@ public class MainActivity extends BridgeActivity {
                                         .setColorized(true)
                                         .setContentTitle(title)
                                         .setContentText(rakah + " — Tap to log prayer")
-                                        .setSubText("Siraj")
                                         .setStyle(new NotificationCompat.BigTextStyle().bigText(bigText))
                                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                                         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -829,7 +828,14 @@ public class MainActivity extends BridgeActivity {
                         try {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-                                return am != null && am.canScheduleExactAlarms();
+                                if (am != null && am.canScheduleExactAlarms()) {
+                                    return true;
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    return androidx.core.content.ContextCompat.checkSelfPermission(
+                                            MainActivity.this, "android.permission.USE_EXACT_ALARM") == PackageManager.PERMISSION_GRANTED;
+                                }
+                                return false;
                             }
                             return true;
                         } catch (Throwable t) {
@@ -883,6 +889,10 @@ public class MainActivity extends BridgeActivity {
                     public void scheduleTest5sAlarm(final String prayerName, final String prayerTime12h) {
                         try {
                             final String pName = (prayerName != null && !prayerName.trim().isEmpty()) ? prayerName : "Fajr";
+                            final long triggerMs = System.currentTimeMillis() + 5000L;
+                            final String resolvedTime = (prayerTime12h != null && !prayerTime12h.trim().isEmpty())
+                                    ? prayerTime12h.trim()
+                                    : new java.text.SimpleDateFormat("hh:mm a", java.util.Locale.US).format(new java.util.Date(triggerMs));
                             NativeAdhanScheduler.setEnabled(MainActivity.this, true);
                             NativeAdhanScheduler.removeAlarm(MainActivity.this, 9901);
                             NativeAdhanScheduler.removeAlarm(MainActivity.this, 99999);
@@ -893,16 +903,40 @@ public class MainActivity extends BridgeActivity {
                             }
                             NativeAdhanScheduler.ScheduledAdhan testAlarm = new NativeAdhanScheduler.ScheduledAdhan(
                                     9901,
-                                    System.currentTimeMillis() + 5000L,
+                                    triggerMs,
                                     pName,
+                                    resolvedTime,
                                     "/audio/adhan-makkah.mp3",
                                     false,
                                     false
                             );
                             NativeAdhanScheduler.scheduleAlarm(MainActivity.this, testAlarm, false);
-                            Log.i(TAG, "Scheduled 5-second test alarm for prayer: " + pName + " (ID 9901)");
+                            Log.i(TAG, "Scheduled 5-second test alarm for prayer: " + pName + " (" + resolvedTime + ", ID 9901)");
                         } catch (Throwable t) {
                             Log.w(TAG, "Failed to schedule 5s test alarm", t);
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public String getNativeNotificationHistory() {
+                        try {
+                            android.content.SharedPreferences histPrefs = getSharedPreferences(
+                                    PrayerAlarmReceiver.HISTORY_PREFS_NAME, MODE_PRIVATE);
+                            return histPrefs.getString(PrayerAlarmReceiver.HISTORY_KEY_ITEMS, "[]");
+                        } catch (Throwable t) {
+                            return "[]";
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public void clearNativeNotificationHistory() {
+                        try {
+                            getSharedPreferences(PrayerAlarmReceiver.HISTORY_PREFS_NAME, MODE_PRIVATE)
+                                    .edit()
+                                    .remove(PrayerAlarmReceiver.HISTORY_KEY_ITEMS)
+                                    .apply();
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to clear native notification history", t);
                         }
                     }
                 }, "AndroidBridge");

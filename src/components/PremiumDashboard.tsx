@@ -25,9 +25,8 @@ import { TopQazaReminderBanner } from "@/components/TopQazaReminderBanner";
 import { hasHomeEntranceCompleted } from "@/lib/home-entrance";
 import { PrayerTimesSection } from "@/components/PrayerTimesSection";
 import { getDayWorshipLog, formatDateKey } from "@/lib/worship-log";
-import { getPrayerHistory, getTodayPrayers, type DailyPrayers } from "@/lib/salah-tracker";
+import { getPrayerHistory } from "@/lib/salah-tracker";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
-import { parseTimeToSeconds } from "@/lib/makruh-times";
 
 // Lazy load widget components to reduce initial bundle size
 const EnhancedDailyAyah = lazy(() => import("@/components/EnhancedDailyAyah"));
@@ -475,97 +474,9 @@ function PremiumDashboardInner({
     };
   }, []);
 
-  // ── Auto-Trigger Royal Prayer Reminder Banner at "DUE NOW" (Part 2) ──
-  useEffect(() => {
-    if (!prayers || prayers.length === 0) return;
-
-    const FARD_PRAYERS = ['fajr', 'dhuhr', 'jummah', 'asr', 'maghrib', 'isha'];
-    let timerId: ReturnType<typeof setTimeout> | null = null;
-    let isCancelled = false;
-
-    const checkDueNow = () => {
-      if (isCancelled) return;
-      const now = new Date();
-      const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      let nextUpcomingDelayMs = 60000;
-      let currentPrayers: DailyPrayers | Record<string, boolean> = {};
-      try {
-        currentPrayers = typeof getTodayPrayers === 'function' ? getTodayPrayers() : {};
-      } catch (err) {
-        console.warn('Error reading today prayers for banner auto-trigger:', err);
-        currentPrayers = {};
-      }
-
-      for (const p of prayers) {
-        const rawName = (p.originalName || p.name || '').trim();
-        const lower = rawName.toLowerCase();
-        if (!FARD_PRAYERS.includes(lower)) continue;
-
-        const prayerSec = parseTimeToSeconds(p.date || p.time);
-        if (prayerSec === null) continue;
-
-        const canonicalName = lower === 'jummah' ? 'Dhuhr' : rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
-        const pKey = lower === 'jummah' ? 'dhuhr' : (lower as 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha');
-        const isAlreadyPrayed = currentPrayers && currentPrayers[pKey];
-
-        // Active 45-minute window: 0 to 2700 seconds after prayer start
-        const isInActiveWindow = nowSec >= prayerSec && nowSec < prayerSec + 2700;
-
-        if (isInActiveWindow && !isAlreadyPrayed) {
-          const triggerKey = `${todayIso}:${canonicalName}`;
-          const dismissedSession = sessionStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${canonicalName}`);
-          const dismissedLocal = localStorage.getItem(`noor_hadith_modal_dismissed_${todayIso}_${canonicalName}`);
-          const lastTriggeredSession = sessionStorage.getItem('noor_last_auto_triggered_prayer');
-
-          if (dismissedSession !== 'true' && dismissedLocal !== 'true' && lastTriggeredSession !== triggerKey) {
-            try {
-              sessionStorage.setItem('noor_last_auto_triggered_prayer', triggerKey);
-              localStorage.setItem('noor_last_auto_triggered_prayer', triggerKey);
-            } catch {
-              // Safe storage fallback
-            }
-
-            // Native Android notification trigger if on Android bridge
-            const time12h = p.time || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-            // Native Android notification trigger if on Android bridge
-            try {
-              (window as any).AndroidBridge?.triggerTestPrayerNotification?.(canonicalName, time12h);
-            } catch {
-              // Safe bridge fallback
-            }
-            break;
-          }
-        } else if (prayerSec > nowSec) {
-          const diffMs = (prayerSec - nowSec) * 1000 - now.getMilliseconds();
-          if (diffMs > 0 && diffMs < nextUpcomingDelayMs) {
-            nextUpcomingDelayMs = diffMs;
-          }
-        }
-      }
-
-      // Schedule next check for exact next prayer start (or next minute boundary)
-      const delay = Math.max(500, Math.min(nextUpcomingDelayMs, 60000));
-      timerId = setTimeout(checkDueNow, delay);
-    };
-
-    checkDueNow();
-
-    const handleResume = () => {
-      checkDueNow();
-    };
-
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) handleResume();
-    });
-
-    return () => {
-      isCancelled = true;
-      if (timerId !== null) clearTimeout(timerId);
-      document.removeEventListener('visibilitychange', handleResume);
-    };
-  }, [prayers]);
+  // NOTE: Retroactive app-open prayer catch-up notifications were intentionally removed here.
+  // Real prayer notifications fire strictly at exact scheduled future prayer times via the
+  // single authoritative native OS alarm pipeline (NativeAdhanScheduler / AlarmManager.setAlarmClock).
 
   const qiblaBearing = React.useMemo(() => {
     if (location?.latitude && location?.longitude) {

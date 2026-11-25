@@ -92,8 +92,8 @@ public class AdhanPlaybackService extends Service {
         startForeground(notifId, createNotification(prayerName, prayerTime));
 
         // Release the WakeLock now that startForeground() has been called.
-        // This closes the Doze race-condition window opened by AdhanAlarmReceiver.
-        AdhanAlarmReceiver.releaseWakeLock();
+        // This closes the Doze race-condition window opened by PrayerAlarmReceiver.
+        PrayerAlarmReceiver.releaseWakeLock();
 
         playAdhan(adhanUrl, prayerName, overrideSilent, maxVolume);
 

@@ -162,10 +162,44 @@ class ServiceWorkerManager {
     });
   }
 
-  // Get notification history from Service Worker
+  // Get notification history from Service Worker (or merge native Android history)
   async getNotificationHistory(): Promise<NotificationHistoryItem[]> {
+    const mergeNativeHistory = (base: NotificationHistoryItem[]): NotificationHistoryItem[] => {
+      try {
+        const rawNative = (window as unknown as {
+          AndroidBridge?: { getNativeNotificationHistory?: () => string };
+        }).AndroidBridge?.getNativeNotificationHistory?.();
+        if (!rawNative) return base;
+        const parsed = JSON.parse(rawNative);
+        if (!Array.isArray(parsed)) return base;
+
+        const combined: NotificationHistoryItem[] = [...base];
+        const seen = new Set(
+          combined.map((item) => `${item.title}|${Math.floor((item.timestamp || 0) / 60000)}`),
+        );
+        for (const item of parsed) {
+          if (!item || typeof item.title !== 'string') continue;
+          const ts = typeof item.timestamp === 'number' ? item.timestamp : Date.now();
+          const dedupKey = `${item.title}|${Math.floor(ts / 60000)}`;
+          if (seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+          combined.push({
+            type: item.type || 'prayer',
+            title: item.title,
+            body: typeof item.body === 'string' ? item.body : '',
+            timestamp: ts,
+          });
+        }
+        return combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50);
+      } catch (err) {
+        console.debug('Failed to merge native notification history:', err);
+        return base;
+      }
+    };
+
     if (!this.registration) {
-      return this.notificationHistory;
+      this.loadNotificationHistory();
+      return mergeNativeHistory(this.notificationHistory);
     }
 
     try {
@@ -176,7 +210,7 @@ class ServiceWorkerManager {
           if (event.data.type === 'NOTIFICATION_HISTORY') {
             this.notificationHistory = event.data.data;
             this.saveNotificationHistory();
-            resolve(this.notificationHistory);
+            resolve(mergeNativeHistory(this.notificationHistory));
           }
         };
 
@@ -186,12 +220,20 @@ class ServiceWorkerManager {
       });
     } catch (error) {
       console.error('Failed to get notification history:', error);
-      return this.notificationHistory;
+      return mergeNativeHistory(this.notificationHistory);
     }
   }
 
   // Clear notification history
   async clearNotificationHistory(): Promise<void> {
+    try {
+      (window as unknown as {
+        AndroidBridge?: { clearNativeNotificationHistory?: () => void };
+      }).AndroidBridge?.clearNativeNotificationHistory?.();
+    } catch (err) {
+      console.debug('Failed to clear native notification history:', err);
+    }
+
     if (!this.registration) {
       this.notificationHistory = [];
       this.saveNotificationHistory();

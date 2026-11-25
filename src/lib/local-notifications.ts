@@ -29,6 +29,7 @@ const PRAYER_NOTIFICATIONS_ENABLED_KEY = 'prayer-notifications-enabled';
 const PRAYER_ALARM_ENABLED_KEY = 'prayer-alarm-enabled';
 const LAST_SCHEDULE_SIGNATURE_KEY = 'last-prayer-notification-signature';
 const SCHEDULE_WINDOW_DAYS = 2; // 48-hour rolling schedule cap (today + tomorrow)
+export const MIN_FUTURE_PRAYER_GUARD_MS = 15_000; // Strict > now + 15s guard (no past/retroactive fires)
 
 if (localStorage.getItem(PRAYER_NOTIFICATIONS_ENABLED_KEY) === null) {
   localStorage.setItem(PRAYER_NOTIFICATIONS_ENABLED_KEY, 'true');
@@ -346,12 +347,33 @@ export class LocalNotificationManager {
           const prayerTime = timings[prayerName as keyof AladhanPrayerTime];
           if (!prayerTime) continue;
           const cleaned = prayerTime.replace(/\s*\(.*?\)\s*/g, '').trim();
-          const [hours, minutes] = cleaned.split(':').map(Number);
-          const prayerDate = new Date(targetDate);
-          prayerDate.setHours(hours, minutes, 0, 0);
+          const timeMatch = cleaned.match(/^(\d{1,2}):(\d{2})/);
+          if (!timeMatch) continue;
+          const hours = Number(timeMatch[1]);
+          const minutes = Number(timeMatch[2]);
+          if (
+            !Number.isFinite(hours) ||
+            !Number.isFinite(minutes) ||
+            hours < 0 ||
+            hours > 23 ||
+            minutes < 0 ||
+            minutes > 59
+          ) {
+            continue;
+          }
+          // Construct explicit local timezone timestamp (never UTC-shifted)
+          const prayerDate = new Date(
+            targetDate.getFullYear(),
+            targetDate.getMonth(),
+            targetDate.getDate(),
+            hours,
+            minutes,
+            0,
+            0,
+          );
 
-          // Strict Future-Only Guard: triggerAtMs > now + 5000ms
-          if (prayerDate.getTime() <= now.getTime() + 5000) {
+          // Strict Future-Only Guard: triggerAtMs > now + 15000ms
+          if (prayerDate.getTime() <= now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
             continue;
           }
 
@@ -410,6 +432,7 @@ export class LocalNotificationManager {
             id: notificationId,
             triggerAt: prayerDate.getTime(),
             prayerName,
+            prayerTime: time12h,
             adhanUrl: await getAdhanUrlForPrayer(prayerName as PrayerName),
             overrideSilent: adhanService.getAdhanConfig().overrideSilentMode,
             maxVolume: adhanService.getAdhanConfig().playAtMaxVolume,
@@ -490,8 +513,8 @@ export class LocalNotificationManager {
         const toggleKey = prayerToggleMap[prayer.name];
         if (toggleKey && !adhanConfig[toggleKey]) continue;
 
-        // Strict Future-Only Guard: triggerAtMs > now + 5000ms
-        if (prayer.date.getTime() > now.getTime() + 5000) {
+        // Strict Future-Only Guard: triggerAtMs > now + 15000ms
+        if (prayer.date.getTime() > now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
           const notificationId = this.getNotificationId(prayer.name, prayer.date);
 
           const displayName = getPrayerDisplayName(prayer.name, prayer.date);
@@ -540,7 +563,7 @@ export class LocalNotificationManager {
           const key = prayerToggleMap[prayer.name];
           if (key && !adhanConfig[key]) continue;
 
-          if (prayer.date.getTime() > now.getTime() + 5000) {
+          if (prayer.date.getTime() > now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
             const validPrayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
             if (!validPrayerNames.includes(prayer.name as typeof validPrayerNames[number])) {
               console.warn(`Invalid prayer name "${prayer.name}", skipping native alarm`);
@@ -551,6 +574,7 @@ export class LocalNotificationManager {
               id: this.getNotificationId(prayer.name, prayer.date),
               triggerAt: prayer.date.getTime(),
               prayerName: prayer.name,
+              prayerTime: format12HourTime(prayer.time),
               adhanUrl: await getAdhanUrlForPrayer(prayer.name as PrayerName),
               overrideSilent: adhanService.getAdhanConfig().overrideSilentMode,
               maxVolume: adhanService.getAdhanConfig().playAtMaxVolume,
@@ -611,6 +635,9 @@ export class LocalNotificationManager {
     }
 
     try {
+      if (prayerDate.getTime() <= Date.now() + MIN_FUTURE_PRAYER_GUARD_MS) {
+        return;
+      }
       const notificationId = this.getNotificationId(prayerName, prayerDate);
       const displayName = getPrayerDisplayName(prayerName, prayerDate);
 

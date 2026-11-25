@@ -53,17 +53,20 @@ public class NativeAdhanPlugin extends Plugin {
                 int id = alarm.optInt("id", -1);
                 long triggerAt = alarm.optLong("triggerAt", -1L);
                 String prayerName = alarm.optString("prayerName", "Prayer");
+                String prayerTime = alarm.optString("prayerTime", "");
                 String adhanUrl = alarm.optString("adhanUrl", "/audio/adhan-makkah.mp3");
                 boolean overrideSilent = alarm.optBoolean("overrideSilent", false);
                 boolean maxVolume = alarm.optBoolean("maxVolume", false);
 
-                if (id < 0 || triggerAt <= now) {
+                boolean isTest = (id == 9901 || id == 99999);
+                long minTrigger = isTest ? (now + 1000L) : (now + NativeAdhanScheduler.MIN_FUTURE_GUARD_MS);
+                if (id < 0 || triggerAt <= minTrigger) {
                     continue;
                 }
 
                 NativeAdhanScheduler.scheduleAlarm(
                         context,
-                        new NativeAdhanScheduler.ScheduledAdhan(id, triggerAt, prayerName, adhanUrl, overrideSilent, maxVolume),
+                        new NativeAdhanScheduler.ScheduledAdhan(id, triggerAt, prayerName, prayerTime, adhanUrl, overrideSilent, maxVolume),
                         true
                 );
                 scheduled++;
@@ -112,6 +115,10 @@ public class NativeAdhanPlugin extends Plugin {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             android.app.AlarmManager alarmManager = (android.app.AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
             boolean canSchedule = alarmManager != null && alarmManager.canScheduleExactAlarms();
+            if (!canSchedule && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                canSchedule = androidx.core.content.ContextCompat.checkSelfPermission(
+                        getContext(), "android.permission.USE_EXACT_ALARM") == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            }
             result.put("canSchedule", canSchedule);
         } else {
             result.put("canSchedule", true);

@@ -220,13 +220,13 @@ export default function NotificationHistory() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 relative z-10">
+    <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-4 relative z-10 overflow-x-hidden">
       <AppBar
         title={t("notificationHistory") || "Notification History"}
         showBack={true}
       />
 
-      <div className="p-4 space-y-4 max-w-4xl mx-auto">
+      <div className="p-3.5 sm:p-4 space-y-4 max-w-4xl mx-auto overflow-x-hidden">
         {/* Filters and Search Card */}
         <Card className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-md">
           <div className="space-y-3.5">
@@ -242,9 +242,9 @@ export default function NotificationHistory() {
             </div>
 
             {/* Filter Dropdown + Clear All Button */}
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center min-w-0">
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="flex-1 min-w-[155px] whitespace-nowrap rounded-xl bg-[var(--surface-2)] text-[var(--text-primary)] border-[var(--border)] font-semibold text-xs">
+                <SelectTrigger className="flex-1 min-w-0 whitespace-nowrap rounded-xl bg-[var(--surface-2)] text-[var(--text-primary)] border-[var(--border)] font-semibold text-xs">
                   <Filter className="w-3.5 h-3.5 ms-1.5 shrink-0 text-[var(--accent)]" />
                   <SelectValue placeholder="Filter by type" />
                 </SelectTrigger>
@@ -298,12 +298,12 @@ export default function NotificationHistory() {
         </div>
 
         {/* Notification List Card */}
-        <Card className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-sm text-[var(--text-primary)]">Recent Notifications</h3>
+        <Card className="p-3.5 sm:p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-md overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h3 className="font-bold text-sm text-[var(--text-primary)] min-w-0 truncate">Recent Notifications</h3>
             <Badge
               variant="outline"
-              className="bg-[var(--surface-2)] text-[var(--accent-text)] border-[var(--border)] text-[10px] font-bold"
+              className="bg-[var(--surface-2)] text-[var(--accent-text)] border-[var(--border)] text-[10px] font-bold shrink-0"
             >
               {filteredNotifications.length} of {notifications.length}
             </Badge>
@@ -324,30 +324,33 @@ export default function NotificationHistory() {
               </p>
             </div>
           ) : (
-            <ScrollArea className="h-[400px]">
-              <div className="space-y-2.5">
+            <ScrollArea className="h-[400px] w-full overflow-x-hidden">
+              <div className="space-y-2.5 min-w-0 overflow-x-hidden">
                 {filteredNotifications.map((notification, index) => (
                   <Card
                     key={`${notification.timestamp}-${index}`}
-                    className="p-3.5 rounded-xl bg-[var(--surface-2)]/80 border border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors shadow-sm"
+                    className="p-3 sm:p-3.5 rounded-xl bg-[var(--surface-2)]/80 border border-[var(--border)] hover:bg-[var(--surface-2)] transition-colors shadow-sm overflow-hidden"
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
                       <div className="mt-0.5 bg-[var(--surface)] p-2 rounded-xl shrink-0 border border-[var(--border)]">
                         {getNotificationIcon(notification.type)}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <h4 className="font-bold text-sm truncate text-[var(--text-primary)]">
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
+                          <h4 className="font-bold text-sm truncate min-w-0 flex-1 text-[var(--text-primary)]">
                             {notification.title}
                           </h4>
                           <Badge
                             variant="secondary"
-                            className={`text-[9.5px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full shrink-0 ${getNotificationBadgeColor(notification.type)}`}
+                            className={`text-[9.5px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap ${getNotificationBadgeColor(notification.type)}`}
                           >
                             {notification.type.replace('-', ' ')}
                           </Badge>
                         </div>
-                        <p className="text-xs text-[var(--text-secondary)] mb-2 leading-relaxed">
+                        <p
+                          className="text-xs text-[var(--text-secondary)] mb-2 leading-relaxed break-words"
+                          style={{ overflowWrap: 'anywhere' }}
+                        >
                           {notification.body}
                         </p>
                         <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-[var(--text-secondary)]/80">
