@@ -9,6 +9,21 @@ export interface NativeAdhanAlarm {
   adhanUrl: string;
   overrideSilent?: boolean;
   maxVolume?: boolean;
+  playAdhanAudio?: boolean;
+}
+
+export interface AlarmKernelDiagnostics {
+  osNextAlarmClock: string;
+  osNextAlarmEpochMs: number;
+  canScheduleExactAlarms: boolean;
+  notificationsEnabled: boolean;
+  channelImportance: number;
+  batteryUnrestricted: boolean;
+  deviceManufacturer: string;
+  deviceModel: string;
+  androidApi: number;
+  scheduledCount: number;
+  nativeTraceLog: string[];
 }
 
 interface NativeAdhanPlugin {
@@ -16,6 +31,13 @@ interface NativeAdhanPlugin {
   clear(): Promise<{ status: string }>;
   setEnabled(options: { enabled: boolean }): Promise<{ enabled: boolean; count: number }>;
   getStatus(): Promise<{ enabled: boolean; count: number }>;
+  scheduleTest60sAlarm(options: {
+    prayerName: string;
+    prayerTime?: string;
+    playAudio?: boolean;
+  }): Promise<{ scheduled: boolean; triggerAtMs: number }>;
+  getAlarmKernelDiagnostics(): Promise<AlarmKernelDiagnostics>;
+  clearTraceLog(): Promise<{ cleared: boolean }>;
   canScheduleExactAlarms(): Promise<{ canSchedule: boolean }>;
   requestExactAlarmPermission(): Promise<{ opened: boolean; alreadyGranted?: boolean }>;
 }
@@ -52,7 +74,6 @@ class NativeAdhanBridge {
   async requestExactAlarmPermission(): Promise<boolean> {
     if (!this.isNative()) return false;
 
-    // Show the in-app explanation FIRST; only proceed if user taps Allow.
     const userAllowed = await showExactAlarmRationale();
     if (!userAllowed) return false;
 
@@ -61,8 +82,7 @@ class NativeAdhanBridge {
 
   /**
    * Directly open the system "Alarms & reminders" settings WITHOUT showing the
-   * rationale modal first. Use this only when the rationale has already been
-   * shown via showExactAlarmRationale() and the user has tapped Allow.
+   * rationale modal first.
    */
   async openExactAlarmSettings(): Promise<boolean> {
     if (!this.isNative()) return false;
@@ -78,9 +98,6 @@ class NativeAdhanBridge {
 
   /**
    * Check and ensure exact alarm permission politely.
-   * Always shows the in-app rationale modal first (via requestExactAlarmPermission),
-   * then opens system settings only if the user taps Allow.
-   * Uses a per-session flag to avoid nagging loops.
    */
   async ensureExactAlarmPermission(forcePrompt: boolean = false): Promise<boolean> {
     if (!this.isNative()) return true;
@@ -89,12 +106,10 @@ class NativeAdhanBridge {
     if (canSchedule) return true;
 
     if (forcePrompt) {
-      // requestExactAlarmPermission already shows rationale first
       await this.requestExactAlarmPermission();
       return false;
     }
 
-    // Do not trigger background session prompt if first-launch onboarding sequence is pending
     if (localStorage.getItem('onboarding_perms_v2_done') !== 'true') {
       return false;
     }
@@ -102,7 +117,6 @@ class NativeAdhanBridge {
     const alreadyPrompted = sessionStorage.getItem(EXACT_ALARM_PROMPT_KEY);
     if (!alreadyPrompted) {
       sessionStorage.setItem(EXACT_ALARM_PROMPT_KEY, 'true');
-      // requestExactAlarmPermission already shows rationale first
       await this.requestExactAlarmPermission();
     }
 
@@ -153,28 +167,72 @@ class NativeAdhanBridge {
       return { enabled: true, count: 0 };
     }
   }
+
+  /**
+   * Schedule a 60-second test alarm using the 100% identical AlarmManager.setAlarmClock() -> PrayerAlarmReceiver path.
+   */
+  async scheduleTest60sAlarm(
+    prayerName: string,
+    prayerTime?: string,
+    playAudio: boolean = true
+  ): Promise<{ scheduled: boolean; triggerAtMs: number }> {
+    if (!this.isNative()) {
+      return { scheduled: false, triggerAtMs: 0 };
+    }
+
+    try {
+      return await NativeAdhanPlugin.scheduleTest60sAlarm({ prayerName, prayerTime, playAudio });
+    } catch (error) {
+      const bridge = typeof window !== 'undefined' ? (window as unknown as { AndroidBridge?: { scheduleTest60sAlarm?: (p: string, t: string) => number } }).AndroidBridge : undefined;
+      if (bridge && typeof bridge.scheduleTest60sAlarm === 'function') {
+        const triggerAtMs = Number(bridge.scheduleTest60sAlarm(prayerName, prayerTime || '')) || 0;
+        return { scheduled: triggerAtMs > 0, triggerAtMs };
+      }
+      console.warn('Failed to schedule 60s test alarm:', error);
+      return { scheduled: false, triggerAtMs: 0 };
+    }
+  }
+
+  async getAlarmKernelDiagnostics(): Promise<AlarmKernelDiagnostics | null> {
+    if (!this.isNative()) return null;
+
+    try {
+      return await NativeAdhanPlugin.getAlarmKernelDiagnostics();
+    } catch (error) {
+      const bridge = typeof window !== 'undefined' ? (window as unknown as { AndroidBridge?: { getAlarmKernelDiagnostics?: () => string } }).AndroidBridge : undefined;
+      if (bridge && typeof bridge.getAlarmKernelDiagnostics === 'function') {
+        try {
+          const parsed = JSON.parse(bridge.getAlarmKernelDiagnostics());
+          return parsed as AlarmKernelDiagnostics;
+        } catch {
+          return null;
+        }
+      }
+      console.warn('Failed to read alarm kernel diagnostics:', error);
+      return null;
+    }
+  }
+
+  async clearTraceLog(): Promise<void> {
+    if (!this.isNative()) return;
+    try {
+      await NativeAdhanPlugin.clearTraceLog();
+    } catch (error) {
+      console.warn('Failed to clear native trace log:', error);
+    }
+  }
 }
 
 export const nativeAdhan = new NativeAdhanBridge();
 
-/**
- * Convenient standalone helper to check and request exact alarms on native.
- */
 export async function checkAndRequestExactAlarms(force: boolean = false): Promise<boolean> {
   return nativeAdhan.ensureExactAlarmPermission(force);
 }
 
-/**
- * Check whether exact alarm permission is granted.
- */
 export async function isExactAlarmPermissionGranted(): Promise<boolean> {
   return nativeAdhan.canScheduleExactAlarms();
 }
 
-/**
- * Open the system "Alarms & reminders" settings directly (no rationale modal).
- * Only call this after the user has already confirmed via showExactAlarmRationale().
- */
 export async function openExactAlarmSettings(): Promise<boolean> {
   return nativeAdhan.openExactAlarmSettings();
 }

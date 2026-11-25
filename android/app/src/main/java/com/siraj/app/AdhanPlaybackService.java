@@ -86,7 +86,7 @@ public class AdhanPlaybackService extends Service {
         boolean maxVolume = intent != null && intent.getBooleanExtra(EXTRA_MAX_VOLUME, false);
 
         int alarmId = intent != null ? intent.getIntExtra(AdhanAlarmReceiver.EXTRA_ALARM_ID, -1) : -1;
-        int notifId = (alarmId == 99999 || alarmId == 9901) ? 9901 : getPrayerNotificationId(prayerName);
+        int notifId = NativeAdhanScheduler.isTestAlarmId(alarmId) ? 9901 : getPrayerNotificationId(prayerName);
         String prayerTime = intent != null ? intent.getStringExtra("prayerTime") : null;
 
         startForeground(notifId, createNotification(prayerName, prayerTime));

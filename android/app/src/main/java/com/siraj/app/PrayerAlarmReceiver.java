@@ -1,14 +1,21 @@
 package com.siraj.app;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.Log;
+
+import androidx.core.app.NotificationCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -21,10 +28,12 @@ import java.util.Locale;
  * PrayerAlarmReceiver — Primary Doze-immune BroadcastReceiver for prayer alarms.
  *
  * Enforces:
- * 1. Brief 10s PowerManager.PARTIAL_WAKE_LOCK ("siraj:prayer_alarm") with strict finally cleanup
- * 2. 20-minute stale alarm cutoff (discards delayed late wakeups silently without posting outdated alerts)
- * 3. Persistent once-per-calendar-day dedup lock ("fired_date_<prayerKey>" = "YYYY-MM-DD")
- * 4. Self-contained native Notification History recording into SharedPreferences
+ * 1. Brief 10s PowerManager.PARTIAL_WAKE_LOCK ("siraj:prayer_alarm") inside try/catch/finally
+ * 2. 20-minute stale alarm cutoff (bypassed for test alarms)
+ * 3. Persistent once-per-calendar-day dedup lock ("fired_date_YYYY-MM-DD_<prayerKey>", bypassed for test alarms)
+ * 4. Channel siraj_prayers_v3 (IMPORTANCE_HIGH, VISIBILITY_PUBLIC) guaranteed before notify(...)
+ * 5. Strictly ONE clean styled notification (single Hadith ref, zero duplicate Siraj • Siraj) + Notification History
+ * 6. Self-chaining failsafe: immediately re-arms next upcoming prayer in AlarmManager.setAlarmClock()
  */
 public class PrayerAlarmReceiver extends BroadcastReceiver {
     private static final String TAG = "PrayerAlarmReceiver";
@@ -37,7 +46,9 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
     public static final String EXTRA_OVERRIDE_SILENT = "overrideSilent";
     public static final String EXTRA_MAX_VOLUME = "maxVolume";
     public static final String EXTRA_EXPECTED_TRIGGER_MS = "expectedTriggerMs";
+    public static final String EXTRA_PLAY_ADHAN_AUDIO = "playAdhanAudio";
 
+    public static final String CHANNEL_ID = "siraj_prayers_v3";
     public static final long STALE_ALARM_CUTOFF_MS = 20L * 60L * 1000L; // 20 minutes
     private static final long WAKE_LOCK_TIMEOUT_MS = 10_000L; // 10 seconds
 
@@ -77,6 +88,36 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
                 }
             }
             sWakeLock = null;
+        }
+    }
+
+    public static void ensurePrayerChannel(Context context) {
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        try {
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager == null) return;
+
+            NotificationChannel existing = manager.getNotificationChannel(CHANNEL_ID);
+            if (existing != null) {
+                return;
+            }
+
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Prayer Notifications",
+                    NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription(
+                    "Authentic prayer time alerts and daily Hadith guidance for all 5 prayers");
+            channel.enableLights(true);
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[] { 0, 250, 150, 250 });
+            channel.setShowBadge(true);
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            manager.createNotificationChannel(channel);
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed ensuring prayer notification channel", t);
         }
     }
 
@@ -134,6 +175,60 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
         }
     }
 
+    private void postStyledPrayerNotification(Context context, int notifId, String prayerName, String prayerTime) {
+        ensurePrayerChannel(context);
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        Intent openIntent = new Intent(context, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                context,
+                notifId,
+                openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        String safeName = (prayerName != null && !prayerName.trim().isEmpty()) ? prayerName.trim() : "Prayer";
+        String normalizedName = safeName.substring(0, 1).toUpperCase(Locale.ROOT)
+                + safeName.substring(1).toLowerCase(Locale.ROOT);
+        String arabic = AdhanPlaybackService.getPrayerArabicName(normalizedName);
+        String displayTime = (prayerTime != null && !prayerTime.trim().isEmpty())
+                ? prayerTime.trim()
+                : new SimpleDateFormat("hh:mm a", Locale.US).format(new Date());
+
+        String title = "🕌 " + normalizedName + " • " + arabic + " (" + displayTime + ")";
+        String subText = "حي على الصلاة • Hayya 'ala-s-Salah";
+        String rakah = AdhanPlaybackService.getPrayerRakahSummary(normalizedName);
+        String hadith = PrayerHadithHelper.getPrayerHadith(context, normalizedName);
+        String bigText = "✨ Hayya 'ala-s-Salah • Hayya 'ala-l-Falah\n"
+                + "📿 Rak'aat: " + rakah + "\n"
+                + hadith;
+
+        Bitmap largeIconBitmap = AdhanPlaybackService.createPrayerEmblemBitmap(normalizedName);
+
+        Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_siraj)
+                .setLargeIcon(largeIconBitmap)
+                .setColor(0xFFD4AF37)
+                .setColorized(true)
+                .setContentTitle(title)
+                .setSubText(subText)
+                .setContentText(rakah + " — Tap to log prayer")
+                .setStyle(new NotificationCompat.BigTextStyle()
+                        .setBigContentTitle(title)
+                        .setSummaryText(subText)
+                        .bigText(bigText))
+                .setContentIntent(contentIntent)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setAutoCancel(true)
+                .addAction(R.drawable.ic_stat_siraj, "✓ Log Prayer", contentIntent)
+                .build();
+
+        nm.notify(notifId, notification);
+    }
+
     @Override
     public void onReceive(Context context, Intent intent) {
         if (context == null || intent == null) {
@@ -145,7 +240,7 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
         }
 
         if (!NativeAdhanScheduler.isEnabled(context)) {
-            Log.d(TAG, "Native adhan playback disabled; skipping trigger");
+            Log.d(TAG, "Native prayer alarms disabled; skipping trigger");
             return;
         }
 
@@ -155,70 +250,96 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
         String adhanUrl = intent.getStringExtra(EXTRA_ADHAN_URL);
         boolean overrideSilent = intent.getBooleanExtra(EXTRA_OVERRIDE_SILENT, false);
         boolean maxVolume = intent.getBooleanExtra(EXTRA_MAX_VOLUME, false);
+        boolean playAdhanAudio = intent.getBooleanExtra(EXTRA_PLAY_ADHAN_AUDIO, true);
         long expectedTriggerMs = intent.getLongExtra(EXTRA_EXPECTED_TRIGGER_MS, -1L);
 
-        String prayerKey = (prayerName != null)
+        String prayerKey = (prayerName != null && !prayerName.trim().isEmpty())
                 ? prayerName.trim().toLowerCase(Locale.ROOT)
                 : "unknown";
-        boolean isTest = (alarmId == 99999 || alarmId == 9901 || "test".equalsIgnoreCase(prayerKey));
+        boolean isTest = NativeAdhanScheduler.isTestAlarmId(alarmId) || "test".equalsIgnoreCase(prayerKey);
+        int notifId = isTest ? 9901 : AdhanPlaybackService.getPrayerNotificationId(prayerName);
 
         acquireWakeLock(context);
         boolean handedOffToForegroundService = false;
 
         try {
             long now = System.currentTimeMillis();
+            NativeAdhanScheduler.logTrace(context,
+                    "FIRED " + prayerName + " (id=" + alarmId + ", test=" + isTest + ")");
 
-            // Always remove this fired alarm entry and verify future schedule
-            if (alarmId > -1) {
+            if (alarmId > -1 && !isTest) {
                 NativeAdhanScheduler.removeAlarm(context, alarmId);
             }
 
-            // 1. 20-Minute Stale Alarm Cutoff Guard (never post outdated prayer alerts)
+            // 1. 20-Minute Stale Alarm Cutoff Guard (bypassed for test alarms)
             if (!isTest && expectedTriggerMs > 0L && (now - expectedTriggerMs) > STALE_ALARM_CUTOFF_MS) {
-                Log.w(TAG, "Discarding stale prayer alarm for " + prayerKey
-                        + " (delayed by " + ((now - expectedTriggerMs) / 60000L) + " min)");
+                long delayMin = (now - expectedTriggerMs) / 60000L;
+                Log.w(TAG, "Discarding stale prayer alarm for " + prayerKey + " (delayed by " + delayMin + " min)");
+                NativeAdhanScheduler.logTrace(context, "STALE_SKIP " + prayerName + " (+" + delayMin + "m)");
                 NativeAdhanScheduler.rescheduleAlarms(context);
                 return;
             }
 
-            // 2. Persistent Once-Per-Calendar-Day Dedup Lock ("fired_date_<prayerKey>" = "YYYY-MM-DD")
+            // 2. Persistent Once-Per-Calendar-Day Dedup Lock ("fired_date_YYYY-MM-DD_<prayerKey>", bypassed for test)
             if (!isTest) {
                 SharedPreferences dedupPrefs = context.getSharedPreferences(DEDUP_PREFS_NAME, Context.MODE_PRIVATE);
                 String todayDateKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(now));
-                String firedDateKey = "fired_date_" + prayerKey;
-                String alreadyFiredDate = dedupPrefs.getString(firedDateKey, "");
-                if (todayDateKey.equals(alreadyFiredDate)) {
-                    Log.d(TAG, "Once-per-day dedup lock blocked duplicate " + prayerKey + " for " + todayDateKey);
+                String firedDateKey = "fired_date_" + todayDateKey + "_" + prayerKey;
+                if (dedupPrefs.getBoolean(firedDateKey, false)) {
+                    Log.d(TAG, "Once-per-day dedup lock blocked duplicate " + firedDateKey);
+                    NativeAdhanScheduler.logTrace(context, "DEDUP_SKIP " + firedDateKey);
+                    NativeAdhanScheduler.rescheduleAlarms(context);
                     return;
                 }
-                dedupPrefs.edit().putString(firedDateKey, todayDateKey).commit();
-
-                // Record background prayer delivery into native Notification History
-                recordNativeDeliveryHistory(context, prayerName, prayerTime, now);
+                dedupPrefs.edit().putBoolean(firedDateKey, true).commit();
             }
+
+            // Record delivery into native Notification History
+            recordNativeDeliveryHistory(context, prayerName, prayerTime, now);
+
+            // Guarantee channel exists before notification delivery
+            ensurePrayerChannel(context);
 
             triggerHapticFeedback(context);
 
-            Intent playbackIntent = new Intent(context, AdhanPlaybackService.class);
-            playbackIntent.setAction(AdhanPlaybackService.ACTION_PLAY);
-            playbackIntent.putExtra(EXTRA_ALARM_ID, alarmId);
-            playbackIntent.putExtra(EXTRA_PRAYER_NAME, prayerName);
-            if (prayerTime != null && !prayerTime.isEmpty()) {
-                playbackIntent.putExtra("prayerTime", prayerTime);
-            }
-            playbackIntent.putExtra(EXTRA_ADHAN_URL, adhanUrl);
-            playbackIntent.putExtra(AdhanPlaybackService.EXTRA_OVERRIDE_SILENT, overrideSilent);
-            playbackIntent.putExtra(AdhanPlaybackService.EXTRA_MAX_VOLUME, maxVolume);
+            if (playAdhanAudio) {
+                Intent playbackIntent = new Intent(context, AdhanPlaybackService.class);
+                playbackIntent.setAction(AdhanPlaybackService.ACTION_PLAY);
+                playbackIntent.putExtra(EXTRA_ALARM_ID, alarmId);
+                playbackIntent.putExtra(EXTRA_PRAYER_NAME, prayerName);
+                if (prayerTime != null && !prayerTime.isEmpty()) {
+                    playbackIntent.putExtra("prayerTime", prayerTime);
+                }
+                playbackIntent.putExtra(EXTRA_ADHAN_URL, adhanUrl);
+                playbackIntent.putExtra(AdhanPlaybackService.EXTRA_OVERRIDE_SILENT, overrideSilent);
+                playbackIntent.putExtra(AdhanPlaybackService.EXTRA_MAX_VOLUME, maxVolume);
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(playbackIntent);
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(playbackIntent);
+                    } else {
+                        context.startService(playbackIntent);
+                    }
+                    handedOffToForegroundService = true;
+                    NativeAdhanScheduler.logTrace(context, "POSTED_FGS " + prayerName + " (notifId=" + notifId + ")");
+                } catch (Throwable fgsError) {
+                    // Android 12+ / OEM background FGS restriction fallback: post styled notification directly!
+                    Log.w(TAG, "startForegroundService failed, posting direct styled notification", fgsError);
+                    postStyledPrayerNotification(context, notifId, prayerName, prayerTime);
+                    NativeAdhanScheduler.logTrace(context, "POSTED_DIRECT_FALLBACK " + prayerName + ": " + fgsError.getClass().getSimpleName());
+                }
             } else {
-                context.startService(playbackIntent);
+                // Audio playback off: post single clean styled OS notification directly
+                postStyledPrayerNotification(context, notifId, prayerName, prayerTime);
+                NativeAdhanScheduler.logTrace(context, "POSTED_DRAWER " + prayerName + " (notifId=" + notifId + ")");
             }
-            handedOffToForegroundService = true;
-            Log.d(TAG, "Started adhan playback service for " + prayerName);
-        } catch (Throwable err) {
-            Log.e(TAG, "Failed handling prayer alarm broadcast", err);
+
+            // 3. Self-Chaining Failsafe: immediately arm next upcoming prayer from SharedPreferences
+            int chained = NativeAdhanScheduler.rescheduleAlarms(context);
+            NativeAdhanScheduler.logTrace(context, "SELF_CHAINED remaining=" + chained);
+        } catch (Throwable t) {
+            Log.e(TAG, "Failed handling prayer alarm broadcast", t);
+            NativeAdhanScheduler.logTrace(context, "ERR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
         } finally {
             if (!handedOffToForegroundService) {
                 releaseWakeLock();

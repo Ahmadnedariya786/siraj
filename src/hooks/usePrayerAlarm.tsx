@@ -148,27 +148,26 @@ export const usePrayerAlarm = () => {
     localStorage.setItem(STORAGE_KEY, 'false');
     const config = adhanService.getAdhanConfig();
     
-    // When master switch is off, also turn off all individual toggles
     const updated = { 
       ...config, 
       enabled: false,
-      fajrEnabled: false,
-      dhuhrEnabled: false,
-      asrEnabled: false,
-      maghribEnabled: false,
-      ishaEnabled: false,
-      jummahEnabled: false
     };
     
     adhanService.saveAdhanConfig(updated);
     setIsEnabled(false);
     dispatchToggleEvent(false);
     window.dispatchEvent(new CustomEvent('adhan-config-changed', { detail: updated }));
-    void nativeAdhan.setEnabled(false);
     stopAdhan();
 
+    // Keep native prayer drawer notifications scheduled (with audio disabled) when notifications are enabled
+    import('@/lib/local-notifications')
+      .then(({ localNotifications }) => localNotifications.schedulePrayerNotificationsFromAPI())
+      .catch((error) => {
+        console.warn('Failed to refresh native notifications after silencing adhan:', error);
+      });
+
     toast.success('Adhan Silence Mode Active', {
-      description: 'Master switch and all individual adhan alerts have been turned OFF.'
+      description: 'Adhan audio alerts turned OFF; OS prayer drawer reminders remain active.'
     });
   }, [stopAdhan]);
 

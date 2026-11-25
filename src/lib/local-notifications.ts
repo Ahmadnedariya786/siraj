@@ -15,6 +15,8 @@ import { getPrayerDisplayName } from './prayer-utils';
 import { calculatePrayerTimes } from './prayer-calculator';
 import { getPrayerHadith, stripTrailingHadithRef } from './prayer-hadith-i18n';
 import { getFallbackLocationByTimezone } from './location-config';
+import { getPrayerMinuteOffsets, applyOffsetsToTimings } from './prayer-offsets';
+import { getMaghribIhtiyatMin } from './prayer-times';
 
 // Task 2: Use SW registration for more robust "Native" notifications
 let swRegistration: ServiceWorkerRegistration | null = null;
@@ -28,7 +30,7 @@ const LOCATION_STORAGE_KEY = 'location-storage';
 const PRAYER_NOTIFICATIONS_ENABLED_KEY = 'prayer-notifications-enabled';
 const PRAYER_ALARM_ENABLED_KEY = 'prayer-alarm-enabled';
 const LAST_SCHEDULE_SIGNATURE_KEY = 'last-prayer-notification-signature';
-const SCHEDULE_WINDOW_DAYS = 2; // 48-hour rolling schedule cap (today + tomorrow)
+const SCHEDULE_WINDOW_DAYS = 7; // 7-day rolling schedule for BootReceiver & self-chaining recovery
 export const MIN_FUTURE_PRAYER_GUARD_MS = 15_000; // Strict > now + 15s guard (no past/retroactive fires)
 
 if (localStorage.getItem(PRAYER_NOTIFICATIONS_ENABLED_KEY) === null) {
@@ -110,6 +112,7 @@ export class LocalNotificationManager {
   private isInitialized: boolean = false;
   private static hasStarted: boolean = false; // Global flag to prevent multiple starts
   private scheduledNotifications: Map<number, ScheduledNotification> = new Map();
+  private scheduleMutex: Promise<void> = Promise.resolve();
 
   constructor() {
     // Check if LocalNotifications plugin is available
@@ -117,6 +120,19 @@ export class LocalNotificationManager {
       console.warn('LocalNotifications plugin not available');
       return;
     }
+  }
+
+  /**
+   * Serialized mutex around all native/local alarm scheduling & clearing operations.
+   * Guarantees concurrent startup, resume, city-change, and settings events NEVER
+   * cancel alarms scheduled by a parallel call.
+   */
+  private runSerializedSchedule(task: () => Promise<void>): Promise<void> {
+    const next = this.scheduleMutex.then(task, task);
+    this.scheduleMutex = next.catch(() => {
+      // Keep mutex chain alive after a handled error
+    });
+    return next;
   }
 
   async checkPermissions(): Promise<boolean> {
@@ -223,111 +239,77 @@ export class LocalNotificationManager {
   }
 
   /**
-   * Schedule prayer time notifications using Aladhan API for accurate times
-   * Only schedules when location is successfully resolved and times have actually changed
+   * Schedule prayer time notifications using Aladhan API + local offsets/method/madhab.
+   * Serialized via scheduleMutex so concurrent events never clobber alarms.
    */
   async schedulePrayerNotificationsFromAPI(): Promise<void> {
-    if (!this.arePrayerNotificationsEnabled()) {
-      return;
-    }
-
-    if (!this.isInitialized) {
-      const initialized = await this.initialize();
-      if (!initialized) return;
-    }
-
-    try {
-      let locationData = { latitude: 23.985, longitude: 72.482, source: 'default' };
-      const storedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
-      if (storedLocation) {
-        try {
-          const parsed = JSON.parse(storedLocation);
-          if (typeof parsed?.latitude === 'number' && typeof parsed?.longitude === 'number') {
-            locationData = parsed;
-          }
-        } catch {
-          // Safe catch
-        }
-      } else {
-        const fallback = getFallbackLocationByTimezone();
-        locationData = { latitude: fallback.latitude, longitude: fallback.longitude, source: 'timezone-fallback' };
-      }
-
-      const now = new Date();
-      const method = 1; // Muslim World League method
-      const adhanPreferenceSignature = localStorage.getItem('adhan-preferences') || 'default';
-      const adhanConfigText = localStorage.getItem('adhan-config') || '{}';
-      const adhanEnabledSignature = this.isPrayerAlarmEnabled() ? 'adhan-on' : 'adhan-off';
-      const signature = [
-        now.toDateString(),
-        locationData.latitude.toFixed(3),
-        locationData.longitude.toFixed(3),
-        locationData.source || 'unknown',
-        `window-${SCHEDULE_WINDOW_DAYS}`,
-        adhanPreferenceSignature,
-        adhanEnabledSignature,
-        adhanConfigText
-      ].join('|');
-
-      const previousSignature = localStorage.getItem(LAST_SCHEDULE_SIGNATURE_KEY);
-      if (previousSignature === signature) {
+    return this.runSerializedSchedule(async () => {
+      if (!this.arePrayerNotificationsEnabled()) {
         return;
       }
 
-      await this.clearPrayerNotifications();
+      if (!this.isInitialized) {
+        const initialized = await this.initialize();
+        if (!initialized) return;
+      }
 
-      const notifications: LocalNotificationSchema[] = [];
-      const nativeAlarms: NativeAdhanAlarm[] = [];
-      const monthsFetched = new Set<string>();
-      const syncTimings: ServiceWorkerPrayerTimings = {};
-
-      for (let dayOffset = 0; dayOffset < SCHEDULE_WINDOW_DAYS; dayOffset += 1) {
-        const targetDate = new Date(now);
-        targetDate.setDate(now.getDate() + dayOffset);
-        targetDate.setHours(0, 0, 0, 0);
-
-        const year = targetDate.getFullYear();
-        const month = targetDate.getMonth() + 1;
-        const monthKey = `${year}-${month}`;
-
-        if (!monthsFetched.has(monthKey)) {
-          await AladhanAPI.fetchMonthlyCalendar(
-            locationData.latitude,
-            locationData.longitude,
-            year,
-            month,
-            method
-          );
-          monthsFetched.add(monthKey);
-        }
-
-        const dayData = AladhanAPI.getPrayerTimesForDate(
-          targetDate,
-          locationData.latitude,
-          locationData.longitude
-        );
-
-        let timings: AladhanPrayerTime;
-        if (dayData && dayData.timings) {
-          timings = dayData.timings;
+      try {
+        let locationData = { latitude: 23.985, longitude: 72.482, source: 'default' };
+        const storedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
+        if (storedLocation) {
+          try {
+            const parsed = JSON.parse(storedLocation);
+            if (typeof parsed?.latitude === 'number' && typeof parsed?.longitude === 'number') {
+              locationData = parsed;
+            }
+          } catch {
+            // Safe catch
+          }
         } else {
-          const localTimes = calculatePrayerTimes(locationData.latitude, locationData.longitude, targetDate);
-          const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-          const formatTime = (d: Date) => (d instanceof Date && !isNaN(d.getTime())) ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : '00:00';
-          timings = {
-            Fajr: formatTime(localTimes.fajr),
-            Sunrise: formatTime(localTimes.sunrise),
-            Dhuhr: formatTime(localTimes.dhuhr),
-            Asr: formatTime(localTimes.asr),
-            Maghrib: formatTime(localTimes.maghrib),
-            Isha: formatTime(localTimes.isha),
-            Imsak: formatTime(localTimes.fajr),
-            Midnight: '00:00',
-            Firstthird: '00:00',
-            Lastthird: '00:00',
-          };
+          const fallback = getFallbackLocationByTimezone();
+          locationData = { latitude: fallback.latitude, longitude: fallback.longitude, source: 'timezone-fallback' };
         }
 
+        const now = new Date();
+        const method = AladhanAPI.getResolvedMethodId();
+        const school = AladhanAPI.getResolvedSchool();
+        const offsets = getPrayerMinuteOffsets();
+        const maghribIhtiyat = getMaghribIhtiyatMin();
+        const adhanPreferenceSignature = localStorage.getItem('adhan-preferences') || 'default';
+        const adhanConfigText = localStorage.getItem('adhan-config') || '{}';
+        const adhanEnabledSignature = this.isPrayerAlarmEnabled() ? 'adhan-on' : 'adhan-off';
+        const signature = [
+          now.toDateString(),
+          locationData.latitude.toFixed(3),
+          locationData.longitude.toFixed(3),
+          locationData.source || 'unknown',
+          `m-${method}-s-${school}-mi-${maghribIhtiyat}`,
+          JSON.stringify(offsets),
+          `window-${SCHEDULE_WINDOW_DAYS}`,
+          adhanPreferenceSignature,
+          adhanEnabledSignature,
+          adhanConfigText
+        ].join('|');
+
+        const previousSignature = localStorage.getItem(LAST_SCHEDULE_SIGNATURE_KEY);
+        if (previousSignature === signature) {
+          if (Capacitor.isNativePlatform()) {
+            const nativeStatus = await nativeAdhan.getStatus();
+            if (nativeStatus.count > 0 && nativeStatus.enabled) {
+              return;
+            }
+          } else {
+            return;
+          }
+        }
+
+        await this.clearPrayerNotificationsInternal(false);
+
+        const notifications: LocalNotificationSchema[] = [];
+        const nativeAlarms: NativeAdhanAlarm[] = [];
+        const monthsFetched = new Set<string>();
+        const syncTimings: ServiceWorkerPrayerTimings = {};
+        const playAdhanAudio = this.isPrayerAlarmEnabled();
         const adhanConfig = adhanService.getAdhanConfig();
         const prayerToggleMap: Record<string, keyof AdhanConfig> = {
           'Fajr': 'fajrEnabled',
@@ -337,284 +319,318 @@ export class LocalNotificationManager {
           'Isha': 'ishaEnabled'
         };
 
-        for (const prayerName of PRAYER_NAMES) {
-          // Check if this prayer is enabled
-          const toggleKey = prayerToggleMap[prayerName];
-          if (toggleKey && !adhanConfig[toggleKey]) {
-            continue;
+        for (let dayOffset = 0; dayOffset < SCHEDULE_WINDOW_DAYS; dayOffset += 1) {
+          const targetDate = new Date(now);
+          targetDate.setDate(now.getDate() + dayOffset);
+          targetDate.setHours(0, 0, 0, 0);
+
+          const year = targetDate.getFullYear();
+          const month = targetDate.getMonth() + 1;
+          const monthKey = `${year}-${month}`;
+
+          if (!monthsFetched.has(monthKey)) {
+            await AladhanAPI.fetchMonthlyCalendar(
+              locationData.latitude,
+              locationData.longitude,
+              year,
+              month,
+              method,
+              school
+            );
+            monthsFetched.add(monthKey);
           }
 
-          const prayerTime = timings[prayerName as keyof AladhanPrayerTime];
-          if (!prayerTime) continue;
-          const cleaned = prayerTime.replace(/\s*\(.*?\)\s*/g, '').trim();
-          const timeMatch = cleaned.match(/^(\d{1,2}):(\d{2})/);
-          if (!timeMatch) continue;
-          const hours = Number(timeMatch[1]);
-          const minutes = Number(timeMatch[2]);
-          if (
-            !Number.isFinite(hours) ||
-            !Number.isFinite(minutes) ||
-            hours < 0 ||
-            hours > 23 ||
-            minutes < 0 ||
-            minutes > 59
-          ) {
-            continue;
-          }
-          // Construct explicit local timezone timestamp (never UTC-shifted)
-          const prayerDate = new Date(
-            targetDate.getFullYear(),
-            targetDate.getMonth(),
-            targetDate.getDate(),
-            hours,
-            minutes,
-            0,
-            0,
+          const dayData = AladhanAPI.getPrayerTimesForDate(
+            targetDate,
+            locationData.latitude,
+            locationData.longitude,
+            school
           );
 
-          // Strict Future-Only Guard: triggerAtMs > now + 15000ms
-          if (prayerDate.getTime() <= now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
-            continue;
+          let rawTimings: AladhanPrayerTime;
+          if (dayData && dayData.timings) {
+            rawTimings = dayData.timings;
+          } else {
+            const localTimes = calculatePrayerTimes(locationData.latitude, locationData.longitude, targetDate);
+            const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+            const formatTime = (d: Date) => (d instanceof Date && !isNaN(d.getTime())) ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : '00:00';
+            rawTimings = {
+              Fajr: formatTime(localTimes.fajr),
+              Sunrise: formatTime(localTimes.sunrise),
+              Dhuhr: formatTime(localTimes.dhuhr),
+              Asr: formatTime(localTimes.asr),
+              Maghrib: formatTime(localTimes.maghrib),
+              Isha: formatTime(localTimes.isha),
+              Imsak: formatTime(localTimes.fajr),
+              Midnight: '00:00',
+              Firstthird: '00:00',
+              Lastthird: '00:00',
+            };
           }
 
-          const notificationId = this.getNotificationId(prayerName, prayerDate);
-          const hadithData = getPrayerHadith(prayerName);
-          const time12h = format12HourTime(cleaned);
-          const cleanTranslation = stripTrailingHadithRef(hadithData.translation, hadithData.reference);
-          const title = `🕌 ${prayerName} • ${time12h}`;
-          const body = `${hadithData.arabic} — ${cleanTranslation} (${hadithData.reference})`;
-          const largeBody = `Hayya 'alas-Salah — Time for ${prayerName}\n${hadithData.arabic}\n${cleanTranslation}\n— ${hadithData.reference} • ${hadithData.rakah}`;
+          const timings = applyOffsetsToTimings(rawTimings, offsets);
 
-          const notification: LocalNotificationSchema = {
-            id: notificationId,
-            title,
-            body,
-            largeBody,
-            summaryText: `${prayerName} Prayer • Siraj`,
-            channelId: 'siraj_prayers_v3',
-            schedule: {
-              at: prayerDate,
-              allowWhileIdle: true,
-              repeats: false,
-            },
-            sound: 'default',
-            smallIcon: 'ic_stat_siraj',
-            largeIcon: 'ic_launcher',
-            iconColor: '#D4AF37',
-            extra: {
+          for (const prayerName of PRAYER_NAMES) {
+            const toggleKey = prayerToggleMap[prayerName];
+            if (toggleKey && adhanConfig[toggleKey] === false) {
+              continue;
+            }
+
+            const prayerTime = timings[prayerName as keyof AladhanPrayerTime];
+            if (!prayerTime) continue;
+            const cleaned = prayerTime.replace(/\s*\(.*?\)\s*/g, '').trim();
+            const timeMatch = cleaned.match(/^(\d{1,2}):(\d{2})/);
+            if (!timeMatch) continue;
+            const hours = Number(timeMatch[1]);
+            const minutes = Number(timeMatch[2]);
+            if (
+              !Number.isFinite(hours) ||
+              !Number.isFinite(minutes) ||
+              hours < 0 ||
+              hours > 23 ||
+              minutes < 0 ||
+              minutes > 59
+            ) {
+              continue;
+            }
+
+            // Construct explicit local timezone epoch timestamp (never UTC-shifted)
+            const prayerDate = new Date(
+              targetDate.getFullYear(),
+              targetDate.getMonth(),
+              targetDate.getDate(),
+              hours,
+              minutes,
+              0,
+              0,
+            );
+
+            // Strict Future-Only Guard: triggerAtMs > now + 15000ms
+            if (prayerDate.getTime() <= now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
+              continue;
+            }
+
+            const notificationId = this.getNotificationId(prayerName, prayerDate, dayOffset);
+            const hadithData = getPrayerHadith(prayerName);
+            const time12h = format12HourTime(cleaned);
+            const cleanTranslation = stripTrailingHadithRef(hadithData.translation, hadithData.reference);
+            const title = `🕌 ${prayerName} • ${time12h}`;
+            const body = `${hadithData.arabic} — ${cleanTranslation} (${hadithData.reference})`;
+            const largeBody = `Hayya 'alas-Salah — Time for ${prayerName}\n${hadithData.arabic}\n${cleanTranslation}\n— ${hadithData.reference} • ${hadithData.rakah}`;
+
+            const notification: LocalNotificationSchema = {
+              id: notificationId,
+              title,
+              body,
+              largeBody,
+              summaryText: `${prayerName} Prayer • Siraj`,
+              channelId: 'siraj_prayers_v3',
+              schedule: {
+                at: prayerDate,
+                allowWhileIdle: true,
+                repeats: false,
+              },
+              sound: 'default',
+              smallIcon: 'ic_stat_siraj',
+              largeIcon: 'ic_launcher',
+              iconColor: '#D4AF37',
+              extra: {
+                prayerName,
+                prayerKey: prayerName.toLowerCase(),
+                prayerTime: cleaned,
+                time12h,
+                type: 'prayer_reminder',
+                location: locationData,
+                scheduledDate: targetDate.toISOString(),
+              },
+            };
+
+            notifications.push(notification);
+            this.scheduledNotifications.set(notificationId, {
+              id: notificationId,
+              title,
+              body,
+              scheduleTime: prayerDate,
               prayerName,
-              prayerKey: prayerName.toLowerCase(),
-              prayerTime: cleaned,
-              time12h,
-              type: 'prayer_reminder',
-              location: locationData,
-              scheduledDate: targetDate.toISOString(),
-            },
-          };
+            });
 
-          notifications.push(notification);
-          this.scheduledNotifications.set(notificationId, {
-            id: notificationId,
-            title,
-            body,
-            scheduleTime: prayerDate,
-            prayerName,
-          });
+            nativeAlarms.push({
+              id: notificationId,
+              triggerAt: prayerDate.getTime(),
+              prayerName,
+              prayerTime: time12h,
+              adhanUrl: await getAdhanUrlForPrayer(prayerName as PrayerName),
+              overrideSilent: adhanConfig.overrideSilentMode,
+              maxVolume: adhanConfig.playAtMaxVolume,
+              playAdhanAudio,
+            });
 
-          const validPrayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
-
-          if (!validPrayerNames.includes(prayerName as typeof validPrayerNames[number])) {
-            console.warn(`Invalid prayer name "${prayerName}", skipping native alarm`);
-            continue;
-          }
-
-          nativeAlarms.push({
-            id: notificationId,
-            triggerAt: prayerDate.getTime(),
-            prayerName,
-            prayerTime: time12h,
-            adhanUrl: await getAdhanUrlForPrayer(prayerName as PrayerName),
-            overrideSilent: adhanService.getAdhanConfig().overrideSilentMode,
-            maxVolume: adhanService.getAdhanConfig().playAtMaxVolume,
-          });
-
-          if (dayOffset === 0) {
-            syncTimings[prayerName.toLowerCase()] = { time: cleaned };
+            if (dayOffset === 0) {
+              syncTimings[prayerName.toLowerCase()] = { time: cleaned };
+            }
           }
         }
-      }
 
-      if (Capacitor.isNativePlatform()) {
-        // Native Android Single-Pipeline: NativeAdhanScheduler is the sole scheduler for Fard prayers.
-        // Wipe all legacy/stale Capacitor prayer notifications to eliminate duplicate firing & 146 alarm spam.
-        await this.clearPrayerNotifications(false);
-
-        if (this.isPrayerAlarmEnabled() && nativeAlarms.length > 0) {
-          try {
-            await nativeAdhan.schedule(nativeAlarms, true);
-          } catch (error) {
-            console.warn('Failed to schedule native adhan alarms:', error);
+        if (Capacitor.isNativePlatform()) {
+          // Native Android Single-Pipeline: NativeAdhanScheduler (AlarmManager.setAlarmClock) is the sole
+          // authoritative scheduler for all Fard prayers (both OS drawer alerts & Adhan audio).
+          if (nativeAlarms.length > 0) {
+            try {
+              await nativeAdhan.schedule(nativeAlarms, true);
+              localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
+            } catch (error) {
+              console.warn('Failed to schedule native adhan alarms:', error);
+            }
+          } else {
+            await nativeAdhan.clear();
+            localStorage.removeItem(LAST_SCHEDULE_SIGNATURE_KEY);
           }
-        } else {
-          await nativeAdhan.clear();
-        }
 
-        localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
-
-        if (Object.keys(syncTimings).length > 0) {
-          this.syncWithServiceWorker(syncTimings);
-        }
-      } else {
-        // Web / browser platform:
-        if (notifications.length > 0) {
-          await LocalNotifications.schedule({
-            notifications
-          });
-          localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
           if (Object.keys(syncTimings).length > 0) {
             this.syncWithServiceWorker(syncTimings);
           }
         } else {
-          localStorage.removeItem(LAST_SCHEDULE_SIGNATURE_KEY);
+          // Web / browser platform:
+          if (notifications.length > 0) {
+            await LocalNotifications.schedule({
+              notifications
+            });
+            localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
+            if (Object.keys(syncTimings).length > 0) {
+              this.syncWithServiceWorker(syncTimings);
+            }
+          } else {
+            localStorage.removeItem(LAST_SCHEDULE_SIGNATURE_KEY);
+          }
         }
+      } catch (err) {
+        console.warn('[LocalNotifications] schedulePrayerNotificationsFromAPI error:', err);
       }
-    } catch {
-      // Handled non-critical error during prayer notification scheduling from API
-    }
+    });
   }
   async schedulePrayerNotifications(prayerTimes: PrayerTime[]): Promise<void> {
-    if (!this.arePrayerNotificationsEnabled()) {
-      return;
-    }
-
-    if (!this.isInitialized) {
-      const initialized = await this.initialize();
-      if (!initialized) return;
-    }
-
-    try {
-      // Clear existing prayer notifications
-      await this.clearPrayerNotifications();
-
-      const now = new Date();
-      const notifications: LocalNotificationSchema[] = [];
-
-      const adhanConfig = adhanService.getAdhanConfig();
-      const prayerToggleMap: Record<string, keyof AdhanConfig> = {
-        'Fajr': 'fajrEnabled',
-        'Dhuhr': 'dhuhrEnabled',
-        'Asr': 'asrEnabled',
-        'Maghrib': 'maghribEnabled',
-        'Isha': 'ishaEnabled'
-      };
-
-      for (const prayer of prayerTimes) {
-        // Only schedule future prayers for today if enabled in settings
-        const toggleKey = prayerToggleMap[prayer.name];
-        if (toggleKey && !adhanConfig[toggleKey]) continue;
-
-        // Strict Future-Only Guard: triggerAtMs > now + 15000ms
-        if (prayer.date.getTime() > now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
-          const notificationId = this.getNotificationId(prayer.name, prayer.date);
-
-          const displayName = getPrayerDisplayName(prayer.name, prayer.date);
-          const message = getPrayerNotificationMessage(prayer.name, prayer.time, prayer.date);
-          const notification = {
-            id: notificationId,
-            title: message.title,
-            body: message.body,
-            schedule: {
-              at: prayer.date,
-              allowWhileIdle: true, // Wake up device
-              repeats: false,
-            },
-            sound: 'default',
-            smallIcon: 'ic_stat_siraj',
-            largeIcon: 'ic_launcher',
-            iconColor: '#D4AF37',
-            extra: {
-              prayerName: displayName,
-              originalPrayerName: prayer.name,
-              prayerTime: prayer.time,
-              type: 'prayer_reminder'
-            }
-          };
-
-          notifications.push(notification);
-
-          // Store for tracking
-          this.scheduledNotifications.set(notificationId, {
-            id: notificationId,
-            title: notification.title,
-            body: notification.body,
-            scheduleTime: prayer.date,
-            prayerName: prayer.name
-          });
-        }
+    return this.runSerializedSchedule(async () => {
+      if (!this.arePrayerNotificationsEnabled()) {
+        return;
       }
 
-      if (Capacitor.isNativePlatform()) {
-        // Native Android Single-Pipeline: NativeAdhanScheduler is the sole scheduler for Fard prayers.
-        // Wipe all legacy/stale Capacitor prayer notifications to eliminate duplicate firing & 146 alarm spam.
-        await this.clearPrayerNotifications(false);
+      if (!this.isInitialized) {
+        const initialized = await this.initialize();
+        if (!initialized) return;
+      }
 
-        const nativeAlarms: NativeAdhanAlarm[] = [];
+      try {
+        await this.clearPrayerNotificationsInternal(false);
+
+        const now = new Date();
+        const notifications: LocalNotificationSchema[] = [];
+        const playAdhanAudio = this.isPrayerAlarmEnabled();
+        const adhanConfig = adhanService.getAdhanConfig();
+        const prayerToggleMap: Record<string, keyof AdhanConfig> = {
+          'Fajr': 'fajrEnabled',
+          'Dhuhr': 'dhuhrEnabled',
+          'Asr': 'asrEnabled',
+          'Maghrib': 'maghribEnabled',
+          'Isha': 'ishaEnabled'
+        };
+
         for (const prayer of prayerTimes) {
-          const key = prayerToggleMap[prayer.name];
-          if (key && !adhanConfig[key]) continue;
+          const toggleKey = prayerToggleMap[prayer.name];
+          if (toggleKey && adhanConfig[toggleKey] === false) continue;
 
           if (prayer.date.getTime() > now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
-            const validPrayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
-            if (!validPrayerNames.includes(prayer.name as typeof validPrayerNames[number])) {
-              console.warn(`Invalid prayer name "${prayer.name}", skipping native alarm`);
-              continue;
-            }
+            const notificationId = this.getNotificationId(prayer.name, prayer.date, 0);
+            const displayName = getPrayerDisplayName(prayer.name, prayer.date);
+            const message = getPrayerNotificationMessage(prayer.name, prayer.time, prayer.date);
+            const notification = {
+              id: notificationId,
+              title: message.title,
+              body: message.body,
+              schedule: {
+                at: prayer.date,
+                allowWhileIdle: true,
+                repeats: false,
+              },
+              sound: 'default',
+              smallIcon: 'ic_stat_siraj',
+              largeIcon: 'ic_launcher',
+              iconColor: '#D4AF37',
+              extra: {
+                prayerName: displayName,
+                originalPrayerName: prayer.name,
+                prayerTime: prayer.time,
+                type: 'prayer_reminder'
+              }
+            };
 
-            nativeAlarms.push({
-              id: this.getNotificationId(prayer.name, prayer.date),
-              triggerAt: prayer.date.getTime(),
-              prayerName: prayer.name,
-              prayerTime: format12HourTime(prayer.time),
-              adhanUrl: await getAdhanUrlForPrayer(prayer.name as PrayerName),
-              overrideSilent: adhanService.getAdhanConfig().overrideSilentMode,
-              maxVolume: adhanService.getAdhanConfig().playAtMaxVolume,
+            notifications.push(notification);
+            this.scheduledNotifications.set(notificationId, {
+              id: notificationId,
+              title: notification.title,
+              body: notification.body,
+              scheduleTime: prayer.date,
+              prayerName: prayer.name
             });
           }
         }
 
-        if (this.isPrayerAlarmEnabled() && nativeAlarms.length > 0) {
-          try {
-            await nativeAdhan.schedule(nativeAlarms, true);
-          } catch (error) {
-            console.warn('Failed to schedule native adhan alarms:', error);
-          }
-        } else {
-          await nativeAdhan.clear();
-        }
+        if (Capacitor.isNativePlatform()) {
+          const nativeAlarms: NativeAdhanAlarm[] = [];
+          for (const prayer of prayerTimes) {
+            const key = prayerToggleMap[prayer.name];
+            if (key && adhanConfig[key] === false) continue;
 
-        // Sync with Service Worker
-        const swTimings: Record<string, { time: string }> = {};
-        for (const p of prayerTimes) {
-          swTimings[p.name.toLowerCase()] = { time: p.time };
-        }
-        this.syncWithServiceWorker(swTimings);
-      } else {
-        // Web / browser platform:
-        if (notifications.length > 0) {
-          await LocalNotifications.schedule({
-            notifications
-          });
+            if (prayer.date.getTime() > now.getTime() + MIN_FUTURE_PRAYER_GUARD_MS) {
+              const validPrayerNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
+              if (!validPrayerNames.includes(prayer.name as typeof validPrayerNames[number])) {
+                continue;
+              }
+
+              nativeAlarms.push({
+                id: this.getNotificationId(prayer.name, prayer.date, 0),
+                triggerAt: prayer.date.getTime(),
+                prayerName: prayer.name,
+                prayerTime: format12HourTime(prayer.time),
+                adhanUrl: await getAdhanUrlForPrayer(prayer.name as PrayerName),
+                overrideSilent: adhanConfig.overrideSilentMode,
+                maxVolume: adhanConfig.playAtMaxVolume,
+                playAdhanAudio,
+              });
+            }
+          }
+
+          if (nativeAlarms.length > 0) {
+            try {
+              await nativeAdhan.schedule(nativeAlarms, true);
+            } catch (error) {
+              console.warn('Failed to schedule native adhan alarms:', error);
+            }
+          } else {
+            await nativeAdhan.clear();
+          }
 
           const swTimings: Record<string, { time: string }> = {};
           for (const p of prayerTimes) {
             swTimings[p.name.toLowerCase()] = { time: p.time };
           }
           this.syncWithServiceWorker(swTimings);
+        } else {
+          if (notifications.length > 0) {
+            await LocalNotifications.schedule({
+              notifications
+            });
+
+            const swTimings: Record<string, { time: string }> = {};
+            for (const p of prayerTimes) {
+              swTimings[p.name.toLowerCase()] = { time: p.time };
+            }
+            this.syncWithServiceWorker(swTimings);
+          }
         }
+      } catch (err) {
+        console.warn('[LocalNotifications] schedulePrayerNotifications error:', err);
       }
-    } catch {
-      // Handled non-critical error during prayer notifications scheduling
-    }
+    });
   }
 
   /**
@@ -679,9 +695,10 @@ export class LocalNotificationManager {
   }
 
   /**
-   * Get notification ID for a prayer
+   * Deterministic requestCode per (dayOffset, prayerIndex):
+   * 4101..4105 today, 4201..4205 tomorrow, ..., 4701..4705 day +6.
    */
-  private getNotificationId(prayerName: string, prayerDate?: Date): number {
+  private getNotificationId(prayerName: string, prayerDate?: Date, dayOffset?: number): number {
     const prayerIndex: Record<string, number> = {
       Fajr: 1,
       Dhuhr: 2,
@@ -690,24 +707,30 @@ export class LocalNotificationManager {
       Isha: 5,
     };
 
+    const index = prayerIndex[prayerName] || 9;
+    if (typeof dayOffset === 'number' && dayOffset >= 0 && dayOffset < 30) {
+      return 4000 + (dayOffset + 1) * 100 + index;
+    }
+
     if (prayerDate) {
       const year = prayerDate.getFullYear();
       const month = String(prayerDate.getMonth() + 1).padStart(2, '0');
       const day = String(prayerDate.getDate()).padStart(2, '0');
       const dateNumber = parseInt(`${year}${month}${day}`, 10);
-      const index = prayerIndex[prayerName] || 9;
-      // Use modulo to keep IDs within 32-bit integer range (max 2,147,483,647)
-      // This prevents overflow on Android PendingIntent IDs
       return (dateNumber % 100000) * 10 + index;
     }
 
-    return 1000 + (prayerIndex[prayerName] || 9);
+    return 4100 + index;
   }
 
   /**
-   * Clear all prayer notifications
+   * Clear all prayer notifications (public serialized entry point)
    */
   async clearPrayerNotifications(clearNative: boolean = true): Promise<void> {
+    return this.runSerializedSchedule(() => this.clearPrayerNotificationsInternal(clearNative));
+  }
+
+  private async clearPrayerNotificationsInternal(clearNative: boolean): Promise<void> {
     try {
       const pending = await LocalNotifications.getPending();
       const prayerNotificationIds = pending.notifications
@@ -1013,4 +1036,9 @@ if (typeof window !== 'undefined' && !window.__noorConnectAdhanPrefsListenerAtta
 
   window.addEventListener('adhan-preferences-changed', handleReschedule);
   window.addEventListener('adhan-config-changed', handleReschedule);
+  window.addEventListener('prayer-method-changed', handleReschedule);
+  window.addEventListener('madhab-changed', handleReschedule);
+  window.addEventListener('prayer-minute-offsets-changed', handleReschedule);
+  window.addEventListener('prayer-offsets-changed', handleReschedule);
+  window.addEventListener('maghrib-ihtiyat-changed', handleReschedule);
 }

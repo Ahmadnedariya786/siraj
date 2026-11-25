@@ -887,33 +887,53 @@ public class MainActivity extends BridgeActivity {
 
                     @android.webkit.JavascriptInterface
                     public void scheduleTest5sAlarm(final String prayerName, final String prayerTime12h) {
+                        scheduleTest60sAlarm(prayerName, prayerTime12h);
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public long scheduleTest60sAlarm(final String prayerName, final String prayerTime12h) {
                         try {
-                            final String pName = (prayerName != null && !prayerName.trim().isEmpty()) ? prayerName : "Fajr";
-                            final long triggerMs = System.currentTimeMillis() + 5000L;
-                            final String resolvedTime = (prayerTime12h != null && !prayerTime12h.trim().isEmpty())
-                                    ? prayerTime12h.trim()
-                                    : new java.text.SimpleDateFormat("hh:mm a", java.util.Locale.US).format(new java.util.Date(triggerMs));
-                            NativeAdhanScheduler.setEnabled(MainActivity.this, true);
-                            NativeAdhanScheduler.removeAlarm(MainActivity.this, 9901);
-                            NativeAdhanScheduler.removeAlarm(MainActivity.this, 99999);
-                            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                            if (nm != null) {
-                                nm.cancel(9901);
-                                nm.cancel(99999);
-                            }
-                            NativeAdhanScheduler.ScheduledAdhan testAlarm = new NativeAdhanScheduler.ScheduledAdhan(
-                                    9901,
-                                    triggerMs,
-                                    pName,
-                                    resolvedTime,
-                                    "/audio/adhan-makkah.mp3",
-                                    false,
-                                    false
+                            long triggerMs = NativeAdhanScheduler.scheduleTest60sAlarm(
+                                    MainActivity.this,
+                                    prayerName,
+                                    prayerTime12h,
+                                    true
                             );
-                            NativeAdhanScheduler.scheduleAlarm(MainActivity.this, testAlarm, false);
-                            Log.i(TAG, "Scheduled 5-second test alarm for prayer: " + pName + " (" + resolvedTime + ", ID 9901)");
+                            Log.i(TAG, "Scheduled 60-second OS AlarmClock test for: " + prayerName + " at " + triggerMs);
+                            return triggerMs;
                         } catch (Throwable t) {
-                            Log.w(TAG, "Failed to schedule 5s test alarm", t);
+                            Log.w(TAG, "Failed to schedule 60s test alarm", t);
+                            return 0L;
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public String getAlarmKernelDiagnostics() {
+                        try {
+                            return NativeAdhanScheduler.getAlarmKernelDiagnostics(MainActivity.this).toString();
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to read alarm kernel diagnostics", t);
+                            return "{}";
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public String getOemGuidance() {
+                        try {
+                            return BatteryOptimizationPlugin.getOemGuidanceJson(MainActivity.this).toString();
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to read OEM guidance", t);
+                            return "{}";
+                        }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public boolean openOemBackgroundSettings(final String mode) {
+                        try {
+                            return BatteryOptimizationPlugin.openOemBackgroundSettings(MainActivity.this, mode);
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Failed to open OEM background settings", t);
+                            return false;
                         }
                     }
 

@@ -112,6 +112,8 @@ import {
 import { adhanService } from '@/lib/adhan-service';
 import { localNotifications, PRAYER_RAKAH_BREAKDOWN } from '@/lib/local-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { nativeAdhan, type AlarmKernelDiagnostics } from '@/lib/native-adhan';
+import BatteryOptimization, { type OemGuidance } from '@/lib/battery-optimization';
 import { NoorDynamicLogo, NoorLogoVisualPicker, cycleLogoEdition, getSelectedLogoEdition, setSelectedLogoEdition, NOOR_LOGO_EDITIONS, LOGO_EDITION_CHANGE_EVENT, LOGO_EDITION_CHANGED_EVENT } from '@/components/NoorDynamicLogo';
 import { OwnerSecurityModal } from '@/components/OwnerSecurityModal';
 import { OwnerSecurityVaultCard } from '@/components/OwnerSecurityVaultCard';
@@ -642,7 +644,7 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
   return { name: 'Dhuhr', time: '12:30 PM' };
 }
 
-  // Real-Time OS Notification Diagnostics & Testers
+  // Real-Time OS Notification & Kernel Alarm Diagnostics
   const [osNotificationStatus, setOsNotificationStatus] = useState<{
     notifications: boolean | null;
     exactAlarm: boolean | null;
@@ -652,6 +654,9 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
     exactAlarm: null,
     pendingCount: 0,
   });
+  const [kernelDiag, setKernelDiag] = useState<AlarmKernelDiagnostics | null>(null);
+  const [oemGuidance, setOemGuidance] = useState<OemGuidance | null>(null);
+  const [showNativeTraceLog, setShowNativeTraceLog] = useState(false);
   const [isTestingDrawer, setIsTestingDrawer] = useState(false);
   const [alarmCountdown, setAlarmCountdown] = useState<number | null>(null);
 
@@ -660,23 +665,39 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
     let exactAllowed: boolean | null = null;
     let count = 0;
 
+    if (Capacitor.isNativePlatform()) {
+      const [kDiag, oem] = await Promise.all([
+        nativeAdhan.getAlarmKernelDiagnostics().catch(() => null),
+        BatteryOptimization.getOemGuidance().catch(() => null),
+      ]);
+      if (kDiag) {
+        setKernelDiag(kDiag);
+        notifAllowed = kDiag.notificationsEnabled;
+        exactAllowed = kDiag.canScheduleExactAlarms;
+        count = kDiag.scheduledCount;
+      }
+      if (oem) {
+        setOemGuidance(oem);
+      }
+    }
+
     const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : undefined;
     if (bridge) {
-      if (typeof bridge.areNotificationsEnabled === 'function') {
+      if (notifAllowed === null && typeof bridge.areNotificationsEnabled === 'function') {
         try {
           notifAllowed = bridge.areNotificationsEnabled();
         } catch (err) {
           console.debug('[OSNotif] bridge areNotificationsEnabled failed:', err);
         }
       }
-      if (typeof bridge.canScheduleExactAlarms === 'function') {
+      if (exactAllowed === null && typeof bridge.canScheduleExactAlarms === 'function') {
         try {
           exactAllowed = bridge.canScheduleExactAlarms();
         } catch (err) {
           console.debug('[OSNotif] bridge canScheduleExactAlarms failed:', err);
         }
       }
-      if (typeof bridge.getNativeScheduledAlarmCount === 'function') {
+      if (count === 0 && typeof bridge.getNativeScheduledAlarmCount === 'function') {
         try {
           const nativeCount = Number(bridge.getNativeScheduledAlarmCount());
           if (!isNaN(nativeCount) && nativeCount >= 0) {
@@ -790,24 +811,25 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
     });
   };
 
-  const handleTest5sAlarm = async () => {
+  const handleTest60sAlarm = async () => {
     const { name: pName, time: pTime } = getNextUpcomingPrayerInfo();
     const hadith = getPrayerHadith(pName, hadithLang);
     const cleanRef = stripTrailingHadithRef(hadith.translation, hadith.reference);
     const rakah = PRAYER_RAKAH_BREAKDOWN[pName] || '2 Sunnah • 2 Fardh';
 
-    setAlarmCountdown(5);
+    setAlarmCountdown(60);
 
-    // Single-Pipeline: on native Android use AndroidBridge exclusively (no duplicate LocalNotifications!)
-    const bridge = typeof window !== 'undefined' ? (window as any).AndroidBridge : undefined;
-    if (bridge && typeof bridge.scheduleTest5sAlarm === 'function') {
+    // 100% identical AlarmManager.setAlarmClock() -> PrayerAlarmReceiver path for now + 60_000ms
+    if (Capacitor.isNativePlatform()) {
       try {
-        bridge.scheduleTest5sAlarm(pName, pTime);
+        await nativeAdhan.scheduleTest60sAlarm(pName, pTime, true);
+        setTimeout(() => {
+          refreshOsNotificationStatus();
+        }, 300);
       } catch (err) {
-        console.warn('Bridge scheduleTest5sAlarm failed:', err);
+        console.warn('Native scheduleTest60sAlarm failed:', err);
       }
     } else {
-      // Web / Non-Bridge Fallback: Capacitor LocalNotifications (no [Alarm Clock] debug tag!)
       try {
         await localNotifications.ensureHadithChannel();
         await LocalNotifications.schedule({
@@ -819,7 +841,7 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
               largeBody: `Hayya 'alas-Salah — Time for ${pName}\n📿 ${rakah}\n${hadith.arabic}\n${cleanRef}\n— ${hadith.reference}`,
               summaryText: `${pName} Prayer • Siraj`,
               channelId: 'siraj_prayers_v3',
-              schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true },
+              schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true },
               sound: 'default',
               smallIcon: 'ic_stat_siraj',
               iconColor: '#D4AF37',
@@ -827,28 +849,11 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
           ],
         });
       } catch (err) {
-        console.warn('LocalNotifications 5s alarm schedule failed:', err);
+        console.warn('LocalNotifications 60s alarm schedule failed:', err);
       }
     }
 
-    // Log to Notification History
-    try {
-      const raw = localStorage.getItem('notification-history');
-      const list = raw ? JSON.parse(raw) : [];
-      list.unshift({
-        type: 'prayer',
-        title: `🕌 ${pName} Prayer • ${pTime}`,
-        body: `${hadith.arabic} — ${cleanRef} (${hadith.reference})`,
-        timestamp: Date.now() + 5000,
-      });
-      if (list.length > 50) list.splice(50);
-      localStorage.setItem('notification-history', JSON.stringify(list));
-      window.dispatchEvent(new CustomEvent('notificationHistoryUpdate', { detail: list }));
-    } catch (err) {
-      console.debug('[OSNotif] Log notification history failed:', err);
-    }
-
-    let rem = 5;
+    let rem = 60;
     const interval = setInterval(() => {
       rem -= 1;
       if (rem <= 0) {
@@ -861,8 +866,8 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
     }, 1000);
 
     toast({
-      title: '⏰ 5s OS Alarm Scheduled!',
-      description: 'Lock phone NOW to test lock-screen notification & alarm delivery.',
+      title: '⏰ 60s OS Alarm Scheduled!',
+      description: 'Close app or lock phone NOW — real PrayerAlarmReceiver wakes in 60s.',
     });
   };
 
@@ -1613,37 +1618,102 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
         {/* NOTIFICATIONS SECTION */}
         {sectionId === 'notifications' && (
           <div className="space-y-4">
-            {/* Real-time OS Notification Diagnostic Strip & Quick Testers */}
+            {/* Live OS Alarm Status Card & Kernel Inspector */}
             <Card
-              className="p-4 space-y-3.5 rounded-2xl border"
+              className="p-4 space-y-3 rounded-2xl border overflow-hidden"
               style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
             >
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="min-w-0 flex-1">
                   <Label className="text-xs font-bold uppercase tracking-wider text-[var(--accent-text)] flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4" />
-                    Android OS Drawer Status
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
+                    <span>OS Alarm Status</span>
                   </Label>
-                  <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                    Live system notification delivery & exact alarm status
+                  <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-snug">
+                    Live OS kernel alarm clock, battery sleep &amp; drawer status
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={refreshOsNotificationStatus}
                   title="Refresh status"
-                  className="p-1.5 rounded-lg border text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all"
+                  className="p-1.5 rounded-lg border text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all shrink-0"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
 
+              {/* Live OS Kernel Next + Battery Mode Rows */}
+              <div
+                className="p-2.5 rounded-xl border space-y-2"
+                style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                    OS Kernel Next:
+                  </span>
+                  <span
+                    className={`text-xs font-mono font-bold ${
+                      kernelDiag && kernelDiag.osNextAlarmClock !== 'NONE'
+                        ? 'text-emerald-400'
+                        : Capacitor.isNativePlatform()
+                        ? 'text-rose-400'
+                        : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    {Capacitor.isNativePlatform()
+                      ? kernelDiag?.osNextAlarmClock || 'NONE'
+                      : 'Web Mode'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-1.5 border-t border-[var(--border)]">
+                  <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                    Battery Mode:
+                  </span>
+                  {!Capacitor.isNativePlatform() || kernelDiag?.batteryUnrestricted !== false ? (
+                    <span className="text-xs font-bold text-emerald-400">
+                      Unrestricted ✓
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        BatteryOptimization.openOemBackgroundSettings({ mode: 'battery' }).catch(() => {});
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/40 active:scale-95 transition-all"
+                    >
+                      Fix Battery Sleep →
+                    </button>
+                  )}
+                </div>
+
+                {Capacitor.isNativePlatform() && oemGuidance?.tip && (
+                  <div className="pt-1.5 border-t border-[var(--border)] space-y-1.5">
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
+                      <span className="font-semibold text-[var(--text-primary)]">
+                        {oemGuidance.manufacturer}:
+                      </span>{' '}
+                      {oemGuidance.tip}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        BatteryOptimization.openOemBackgroundSettings({ mode: 'autostart' }).catch(() => {});
+                      }}
+                      className="text-[11px] font-bold text-[var(--accent-text)] underline text-left"
+                    >
+                      Auto-Start / OEM Sleep Settings →
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* 3 Metric Pills */}
               <div className="grid grid-cols-3 gap-2">
-                {/* OS Notification Status */}
                 <div
-                  className="p-2.5 rounded-xl border flex flex-col justify-between"
+                  className="p-2.5 rounded-xl border flex flex-col justify-between min-w-0"
                   style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
                 >
                   <span className="text-[10px] text-[var(--text-secondary)] font-medium">OS Drawer</span>
@@ -1653,7 +1723,7 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                         osNotificationStatus.notifications ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'
                       }`}
                     />
-                    <span className="text-xs font-bold truncate">
+                    <span className="text-xs font-bold">
                       {osNotificationStatus.notifications ? 'Allowed' : 'Blocked'}
                     </span>
                   </div>
@@ -1668,9 +1738,8 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                   )}
                 </div>
 
-                {/* Exact Alarm Status */}
                 <div
-                  className="p-2.5 rounded-xl border flex flex-col justify-between"
+                  className="p-2.5 rounded-xl border flex flex-col justify-between min-w-0"
                   style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
                 >
                   <span className="text-[10px] text-[var(--text-secondary)] font-medium">Exact Alarms</span>
@@ -1680,7 +1749,7 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                         osNotificationStatus.exactAlarm ? 'bg-emerald-500' : 'bg-amber-500'
                       }`}
                     />
-                    <span className="text-xs font-bold truncate">
+                    <span className="text-xs font-bold">
                       {osNotificationStatus.exactAlarm ? 'Active' : 'Standard'}
                     </span>
                   </div>
@@ -1695,52 +1764,85 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                   )}
                 </div>
 
-                {/* Scheduled Count */}
                 <div
-                  className="p-2.5 rounded-xl border flex flex-col justify-between"
+                  className="p-2.5 rounded-xl border flex flex-col justify-between min-w-0"
                   style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
                 >
                   <span className="text-[10px] text-[var(--text-secondary)] font-medium">Scheduled</span>
                   <div className="mt-1 flex items-center gap-1">
                     <Bell className="w-3 h-3 text-[var(--accent-text)] shrink-0" />
-                    <span className="text-xs font-mono font-bold truncate">
+                    <span className="text-xs font-mono font-bold">
                       {osNotificationStatus.pendingCount} Active
                     </span>
                   </div>
-                  <span className="mt-1.5 text-[9.5px] text-[var(--text-secondary)] truncate">
-                    Auto-refreshed
+                  <span className="mt-1.5 text-[9.5px] text-[var(--text-secondary)]">
+                    7-Day Sync
                   </span>
                 </div>
               </div>
 
-              {/* 2 Side-by-side Test Buttons */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              {/* 2 Unclipped Side-by-side Test Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={isTestingDrawer}
                   onClick={handleTestDrawerNow}
-                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all whitespace-nowrap"
+                  className="rounded-xl font-bold text-xs h-10 px-2.5 gap-1.5 active:scale-95 transition-all"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
                 >
                   <Bell className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
-                  <span className="truncate text-[12px] font-bold">Test Drawer</span>
+                  <span className="text-[12px] font-bold">Test Drawer</span>
                 </Button>
 
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={alarmCountdown !== null}
-                  onClick={handleTest5sAlarm}
-                  className="rounded-xl font-bold text-xs h-9 gap-1.5 active:scale-95 transition-all whitespace-nowrap"
+                  onClick={handleTest60sAlarm}
+                  className="rounded-xl font-bold text-xs h-10 px-2.5 gap-1.5 active:scale-95 transition-all"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
                 >
                   <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] shrink-0" />
-                  <span className="truncate text-[12px] font-bold">
-                    {alarmCountdown !== null ? `Firing in ${alarmCountdown}s...` : 'Test 5s Alarm'}
+                  <span className="text-[12px] font-bold">
+                    {alarmCountdown !== null ? `Firing ${alarmCountdown}s...` : 'Test 60s Alarm'}
                   </span>
                 </Button>
               </div>
+
+              {/* Collapsible Native Alarm Trace Log */}
+              {Capacitor.isNativePlatform() && (
+                <div className="pt-1 border-t border-[var(--border)]">
+                  <button
+                    type="button"
+                    onClick={() => setShowNativeTraceLog((v) => !v)}
+                    className="w-full flex items-center justify-between text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] py-1"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Terminal className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+                      View Native Alarm Log ({kernelDiag?.nativeTraceLog?.length ?? 0})
+                    </span>
+                    {showNativeTraceLog ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {showNativeTraceLog && (
+                    <div
+                      className="mt-2 p-2.5 rounded-xl border text-[10px] font-mono space-y-1 max-h-40 overflow-y-auto break-words"
+                      style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
+                    >
+                      {kernelDiag?.nativeTraceLog && kernelDiag.nativeTraceLog.length > 0 ? (
+                        kernelDiag.nativeTraceLog.map((line, i) => (
+                          <div key={i} className="text-[var(--text-secondary)] leading-relaxed">
+                            {line}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-[var(--text-secondary)]">No native alarm trace events yet.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </Card>
 
             {/* 5 Fard Prayer OS Notification Drawer Toggles */}
