@@ -33,6 +33,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { getPageForSurahAndAyah } from '@/lib/interactive-mushaf';
 import { Badge } from '@/components/ui/badge';
+import { useLanguage } from '@/contexts/LanguageContext-new';
+import { useToast } from '@/hooks/use-toast';
+import { formatSajdahString, getSajdahI18n } from '@/lib/sajdah-i18n';
+import {
+  addPendingSajdah,
+  formatAyahRef,
+  logImmediateSajdah,
+  undoLastSajdahAction,
+} from '@/lib/sajdah-tracker';
 
 interface TilawahPlayerModalProps {
   isOpen?: boolean;
@@ -44,6 +53,9 @@ export const TilawahPlayerModal: React.FC<TilawahPlayerModalProps> = ({
   onClose: propOnClose,
 }) => {
   const navigate = useNavigate();
+  const { language } = useLanguage();
+  const { toast } = useToast();
+  const sajdahStrings = useMemo(() => getSajdahI18n(language), [language]);
   const {
     isPlayerOpen,
     closePlayer,
@@ -61,6 +73,8 @@ export const TilawahPlayerModal: React.FC<TilawahPlayerModalProps> = ({
     sleepRemainingSeconds,
     autoContinueNextSurah,
     setAutoContinueNextSurah,
+    sajdahAudioPrompt,
+    dismissSajdahPrompt,
     togglePlay,
     nextAyah,
     prevAyah,
@@ -523,6 +537,103 @@ export const TilawahPlayerModal: React.FC<TilawahPlayerModalProps> = ({
               />
             </button>
           </div>
+
+          {sajdahAudioPrompt && (
+            <div
+              className="p-3 rounded-2xl border flex items-center justify-between gap-2 flex-wrap"
+              style={{
+                backgroundColor: 'var(--accent-soft)',
+                borderColor: 'var(--accent)',
+              }}
+            >
+              <span className="text-xs font-bold text-[var(--accent-text)] inline-flex items-center gap-1.5">
+                <span aria-hidden="true">۩</span>
+                <span>
+                  {sajdahStrings.tilawahChipPrompt}{' '}
+                  <bdi dir="ltr">{formatAyahRef(sajdahAudioPrompt)}</bdi>
+                </span>
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const snap = logImmediateSajdah(sajdahAudioPrompt.id, 'listen');
+                    const ref = formatAyahRef(sajdahAudioPrompt);
+                    dismissSajdahPrompt();
+                    const h = toast({
+                      duration: 5000,
+                      description: (
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <span className="text-xs font-medium">
+                            {formatSajdahString(sajdahStrings.toastImmediateLogged, { ref })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              undoLastSajdahAction(snap);
+                              h.dismiss();
+                            }}
+                            className="px-2 py-0.5 rounded text-[11px] font-bold shrink-0 cursor-pointer"
+                            style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                          >
+                            {sajdahStrings.undoBtn}
+                          </button>
+                        </div>
+                      ),
+                    });
+                  }}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer whitespace-nowrap"
+                  style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                >
+                  {sajdahStrings.tilawahDone}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const snap = addPendingSajdah(sajdahAudioPrompt.id, 'listen', 1);
+                    const ref = formatAyahRef(sajdahAudioPrompt);
+                    dismissSajdahPrompt();
+                    const h = toast({
+                      duration: 5000,
+                      description: (
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <span className="text-xs font-medium">
+                            {formatSajdahString(sajdahStrings.toastAddedPending, { ref })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              undoLastSajdahAction(snap);
+                              h.dismiss();
+                            }}
+                            className="px-2 py-0.5 rounded text-[11px] font-bold shrink-0 cursor-pointer"
+                            style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                          >
+                            {sajdahStrings.undoBtn}
+                          </button>
+                        </div>
+                      ),
+                    });
+                  }}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-bold border cursor-pointer whitespace-nowrap"
+                  style={{
+                    background: 'var(--surface)',
+                    borderColor: 'var(--border)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {sajdahStrings.tilawahTrack}
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissSajdahPrompt}
+                  className="px-2 py-1 rounded-full text-[11px] font-semibold text-[var(--text-secondary)] cursor-pointer whitespace-nowrap"
+                >
+                  {sajdahStrings.tilawahNotNow}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Live Synchronized Ayah Card */}
           <div

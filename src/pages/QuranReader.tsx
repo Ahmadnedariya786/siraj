@@ -42,6 +42,16 @@ import {
 } from '@/lib/interactive-mushaf';
 import { SURAH_START_PAGES, mushafService } from '@/lib/mushaf-service';
 import { PageTransition } from '@/components/PageTransition';
+import { formatSajdahString, getSajdahI18n } from '@/lib/sajdah-i18n';
+import {
+  addPendingSajdah,
+  formatAyahRef,
+  getSajdahByKey,
+  getSajdahForAyah,
+  logImmediateSajdah,
+  undoLastSajdahAction,
+  useSajdahTracker,
+} from '@/lib/sajdah-tracker';
 import { Preferences } from '@capacitor/preferences';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useLanguage } from '@/contexts/LanguageContext-new';
@@ -66,6 +76,13 @@ export default function QuranReader() {
   const isDark = effectiveTheme === 'dark';
   const { language } = useLanguage();
   const uiStrings = useMemo(() => getQuranUIStrings(language), [language]);
+  const sajdahStrings = useMemo(() => getSajdahI18n(language), [language]);
+  const {
+    state: sajdahState,
+    madhab: sajdahMadhab,
+    totalPendingCount: sajdahTotalPending,
+  } = useSajdahTracker();
+  const [activeSajdahKey, setActiveSajdahKey] = useState<string | null>(null);
 
   const { surahName, id } = useParams<{ surahName?: string; id?: string }>();
   const [searchParams] = useSearchParams();
@@ -395,6 +412,18 @@ export default function QuranReader() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSurahId, searchParams]);
+
+  // Smoothly scroll targeted deep-linked ayah (?ayah=) into view in Cards mode
+  useEffect(() => {
+    const ayahParam = searchParams.get('ayah');
+    if (!ayahParam || readerViewMode !== 'card') return;
+    const targetAyah = parseInt(ayahParam, 10);
+    if (!targetAyah || Number.isNaN(targetAyah)) return;
+    const el = document.getElementById(`card-ayah-${routeSurahId}:${targetAyah}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [routeSurahId, searchParams, readerViewMode, currentPageData]);
 
   const surahInfo = quranService.getSurahInfo(surahNum);
   // Dynamic header metadata derived from actual Surah on mushafPageNumber
@@ -1082,6 +1111,12 @@ export default function QuranReader() {
               onStep7Line={(direction) => (direction === 'prev' ? handlePrevPage() : handleNextPage())}
               onOpenStudySheet={handleOpenStudySheet}
               onOpenClipStudio={handleOpenClipStudio}
+              onSajdahTap={(s, a) => {
+                const entry = getSajdahForAyah(s, a, sajdahMadhab);
+                if (entry) {
+                  setActiveSajdahKey((prev) => (prev === entry.id ? null : entry.id));
+                }
+              }}
               onPageTurnRequest={handlePageTurnRequest}
               onPageLoaded={handlePageLoaded}
             />
@@ -1092,6 +1127,11 @@ export default function QuranReader() {
                   const isThisPlaying = isPlaying && currentSurah === v.surah_number && currentAyah === v.verse_number;
                   const transText = cardTranslations[v.verse_number];
                   const isUrdu = language === 'ur';
+                  const cardSajdahEntry = getSajdahForAyah(
+                    v.surah_number,
+                    v.verse_number,
+                    sajdahMadhab,
+                  );
 
                   return (
                     <div
@@ -1226,6 +1266,27 @@ export default function QuranReader() {
                         <span className="inline-block text-[var(--accent)] mx-1 select-none font-bold">
                           ﴿{v.verse_number}﴾
                         </span>
+                        {cardSajdahEntry && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveSajdahKey((prev) =>
+                                prev === cardSajdahEntry.id ? null : cardSajdahEntry.id,
+                              )
+                            }
+                            data-testid={`card-sajdah-medallion-${cardSajdahEntry.id}`}
+                            title={sajdahStrings.inReaderSajdahAyah}
+                            aria-label={`Sajdah-e-Tilawat ${cardSajdahEntry.id}`}
+                            className="inline-flex items-center justify-center px-1.5 py-0.5 mx-1 rounded-full text-sm font-bold border align-middle cursor-pointer active:scale-95 transition-transform"
+                            style={{
+                              background: 'var(--accent-soft)',
+                              borderColor: 'var(--accent)',
+                              color: 'var(--accent-text)',
+                            }}
+                          >
+                            ۩
+                          </button>
+                        )}
                       </div>
 
                       {/* Translation */}
@@ -1288,6 +1349,125 @@ export default function QuranReader() {
             paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
           }}
         >
+          {/* Non-blocking In-Reader Sajdah-e-Tilawat Action Strip */}
+          {activeSajdahKey && (() => {
+            const stripEntry = getSajdahByKey(activeSajdahKey);
+            if (!stripEntry) return null;
+            const pendingCount = sajdahState.pending[stripEntry.id]?.count ?? 0;
+            const hasPerformed = sajdahState.completedLog.some((l) => l.key === stripEntry.id);
+            const statusText =
+              pendingCount > 0
+                ? formatSajdahString(sajdahStrings.inReaderPendingCount, { n: pendingCount })
+                : hasPerformed
+                ? sajdahStrings.inReaderPerformed
+                : sajdahStrings.inReaderNotTracked;
+
+            return (
+              <div
+                data-testid="reader-sajdah-action-strip"
+                className="border-b px-2.5 py-2 max-w-2xl mx-auto space-y-1.5"
+                style={{
+                  borderColor: 'var(--border)',
+                  background: 'var(--accent-soft)',
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                    <span className="text-sm font-bold text-[var(--accent-text)]" aria-hidden="true">
+                      ۩
+                    </span>
+                    <span className="text-xs font-bold text-[var(--text-primary)] truncate">
+                      {stripEntry.surahName}{' '}
+                      <bdi dir="ltr">{formatAyahRef(stripEntry)}</bdi>
+                    </span>
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                      style={{
+                        background: pendingCount > 0 ? 'var(--accent)' : 'var(--surface)',
+                        color: pendingCount > 0 ? 'var(--on-accent)' : 'var(--text-primary)',
+                      }}
+                    >
+                      <bdi dir="ltr">{statusText}</bdi>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSajdahKey(null)}
+                    aria-label="Close Sajdah strip"
+                    className="p-1 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const snap = logImmediateSajdah(stripEntry.id, 'read');
+                      const msg = formatSajdahString(sajdahStrings.toastImmediateLogged, {
+                        ref: formatAyahRef(stripEntry),
+                      });
+                      toast.success(msg, {
+                        duration: 5000,
+                        action: {
+                          label: sajdahStrings.undoBtn,
+                          onClick: () => undoLastSajdahAction(snap),
+                        },
+                      });
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer whitespace-nowrap active:scale-95"
+                    style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                  >
+                    {sajdahStrings.inReaderPerformedNow}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const snap = addPendingSajdah(stripEntry.id, 'read', 1);
+                      const msg = formatSajdahString(sajdahStrings.toastAddedPending, {
+                        ref: formatAyahRef(stripEntry),
+                      });
+                      toast.success(msg, {
+                        duration: 5000,
+                        action: {
+                          label: sajdahStrings.undoBtn,
+                          onClick: () => undoLastSajdahAction(snap),
+                        },
+                      });
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer whitespace-nowrap active:scale-95"
+                    style={{
+                      background: 'var(--surface)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {sajdahStrings.inReaderSavePending}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate('/sajdah')}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer whitespace-nowrap active:scale-95"
+                    style={{
+                      background: 'var(--surface-2)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--accent-text)',
+                    }}
+                  >
+                    <bdi dir="ltr">
+                      {formatSajdahString(sajdahStrings.inReaderViewPending, {
+                        n: sajdahTotalPending,
+                      })}
+                    </bdi>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 7-Line Large Print Subpage Stepper: Stacked cleanly ABOVE the page navigation bar */}
           {readerViewMode !== 'card' && lineFormat === 7 && totalParts7L > 1 && (
             <div

@@ -74,6 +74,8 @@ export function normalizeAppRoute(rawInput?: string | null): string {
     canonicalPath = '/qibla';
   } else if (rawPath.startsWith('/settings')) {
     canonicalPath = rawPath;
+  } else if (rawPath.startsWith('/sajdah') || rawPath.startsWith('/services/sajdah')) {
+    canonicalPath = '/sajdah';
   } else if (rawPath.startsWith('/masjid') || rawPath.startsWith('/mosque')) {
     canonicalPath = '/mosques';
   }

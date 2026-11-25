@@ -118,9 +118,10 @@ const KNOWN_STORAGE_KEYS: readonly string[] = [
   'lastHadithData', 'cached-prayer-times', 'cached_prayer_times', 'prayer-times-today',
   'animations_enabled', 'auto-sync-enabled', 'app-install-source', 'app-version-cache',
   'pwa-install-dismissed',
-  // Salah & Qaza
+  // Salah, Qaza & Sajdah-e-Tilawat
   'salah-tracker', 'salah-streak', 'qaza-prayers', 'processed-salah-qaza',
   'qaza-history', 'qaza-daily-goal', 'menstrual-mode-data', 'haidh-tracker-v2',
+  'siraj_sajdah_tracker_v1', 'siraj_sajdah_reminder_enabled_v1',
   'menstrual-symptoms', 'menstrual-mood-entries', 'salah-focus-settings',
   'salah-current-session', 'salah-session-history', 'salah-audio-backup',
   'quran-volume', 'radio-volume', 'notifications-enabled',
@@ -613,6 +614,13 @@ async function applyBackupPayload(payload: BackupData): Promise<RestoreSummary> 
   summary.verified = present >= Math.min(3, critical.length);
 
   applyTheme(payload.storage?.['theme'] ?? payload.storage?.['pref::theme'] ?? payload.preferences?.['theme']);
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new Event('siraj-sajdah-updated'));
+    } catch (err) {
+      console.warn('[backup-service] failed to notify sajdah listeners:', err);
+    }
+  }
   return summary;
 }
 

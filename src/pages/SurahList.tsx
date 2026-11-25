@@ -64,6 +64,8 @@ import {
 import { JUZ_LIST, type JuzItem } from "@/data/juz-data";
 
 import { REVELATION_TYPE_I18N } from "@/lib/home-prayer-i18n";
+import { formatSajdahString, getSajdahI18n } from "@/lib/sajdah-i18n";
+import { useSajdahTracker } from "@/lib/sajdah-tracker";
 
 const BOOKMARKS_KEY = "quran-bookmarks";
 
@@ -184,6 +186,8 @@ export default function SurahList() {
   const { language } = useLanguage();
   const isRTL = language === 'ar' || language === 'ur';
   const uiStrings = useMemo(() => getQuranUIStrings(language), [language]);
+  const sajdahStrings = useMemo(() => getSajdahI18n(language), [language]);
+  const { totalPendingCount: sajdahPendingCount, visibleAyahs: sajdahVisibleAyahs } = useSajdahTracker();
   const navigate = useNavigate();
 
   const [activeMainTab, setActiveMainTab] = useState<MainTab>("surahs");
@@ -871,6 +875,60 @@ export default function SurahList() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* LIVE SAJDAH TRACKER CARD */}
+        <div className="max-w-2xl mx-auto px-4 mb-2.5">
+          <button
+            type="button"
+            onClick={() => navigate("/sajdah")}
+            data-testid="quran-hub-sajdah-card"
+            className="w-full p-3 rounded-2xl border flex items-center justify-between gap-2.5 cursor-pointer transition-all hover:scale-[1.005] active:scale-[0.99] shadow-sm text-left"
+            style={{
+              background: "var(--surface)",
+              borderColor: sajdahPendingCount > 0 ? "var(--accent)" : "var(--border)",
+              boxShadow: "inset 0 1px 0 var(--card-sheen-line, var(--card-sheen))",
+            }}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
+                style={{
+                  background: "var(--accent-soft)",
+                  color: "var(--accent-text)",
+                }}
+                aria-hidden="true"
+              >
+                ۩
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-[var(--text-primary)] block truncate">
+                  {sajdahStrings.entryTitle}
+                </span>
+                <span className="text-[11px] text-[var(--text-secondary)] block truncate">
+                  <bdi dir="ltr">
+                    {sajdahPendingCount > 0
+                      ? formatSajdahString(sajdahStrings.entryPendingCount, { n: sajdahPendingCount })
+                      : formatSajdahString(sajdahStrings.entryClear, { count: sajdahVisibleAyahs.length })}
+                  </bdi>
+                </span>
+              </div>
+            </div>
+            <span
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap"
+              style={{
+                background: sajdahPendingCount > 0 ? "var(--accent)" : "var(--accent-soft)",
+                color: sajdahPendingCount > 0 ? "var(--on-accent)" : "var(--accent-text)",
+              }}
+            >
+              <bdi dir="ltr">
+                {sajdahPendingCount > 0
+                  ? formatSajdahString(sajdahStrings.entryPendingCount, { n: sajdahPendingCount })
+                  : formatSajdahString(sajdahStrings.entryClear, { count: sajdahVisibleAyahs.length })}
+              </bdi>{" "}
+              {isRTL ? "←" : "→"}
+            </span>
+          </button>
         </div>
 
         {/* 3-TYPE QURAN MUSHAF FORMAT SELECTOR CARD (7-LINE, 13-LINE & 15-LINE) */}

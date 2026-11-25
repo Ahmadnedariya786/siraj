@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppBar } from "@/components/AppBar";
 import { PageTransition } from "@/components/PageTransition";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ import { formatTimetableTime } from "@/lib/prayer-utils";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { getWorshipJournalStrings } from "@/lib/worship-journal-i18n";
+import { useSajdahTracker } from "@/lib/sajdah-tracker";
+import { getSajdahI18n } from "@/lib/sajdah-i18n";
 
 const PRAYERS: { key: PrayerName; label: string; sunnahMax: number; sunnahCycleLabel: string }[] = [
   { key: "fajr", label: "Fajr", sunnahMax: 2, sunnahCycleLabel: "2 Sunnah Before" },
@@ -62,10 +65,13 @@ const PRAYERS: { key: PrayerName; label: string; sunnahMax: number; sunnahCycleL
 ];
 
 export default function PrayerStats() {
+  const navigate = useNavigate();
   const { timeFormat } = useSettings();
   const { language, ui, isRTL } = useLanguage();
   const { toast } = useToast();
   const wj = useMemo(() => getWorshipJournalStrings(language), [language]);
+  const sajdahI18n = useMemo(() => getSajdahI18n(language), [language]);
+  const { totalPendingCount: sajdahPendingCount } = useSajdahTracker();
   const is24h = timeFormat === "24h";
 
   // Selected date for Daily Worship Editor
@@ -394,6 +400,43 @@ export default function PrayerStats() {
                 {wj.pendingMakeup}
               </span>
             </Card>
+
+            {/* 5th Symmetrical Full-Width Horizontal Pod — Sajdah Owed */}
+            <button
+              type="button"
+              onClick={() => navigate("/sajdah")}
+              data-testid="journal-sajdah-pod"
+              className="col-span-2 sm:col-span-4 w-full px-3.5 py-2.5 rounded-2xl border flex items-center justify-between gap-2.5 cursor-pointer active:scale-[0.99] transition-transform text-left"
+              style={{
+                background: "var(--surface)",
+                borderColor: sajdahPendingCount > 0 ? "var(--accent)" : "var(--border)",
+                boxShadow: "inset 0 1px 0 var(--card-sheen-line, var(--card-sheen))",
+              }}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span
+                  className="w-7 h-7 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
+                  style={{ background: "var(--accent-soft)", color: "var(--accent-text)" }}
+                  aria-hidden="true"
+                >
+                  ۩
+                </span>
+                <span className="text-xs font-bold text-[var(--text-primary)] truncate">
+                  {sajdahI18n.journalPodLabel}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className="text-sm font-extrabold font-mono tabular-nums"
+                  style={{ color: sajdahPendingCount > 0 ? "var(--accent-text)" : "var(--text-primary)" }}
+                >
+                  <bdi dir="ltr">{sajdahPendingCount}</bdi>
+                </span>
+                <span className="text-xs text-[var(--text-secondary)]">
+                  {isRTL ? "←" : "→"}
+                </span>
+              </div>
+            </button>
           </div>
 
           {/* INTERACTIVE 3-MONTH GITHUB-STYLE HEATMAP — Flexbox Header Fix with Zero Text Overlap */}

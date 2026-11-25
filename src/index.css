@@ -3050,5 +3050,15 @@ html[lang="ur"] [data-quran-arabic="true"],
   animation: makruhRowPulse 1.1s infinite ease-in-out !important;
 }
 
+.siraj-translucent-card {
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+
+.siraj-translucent-subtle {
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+}
+
 
 

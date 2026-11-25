@@ -7,6 +7,8 @@ import { useIslamicCalendar } from "@/hooks/useIslamicCalendar";
 import { useSettings } from "@/contexts/SettingsContext";
 import { shouldShowMenstrualFeatures } from "@/lib/gender-settings";
 import { getQazaStats } from "@/lib/qaza-tracker";
+import { getSajdahI18n } from "@/lib/sajdah-i18n";
+import { useSajdahTracker } from "@/lib/sajdah-tracker";
 import {
     Radio, Target, Heart, Calculator,
     Star, Trophy, Coins, Calendar, Library, Tv, Sparkles, HeartHandshake, BookOpen, BookText, Moon, Headphones,
@@ -19,6 +21,7 @@ const SERVICE_CATEGORIES: Record<string, string> = {
     "/services/salah-tracker": "Worship",
     "/salah-tracker": "Worship",
     "/qaza": "Worship",
+    "/sajdah": "Worship",
     "/quran-audio": "Audio",
     "/nasheeds": "Audio",
     "/live": "Live",
@@ -80,6 +83,8 @@ export default function Services() {
     })();
 
     const showNoorCycle = shouldShowMenstrualFeatures();
+    const sajdahI18n = useMemo(() => getSajdahI18n(language), [language]);
+    const { totalPendingCount: sajdahPendingCount, madhab: sajdahMadhab } = useSajdahTracker();
 
     const [pendingQazaCount, setPendingQazaCount] = useState(() => {
         try {
@@ -101,9 +106,22 @@ export default function Services() {
         return () => window.removeEventListener('qaza-updated', handleQazaUpdate);
     }, []);
 
-    const baseServices = useMemo(() => [
+    const baseServices: Array<{
+        title: string;
+        subtitle: string;
+        path: string;
+        icon: React.ComponentType<any>;
+        keywords?: string[];
+    }> = useMemo(() => [
         { title: ui.salahTracker, subtitle: ui.salahTrackerSub, path: "/services/salah-tracker", icon: CheckCircle },
         { title: ui.qazaTracker, subtitle: ui.qazaTrackerSub, path: "/qaza", icon: AlertTriangle },
+        {
+            title: sajdahI18n.entryTitle,
+            subtitle: sajdahMadhab === "shafi" ? sajdahI18n.entrySubtitle15 : sajdahI18n.entrySubtitle14,
+            path: "/sajdah",
+            icon: Sparkles,
+            keywords: ["sajdah", "sujud", "tilawat", "prostration"],
+        },
         { title: ui.quranAudio, subtitle: ui.quranAudioSub, path: "/quran-audio", icon: Headphones },
         { title: ui.nasheeds, subtitle: ui.nasheedsSub, path: "/nasheeds", icon: Music },
         { title: ui.liveMecca, subtitle: ui.liveMeccaSub, path: "/live", icon: Tv },
@@ -123,10 +141,10 @@ export default function Services() {
         { title: ui.calendar, subtitle: ui.calendarSub, path: "/calendar", icon: Calendar },
         { title: ui.ebooks, subtitle: ui.ebooksSub, path: "/ebooks", icon: Library },
         { title: ui.tafsir, subtitle: ui.tafsirSub, path: "/tafsir", icon: BookOpen },
-    ], [ui, showNoorCycle]);
+    ], [ui, showNoorCycle, sajdahI18n, sajdahMadhab]);
 
     const conditionalServices = useMemo(() => {
-        const list = [];
+        const list: typeof baseServices = [];
         if (shouldShowFitranaCalculator) {
             list.push({ title: ui.fitranaCalc, subtitle: ui.fitranaCalcSub, path: "/fitrana-calculator", icon: Calculator });
         }
@@ -146,7 +164,9 @@ export default function Services() {
         if (!searchQuery.trim()) return allServices;
         const q = searchQuery.toLowerCase().trim();
         return allServices.filter(s =>
-            s.title.toLowerCase().includes(q) || s.subtitle.toLowerCase().includes(q)
+            s.title.toLowerCase().includes(q) ||
+            s.subtitle.toLowerCase().includes(q) ||
+            Boolean(s.keywords?.some(kw => kw.includes(q)))
         );
     }, [allServices, searchQuery]);
 
@@ -291,7 +311,7 @@ export default function Services() {
                                                 <item.icon className="w-5 h-5" strokeWidth={2} />
                                             </div>
 
-                                            {item.path === '/qaza' && pendingQazaCount > 0 ? (
+                                            {((item.path === '/qaza' && pendingQazaCount > 0) || (item.path === '/sajdah' && sajdahPendingCount > 0)) ? (
                                                 <span
                                                     className="qaza-badge-blink"
                                                     style={{
@@ -311,7 +331,7 @@ export default function Services() {
                                                     }}
                                                 >
                                                     <span className="w-1.5 h-1.5 rounded-full bg-[var(--danger,#ef4444)] qaza-dot-blink inline-block" />
-                                                    {pendingQazaCount} Pending
+                                                    <bdi dir="ltr">{item.path === '/sajdah' ? sajdahPendingCount : pendingQazaCount}</bdi> Pending
                                                 </span>
                                             ) : (
                                                 <span

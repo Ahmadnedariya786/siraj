@@ -30,6 +30,13 @@ import {
   cacheSurahAudio,
   resolveAudioPlaybackUrl,
 } from '@/lib/offline-audio';
+import { getMadhab } from '@/lib/storage';
+import {
+  getSajdahForAyah,
+  hasTilawahPromptedToday,
+  markTilawahPromptedToday,
+  type SajdahAyahEntry,
+} from '@/lib/sajdah-tracker';
 
 export type PlaybackSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 1.75 | 2;
 export type SleepTimerOption = null | 15 | 30 | 45 | 60 | 'end-of-surah';
@@ -94,6 +101,10 @@ export interface TilawahContextValue {
   isBarVisible: boolean;
   isPlayerOpen: boolean;
   autoContinueNextSurah: boolean;
+
+  // Sajdah-e-Tilawat ayah-end detection (nag-guarded once per day per ayah)
+  sajdahAudioPrompt: SajdahAyahEntry | null;
+  dismissSajdahPrompt: () => void;
 
   // Actions
   setAutoContinueNextSurah: (val: boolean) => void;
@@ -175,6 +186,10 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Mini-player bar visibility
   const [isBarVisible, setIsBarVisible] = useState<boolean>(false);
   const [isPlayerOpen, setIsPlayerOpen] = useState<boolean>(false);
+  const [sajdahAudioPrompt, setSajdahAudioPrompt] = useState<SajdahAyahEntry | null>(null);
+  const dismissSajdahPrompt = useCallback(() => {
+    setSajdahAudioPrompt(null);
+  }, []);
   const [autoContinueNextSurah, setAutoContinueNextSurahState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('siraj_auto_continue_next_surah');
@@ -584,6 +599,17 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const handleAyahCompletion = useCallback(() => {
     if (isTransitioningRef.current) return;
     isTransitioningRef.current = true;
+
+    // Detect Sajdah-e-Tilawat ayah completion with once-per-day Nag-Guard
+    try {
+      const completedSajdah = getSajdahForAyah(currentSurah, currentAyah, getMadhab());
+      if (completedSajdah && !hasTilawahPromptedToday(completedSajdah.id)) {
+        markTilawahPromptedToday(completedSajdah.id);
+        setSajdahAudioPrompt(completedSajdah);
+      }
+    } catch (err) {
+      console.warn('[TilawahContext] Sajdah ayah detection failed:', err);
+    }
 
     const computeDelayMs = () => {
       if (ayahDelay === 'match') {
@@ -1117,6 +1143,8 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
       dismissBar,
       autoContinueNextSurah,
       setAutoContinueNextSurah,
+      sajdahAudioPrompt,
+      dismissSajdahPrompt,
     }),
     [
       isPlaying,
@@ -1163,6 +1191,8 @@ export const TilawahProvider: React.FC<{ children: React.ReactNode }> = ({ child
       dismissBar,
       autoContinueNextSurah,
       setAutoContinueNextSurah,
+      sajdahAudioPrompt,
+      dismissSajdahPrompt,
     ]
   );
 

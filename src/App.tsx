@@ -38,6 +38,8 @@ import { TilawahProvider, useTilawah } from "@/contexts/TilawahContext";
 import { GlobalTilawahBar } from "@/components/GlobalTilawahBar";
 import { TilawahPlayerModal } from "@/components/Quran/TilawahPlayerModal";
 import { initQazaRolloverListeners } from "@/lib/qaza-tracker";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import { initSajdahReminderLifecycle, SAJDAH_REMINDER_NOTIFICATION_ID } from "@/lib/sajdah-reminder";
 
 /**
  * RouteBreadcrumbTracker — automatically logs timestamped breadcrumbs on every route change.
@@ -119,9 +121,24 @@ function DeepLinkListener() {
       })
       .catch(() => {});
 
+    // Handle taps on native Sajdah-e-Tilawat reminder notifications cleanly
+    const notifCleanupPromise = Capacitor.isNativePlatform()
+      ? LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+          const notif = event?.notification;
+          if (
+            notif?.id === SAJDAH_REMINDER_NOTIFICATION_ID ||
+            notif?.extra?.type === 'sajdah_reminder' ||
+            notif?.extra?.route === '/sajdah'
+          ) {
+            navigate('/sajdah');
+          }
+        })
+      : null;
+
     return () => {
       cancelled = true;
       cleanupPromise.then((h) => h?.remove?.()).catch(() => {});
+      notifCleanupPromise?.then((h) => h?.remove?.()).catch(() => {});
     };
   }, [navigate, location.pathname, location.search]);
   return null;
@@ -223,6 +240,7 @@ const MonthlyTimetable = lazy(() => import("./pages/MonthlyTimetable"));
 const WidgetSettings = lazy(() => import("./pages/WidgetSettings"));
 const MosqueFinder = lazy(() => import("./pages/MosqueFinder"));
 const SettingsCalculationPage = lazy(() => import("./pages/SettingsCalculationPage"));
+const SajdahTracker = lazy(() => import("./pages/SajdahTracker"));
 
 /**
  * Preload heavy secondary routes during browser idle time so first tap never waits.
@@ -235,6 +253,7 @@ function preloadRouteChunks() {
     import("./pages/SettingsSubPage").catch(() => {});
     import("./pages/SettingsThemePage").catch(() => {});
     import("./pages/QazaPage").catch(() => {});
+    import("./pages/SajdahTracker").catch(() => {});
     import("./pages/Tasbeeh").catch(() => {});
     import("./pages/Duas").catch(() => {});
     import("./pages/Hadith").catch(() => {});
@@ -308,6 +327,8 @@ function AppRoutes() {
           <Route path="/qaza-tracker" element={<QazaPage />} />
           <Route path="/services/qaza" element={<QazaPage />} />
           <Route path="/services/qaza-tracker" element={<QazaPage />} />
+          <Route path="/sajdah" element={<SajdahTracker />} />
+          <Route path="/services/sajdah" element={<SajdahTracker />} />
           <Route path="/ramadan" element={<RamadanMode />} />
           <Route path="/menstrual-mode" element={<Navigate to="/noor-cycle" replace />} />
           <Route path="/enhanced-menstrual-mode" element={<Navigate to="/noor-cycle" replace />} />
@@ -425,9 +446,10 @@ function AppShell() {
   // Push Quran-progress + tasbeeh state to native widgets when they change
   useWidgetSync();
 
-  // Initialize Qaza next-day rollover engine and lifecycle listeners
+  // Initialize Qaza next-day rollover engine, Sajdah reminder sync, and lifecycle listeners
   useEffect(() => {
     initQazaRolloverListeners();
+    initSajdahReminderLifecycle();
     preloadRouteChunks();
     primeNonCriticalMetadata();
   }, []);

@@ -588,12 +588,12 @@ export const REVELATION_TYPE_I18N: Record<
 };
 
 export const SERVICES_TOOLS_BANNER_I18N: Record<LanguageCode, string> = {
-  en: 'Siraj • 17 Spiritual Tools',
-  ar: 'سِراج • ١٧ أداة روحانية',
-  ur: 'سِراج • ۱۷ روحانی ٹولز',
-  gu: 'નૂર કનેક્ટ • ૧૭ આધ્યાત્મિક સાધનો',
-  hi: 'नूर कनेक्ट • १७ आध्यात्मिक साधन',
-  bn: 'নূর কানেক্ট • ১৭টি আধ্যাত্মিক সরঞ্জাম',
-  ru: 'Siraj • 17 духовных инструментов',
-  fr: 'Siraj • 17 outils spirituels',
+  en: 'Siraj • 18 Spiritual Tools',
+  ar: 'سِراج • ١٨ أداة روحانية',
+  ur: 'سِراج • ۱۸ روحانی ٹولز',
+  gu: 'સિરાજ • ૧૮ આધ્યાત્મિક સાધનો',
+  hi: 'सिराज • १८ आध्यात्मिक साधन',
+  bn: 'সিরাজ • ১৮টি আধ্যাত্মিক সরঞ্জাম',
+  ru: 'Siraj • 18 духовных инструментов',
+  fr: 'Siraj • 18 outils spirituels',
 };

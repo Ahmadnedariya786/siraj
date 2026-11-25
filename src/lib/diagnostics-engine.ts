@@ -25,6 +25,15 @@ import {
 } from '@/lib/onboarding-permissions';
 import { getOtaLogTail } from '@/lib/app-updater';
 import { getCachedUpdateInfo } from '@/lib/update-checker';
+import { KNOWN_STORAGE_KEYS } from '@/lib/backup-service';
+import { isProtectedPersonalKey } from '@/lib/cache-manager';
+import {
+  SAJDAH_AYAHS,
+  SAJDAH_COMPLETED_LOG_CAP,
+  SAJDAH_STORAGE_KEY,
+  computeTotalPendingCount,
+  loadSajdahState,
+} from '@/lib/sajdah-tracker';
 
 export type DiagnosticCategory =
   | 'REACT_CRASH'
@@ -992,10 +1001,10 @@ export function initDiagnosticsEngine(): void {
 }
 
 // -------------------------------------------------------------
-// Active Deep Health Scanner (11 Subsystem Checks)
+// Active Deep Health Scanner (12 Subsystem Checks)
 // -------------------------------------------------------------
 
-export const TOTAL_HEALTH_CHECKS = 11;
+export const TOTAL_HEALTH_CHECKS = 12;
 
 export const REQUIRED_THEME_TOKENS = [
   '--bg-base',
@@ -1527,6 +1536,46 @@ export async function runDeepSystemHealthScan(): Promise<DeepHealthScanReport> {
       name: 'Battery-Safe Widget Sync Scheduler',
       status: 'PASS',
       summary: 'Shared scheduler active (800ms debounce)',
+      details: String(err),
+    });
+  }
+
+  // 12. Sajdah Ledger Integrity Check
+  try {
+    const standardCount = SAJDAH_AYAHS.filter((a) => a.school === 'agreed').length;
+    const shafiExtraCount = SAJDAH_AYAHS.filter((a) => a.school === 'shafi-extra').length;
+    const ledgerState = loadSajdahState();
+    const derivedPending = computeTotalPendingCount(ledgerState);
+    const manualPending = Object.values(ledgerState.pending).reduce(
+      (acc, entry) => acc + (entry?.count ?? 0),
+      0,
+    );
+    const keyProtected = isProtectedPersonalKey(SAJDAH_STORAGE_KEY);
+    const backupTracked = KNOWN_STORAGE_KEYS.includes(SAJDAH_STORAGE_KEY);
+    const logWithinCap = ledgerState.completedLog.length <= SAJDAH_COMPLETED_LOG_CAP;
+    const ok =
+      standardCount === 14 &&
+      shafiExtraCount === 1 &&
+      derivedPending === manualPending &&
+      keyProtected &&
+      backupTracked &&
+      logWithinCap;
+
+    checks.push({
+      id: 'sajdah-ledger-integrity',
+      name: 'Sajdah Ledger Integrity',
+      status: ok ? 'PASS' : 'WARN',
+      summary: ok
+        ? `14+1 ayahs • ${derivedPending} pending • Backup & Protection active`
+        : 'Sajdah registry or ledger invariant mismatch',
+      details: `standard=${standardCount}, extra=${shafiExtraCount}, pending=${derivedPending}, log=${ledgerState.completedLog.length}/${SAJDAH_COMPLETED_LOG_CAP}, protected=${keyProtected}, backup=${backupTracked}`,
+    });
+  } catch (err) {
+    checks.push({
+      id: 'sajdah-ledger-integrity',
+      name: 'Sajdah Ledger Integrity',
+      status: 'WARN',
+      summary: 'Unable to audit Sajdah ledger',
       details: String(err),
     });
   }

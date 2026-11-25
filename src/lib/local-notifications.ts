@@ -684,7 +684,23 @@ export class LocalNotificationManager {
     try {
       const pending = await LocalNotifications.getPending();
       const prayerNotificationIds = pending.notifications
-        .filter(n => n.extra?.type === 'prayer_reminder' || n.channelId === 'siraj_prayers_v3' || n.id >= 1000 || n.id === 9901 || n.id === 99999 || n.id === 99998)
+        .filter((n) => {
+          if (
+            n.id === 1099 ||
+            n.channelId === 'siraj_reminders_v3' ||
+            n.extra?.type === 'sajdah_reminder'
+          ) {
+            return false;
+          }
+          return (
+            n.extra?.type === 'prayer_reminder' ||
+            n.channelId === 'siraj_prayers_v3' ||
+            n.id >= 1000 ||
+            n.id === 9901 ||
+            n.id === 99999 ||
+            n.id === 99998
+          );
+        })
         .map(n => n.id);
 
       if (prayerNotificationIds.length > 0) {

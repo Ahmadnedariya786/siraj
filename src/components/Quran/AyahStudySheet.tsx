@@ -11,7 +11,16 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTilawah } from '@/contexts/TilawahContext';
+import { useLanguage } from '@/contexts/LanguageContext-new';
+import { formatSajdahString, getSajdahI18n } from '@/lib/sajdah-i18n';
+import {
+  formatAyahRef,
+  getSajdahForAyah,
+  undoLastSajdahAction,
+  useSajdahTracker,
+} from '@/lib/sajdah-tracker';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import {
   BOOKMARK_COLORS,
@@ -283,11 +292,25 @@ export const AyahStudySheet: React.FC<AyahStudySheetProps> = ({
   currentPage = 1,
   onOpenClipStudio,
 }) => {
+  const navigate = useNavigate();
+  const { language } = useLanguage();
   const { toast } = useToast();
   const { playAyah, startHifzLoop, stopHifzLoop, hifzConfig } = useTilawah();
+  const sajdahStrings = useMemo(() => getSajdahI18n(language), [language]);
+  const {
+    state: sajdahState,
+    madhab: sajdahMadhab,
+    totalPendingCount: sajdahTotalPending,
+    addPendingSajdah,
+    logImmediateSajdah,
+  } = useSajdahTracker();
   useBodyScrollLock(isOpen);
 
   const [activeAyah, setActiveAyah] = useState<number>(initialAyah);
+  const sajdahEntry = useMemo(
+    () => getSajdahForAyah(surahNumber, activeAyah, sajdahMadhab),
+    [surahNumber, activeAyah, sajdahMadhab],
+  );
   const [activeTab, setActiveTab] = useState<StudyTab>('translation');
   const [fontSizeOffset, setFontSizeOffset] = useState<number>(0); // -2 to +6
 
@@ -1133,6 +1156,140 @@ export const AyahStudySheet: React.FC<AyahStudySheetProps> = ({
               )}
             </div>
           </div>
+
+          {/* Sajdah-e-Tilawat Inline Action Card (shown only for Sajdah markAyah) */}
+          {sajdahEntry && (() => {
+            const pendingCount = sajdahState.pending[sajdahEntry.id]?.count ?? 0;
+            const hasPerformed = sajdahState.completedLog.some((l) => l.key === sajdahEntry.id);
+            const statusText =
+              pendingCount > 0
+                ? formatSajdahString(sajdahStrings.inReaderPendingCount, { n: pendingCount })
+                : hasPerformed
+                ? sajdahStrings.inReaderPerformed
+                : sajdahStrings.inReaderNotTracked;
+
+            return (
+              <div
+                data-testid="study-sheet-sajdah-strip"
+                className="p-3.5 rounded-2xl space-y-2.5"
+                style={{
+                  backgroundColor: 'var(--accent-soft)',
+                  border: '1px solid var(--accent)',
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-[var(--accent-text)] inline-flex items-center gap-1.5">
+                    <span aria-hidden="true">۩</span>
+                    <span>
+                      {sajdahStrings.inReaderSajdahAyah}{' '}
+                      <bdi dir="ltr">({formatAyahRef(sajdahEntry)})</bdi>
+                    </span>
+                  </span>
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                    style={{
+                      background: pendingCount > 0 ? 'var(--accent)' : 'var(--surface)',
+                      color: pendingCount > 0 ? 'var(--on-accent)' : 'var(--text-primary)',
+                    }}
+                  >
+                    <bdi dir="ltr">{statusText}</bdi>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const snap = logImmediateSajdah(sajdahEntry.id, 'read');
+                      const msg = formatSajdahString(sajdahStrings.toastImmediateLogged, {
+                        ref: formatAyahRef(sajdahEntry),
+                      });
+                      const h = toast({
+                        duration: 5000,
+                        description: (
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <span className="text-xs font-medium">{msg}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                undoLastSajdahAction(snap);
+                                h.dismiss();
+                              }}
+                              className="px-2 py-0.5 rounded text-[11px] font-bold shrink-0 cursor-pointer"
+                              style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                            >
+                              {sajdahStrings.undoBtn}
+                            </button>
+                          </div>
+                        ),
+                      });
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer whitespace-nowrap active:scale-95"
+                    style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                  >
+                    {sajdahStrings.inReaderPerformedNow}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const snap = addPendingSajdah(sajdahEntry.id, 'read', 1);
+                      const msg = formatSajdahString(sajdahStrings.toastAddedPending, {
+                        ref: formatAyahRef(sajdahEntry),
+                      });
+                      const h = toast({
+                        duration: 5000,
+                        description: (
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <span className="text-xs font-medium">{msg}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                undoLastSajdahAction(snap);
+                                h.dismiss();
+                              }}
+                              className="px-2 py-0.5 rounded text-[11px] font-bold shrink-0 cursor-pointer"
+                              style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                            >
+                              {sajdahStrings.undoBtn}
+                            </button>
+                          </div>
+                        ),
+                      });
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold border cursor-pointer whitespace-nowrap active:scale-95"
+                    style={{
+                      background: 'var(--surface)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {sajdahStrings.inReaderSavePending}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      navigate('/sajdah');
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold border cursor-pointer whitespace-nowrap active:scale-95"
+                    style={{
+                      background: 'var(--surface-2)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--accent-text)',
+                    }}
+                  >
+                    <bdi dir="ltr">
+                      {formatSajdahString(sajdahStrings.inReaderViewPending, {
+                        n: sajdahTotalPending,
+                      })}
+                    </bdi>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 5-Colour Mihrab-Style Smart Bookmark Swatches */}
           <div

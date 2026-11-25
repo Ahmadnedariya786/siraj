@@ -33,6 +33,8 @@ import { evaluateMakruhState } from "@/lib/makruh-times";
 import { MakruhQazaConfirmationModal } from "@/components/MakruhQazaConfirmationModal";
 import { RoyalDatePickerModal } from "@/components/RoyalDatePickerModal";
 import { useToast } from "@/hooks/use-toast";
+import { formatSajdahString, getSajdahI18n } from "@/lib/sajdah-i18n";
+import { useSajdahTracker } from "@/lib/sajdah-tracker";
 
 const prayerLabels: { id: QazaPrayerName; label: string; arabicLabel: string }[] = [
   { id: "fajr", label: "Fajr", arabicLabel: "الفجر" },
@@ -48,9 +50,11 @@ interface QazaTrackerProps {
 }
 
 export function QazaTracker({ compact = false }: QazaTrackerProps) {
-  const { t, ui, isRTL } = useLanguage();
+  const { t, ui, isRTL, language } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { totalPendingCount: sajdahPendingCount } = useSajdahTracker();
+  const sajdahI18n = useMemo(() => getSajdahI18n(language), [language]);
 
   const [prayers, setPrayers] = useState<Record<QazaPrayerName, number>>({
     fajr: 0,
@@ -583,6 +587,30 @@ export function QazaTracker({ compact = false }: QazaTrackerProps) {
               <span>{isRTL ? '←' : '→'}</span>
             </button>
           </div>
+
+          {sajdahPendingCount > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate('/sajdah')}
+              data-testid="home-sajdah-pill"
+              className="w-full mt-2 py-1.5 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-2 cursor-pointer active:scale-[0.99] transition-transform"
+              style={{
+                background: 'var(--accent-soft)',
+                borderColor: 'var(--accent)',
+                color: 'var(--accent-text)',
+              }}
+            >
+              <span className="inline-flex items-center gap-1.5 min-w-0 truncate">
+                <span aria-hidden="true">۩</span>
+                <span className="truncate">
+                  <bdi dir="ltr">
+                    {formatSajdahString(sajdahI18n.homePillText, { n: sajdahPendingCount })}
+                  </bdi>
+                </span>
+              </span>
+              <span className="shrink-0">{isRTL ? '←' : '→'}</span>
+            </button>
+          )}
         </CardContent>
 
         {/* Royal Islamic Date Picker Modal */}

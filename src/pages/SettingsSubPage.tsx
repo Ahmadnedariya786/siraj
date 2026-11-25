@@ -96,6 +96,9 @@ import {
   type OtaStatus,
 } from '@/lib/update-checker';
 import { BUILD_TIME, BUILD_COMMIT } from '@/buildInfo';
+import { getSajdahI18n } from '@/lib/sajdah-i18n';
+import { setSajdahReminderEnabled } from '@/lib/sajdah-reminder';
+import { isSajdahReminderEnabled, useSajdahTracker } from '@/lib/sajdah-tracker';
 import { NoorLogoCrest } from '@/components/NoorLogoCrest';
 import {
   getPrayerHadithLang,
@@ -270,6 +273,19 @@ const SettingsSubPage: React.FC = () => {
   const [smartSalah, setSmartSalah] = useState<SmartSalahConfig>(() => loadSmartSalahConfig());
   const [hasDndAccess, setHasDndAccess] = useState<boolean>(() => hasNativeDndAccess());
   const smartSalahStrings = useMemo(() => getSmartSalahI18n(language), [language]);
+  const sajdahStrings = useMemo(() => getSajdahI18n(language), [language]);
+  const { totalPendingCount: sajdahPendingCount } = useSajdahTracker();
+  const [sajdahReminderOn, setSajdahReminderOn] = useState<boolean>(() => isSajdahReminderEnabled());
+
+  const handleSajdahReminderToggle = async (checked: boolean) => {
+    setSajdahReminderOn(checked);
+    await setSajdahReminderEnabled(checked, language);
+    toast({
+      title: checked
+        ? sajdahStrings.settingsReminderEnabledToast
+        : sajdahStrings.settingsReminderDisabledToast,
+    });
+  };
 
   const updateSmartSalah = (patch: Partial<SmartSalahConfig>) => {
     setSmartSalah((prev) => {
@@ -2178,6 +2194,32 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                   className="shrink-0"
                   checked={notificationPrefs.bedtimeDuaReminders ?? true}
                   onCheckedChange={(c) => handleNotificationToggle('bedtimeDuaReminders', c)}
+                />
+              </div>
+
+              {/* Sajdah-e-Tilawat Daily 20:00 Reminder (single-pipeline channel siraj_reminders_v3, ID 1099) */}
+              <div className="flex items-center justify-between py-3 gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm" style={{ background: 'var(--accent-soft)', color: 'var(--accent-text)' }}>
+                    ۩
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <Label className="text-sm font-bold">{sajdahStrings.settingsReminderTitle}</Label>
+                    <p className="text-xs text-[var(--text-secondary)]">{sajdahStrings.settingsReminderDesc}</p>
+                    {sajdahReminderOn && (
+                      <p className="text-[11px] font-medium mt-0.5" style={{ color: 'var(--accent-text)' }}>
+                        {sajdahPendingCount > 0
+                          ? sajdahStrings.settingsReminderActiveHint
+                          : sajdahStrings.settingsReminderIdleHint}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Switch
+                  data-testid="sajdah-reminder-switch"
+                  className="shrink-0"
+                  checked={sajdahReminderOn}
+                  onCheckedChange={handleSajdahReminderToggle}
                 />
               </div>
             </Card>

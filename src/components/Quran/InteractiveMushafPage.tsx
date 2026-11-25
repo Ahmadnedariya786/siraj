@@ -31,6 +31,7 @@ import {
 } from '@/lib/word-timings';
 import { Volume2, BookOpen, X, Sparkles, Loader2, Film } from 'lucide-react';
 import { MushafSurahPages, type MushafReadingMode } from './MushafSurahPages';
+import { getSajdahForAyah, useSajdahTracker } from '@/lib/sajdah-tracker';
 
 export type InteractiveMushafSurface = 'jewel' | 'parchment' | 'paper' | 'night' | 'classic';
 
@@ -46,6 +47,7 @@ interface InteractiveMushafPageProps {
   onStep7Line?: (direction: 'prev' | 'next') => void;
   onOpenStudySheet: (surah: number, ayah: number) => void;
   onOpenClipStudio?: (surah: number, ayah: number) => void;
+  onSajdahTap?: (surah: number, ayah: number) => void;
   onPageTurnRequest?: (newPage: number) => void;
   onPageLoaded?: (data: InteractivePageData) => void;
 }
@@ -315,9 +317,11 @@ function InteractiveMushafPageComponent({
   onStep7Line,
   onOpenStudySheet,
   onOpenClipStudio,
+  onSajdahTap,
   onPageTurnRequest,
   onPageLoaded,
 }: InteractiveMushafPageProps) {
+  const { madhab: activeMadhab } = useSajdahTracker();
   const [pageData, setPageData] = useState<InteractivePageData | null>(() => getCachedMushafPageSync(pageNumber));
   const [loading, setLoading] = useState<boolean>(() => !getCachedMushafPageSync(pageNumber));
   const [activeFormat, setActiveFormat] = useState<MushafLineFormat>(() => lineFormat || getMushafLineFormat());
@@ -337,6 +341,11 @@ function InteractiveMushafPageComponent({
   useEffect(() => {
     onOpenStudySheetRef.current = onOpenStudySheet;
   }, [onOpenStudySheet]);
+
+  const onSajdahTapRef = useRef(onSajdahTap);
+  useEffect(() => {
+    onSajdahTapRef.current = onSajdahTap;
+  }, [onSajdahTap]);
 
   const onPageTurnRequestRef = useRef(onPageTurnRequest);
   useEffect(() => {
@@ -1421,35 +1430,74 @@ function InteractiveMushafPageComponent({
                             isPlaying &&
                             currentSurah === token.surahNumber &&
                             currentAyah === token.verseNumber;
+                          const sajdahEntry = getSajdahForAyah(
+                            token.surahNumber,
+                            token.verseNumber,
+                            activeMadhab,
+                          );
 
                           return (
-                            <button
+                            <span
                               key={token.key}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenStudySheetRef.current?.(token.surahNumber, token.verseNumber);
-                              }}
-                              title={`Study Verse ${token.surahNumber}:${token.verseNumber}`}
-                              className="inline-flex items-center justify-center border font-bold align-middle transition-all hover:scale-105 active:scale-95 shadow-sm shrink-0 whitespace-nowrap select-none"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.72em',
-                                lineHeight: 1,
-                                padding: '0 2px',
-                                margin: '0 1px',
-                                borderRadius: '9999px',
-                                flexShrink: 0,
-                                whiteSpace: 'nowrap',
-                                background: isVersePlaying ? 'var(--accent)' : surfaceStyles.medallionBg,
-                                color: isVersePlaying ? 'var(--on-accent)' : surfaceStyles.medallionColor,
-                                borderColor: surfaceStyles.medallionBorder,
-                              }}
+                              className="inline-flex items-center align-middle shrink-0 whitespace-nowrap"
+                              style={{ gap: '2px', margin: '0 1px' }}
                             >
-                              <span>﴿{toArabicDigits(token.verseNumber)}﴾</span>
-                            </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenStudySheetRef.current?.(token.surahNumber, token.verseNumber);
+                                }}
+                                title={`Study Verse ${token.surahNumber}:${token.verseNumber}`}
+                                className="inline-flex items-center justify-center border font-bold align-middle transition-all hover:scale-105 active:scale-95 shadow-sm shrink-0 whitespace-nowrap select-none"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.72em',
+                                  lineHeight: 1,
+                                  padding: '0 2px',
+                                  borderRadius: '9999px',
+                                  flexShrink: 0,
+                                  whiteSpace: 'nowrap',
+                                  background: isVersePlaying ? 'var(--accent)' : surfaceStyles.medallionBg,
+                                  color: isVersePlaying ? 'var(--on-accent)' : surfaceStyles.medallionColor,
+                                  borderColor: surfaceStyles.medallionBorder,
+                                }}
+                              >
+                                <span>﴿{toArabicDigits(token.verseNumber)}﴾</span>
+                              </button>
+                              {sajdahEntry && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onSajdahTapRef.current) {
+                                      onSajdahTapRef.current(token.surahNumber, token.verseNumber);
+                                    } else {
+                                      onOpenStudySheetRef.current?.(token.surahNumber, token.verseNumber);
+                                    }
+                                  }}
+                                  title="Sajdah-e-Tilawat"
+                                  aria-label={`Sajdah-e-Tilawat ${token.surahNumber}:${token.verseNumber}`}
+                                  className="inline-flex items-center justify-center border font-bold align-middle transition-all hover:scale-110 active:scale-95 shrink-0 whitespace-nowrap select-none cursor-pointer"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.7em',
+                                    lineHeight: 1,
+                                    padding: '1px 4px',
+                                    borderRadius: '9999px',
+                                    background: 'var(--accent-soft)',
+                                    color: 'var(--accent-text)',
+                                    borderColor: 'var(--accent)',
+                                  }}
+                                >
+                                  ۩
+                                </button>
+                              )}
+                            </span>
                           );
                         }
 

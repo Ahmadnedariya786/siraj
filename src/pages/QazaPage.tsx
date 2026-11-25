@@ -42,6 +42,8 @@ import {
 import { evaluateMakruhState } from "@/lib/makruh-times";
 import { MakruhQazaConfirmationModal } from "@/components/MakruhQazaConfirmationModal";
 import { RoyalDatePickerModal } from "@/components/RoyalDatePickerModal";
+import { getSajdahI18n } from "@/lib/sajdah-i18n";
+import { useSajdahTracker } from "@/lib/sajdah-tracker";
 
 const DEFAULT_FIDYA_UNIT_COST: Record<string, number> = {
   INR: 100,
@@ -82,9 +84,11 @@ interface QazaHistory {
 }
 
 export default function QazaPage() {
-  const { t } = useLanguage();
+  const { t, language, isRTL } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const sajdahStrings = useMemo(() => getSajdahI18n(language), [language]);
+  const { totalPendingCount: sajdahPendingCount } = useSajdahTracker();
   const [qazaCounts, setQazaCounts] = useState<Record<QazaPrayerName, number>>(() => getQazaPrayers());
   const [dailyGoal, setDailyGoal] = useState(() => getQazaDailyGoal());
   const [todayCompleted, setTodayCompleted] = useState(() => getTodayQazaCompleted());
@@ -1399,6 +1403,34 @@ export default function QazaPage() {
               })}
             </div>
           </Card>
+
+          {/* Compact Sajdah-e-Tilawat Footer Link Pill */}
+          <div className="pt-1 pb-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => navigate("/sajdah")}
+              data-testid="qaza-sajdah-pill"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold cursor-pointer active:scale-95 transition-transform whitespace-nowrap"
+              style={{
+                background: "var(--surface)",
+                borderColor: sajdahPendingCount > 0 ? "var(--accent)" : "var(--border)",
+                color: "var(--accent-text)",
+              }}
+            >
+              <span aria-hidden="true">۩</span>
+              <span>{sajdahStrings.qazaPillLabel}</span>
+              <span
+                className="px-1.5 py-0.5 rounded-full text-[11px] font-extrabold"
+                style={{
+                  background: sajdahPendingCount > 0 ? "var(--accent)" : "var(--accent-soft)",
+                  color: sajdahPendingCount > 0 ? "var(--on-accent)" : "var(--accent-text)",
+                }}
+              >
+                <bdi dir="ltr">{sajdahPendingCount}</bdi>
+              </span>
+              <span>{isRTL ? "←" : "→"}</span>
+            </button>
+          </div>
 
           {/* Royal Islamic Date Picker Modal */}
           <RoyalDatePickerModal
