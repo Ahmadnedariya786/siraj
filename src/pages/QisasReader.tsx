@@ -13,13 +13,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageTransition } from "@/components/PageTransition";
+import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
 import { goBackOrFallback } from "@/lib/navigation";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import {
   useContentLanguage,
   streamBookTranslation,
+  getBookTranslationFromCacheSync,
   translateIslamicText,
-  translateIslamicBatch,
   isPureArabicBlock,
   type ContentLang,
 } from "@/lib/content-translator";
@@ -27,13 +28,19 @@ import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
   AaReaderControlsButton,
   BookProseParagraph,
-  ReaderStatusBanner,
+  ChapterOpenerOrnament,
   FormattedIslamicText,
+  ReaderArabicBlock,
+  ReaderContinueChip,
+  ReaderHeading,
+  ReaderStatusBanner,
+  ReaderTagChips,
 } from "@/components/BookReaderControls";
 import {
   useBookReaderPrefs,
   formatIslamicProse,
-  getArabicLineHeight,
+  isInlineArabicHonorific,
+  classifyProseParagraph,
 } from "@/lib/reader-typography";
 import {
   loadProphetList,
@@ -47,15 +54,18 @@ import {
 } from "@/lib/qisas";
 import {
   getReadingProgress,
+  getScrollPosition,
   isBookmarked as checkBookmarked,
   setLastRead,
   setReadingProgress,
+  setScrollPosition,
   toggleBookmark,
 } from "@/lib/reading-storage";
+import { useReaderSwipe } from "@/hooks/useReaderSwipe";
 
 type EraKey = ProphetSummary["era"];
 
-const ARABIC_RUN_RE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]{11,}/;
+const ARABIC_RUN_RE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]{14,}/;
 
 function isStandAloneTranslit(text: string): boolean {
   const trimmed = text.trim();
@@ -71,10 +81,10 @@ function isStandAloneTranslit(text: string): boolean {
 
 /**
  * Normalizes prophet story paragraphs and removes back-to-back duplicated Arabic verse blocks
- * that appear in source data while formatting Allah () / Prophet () honorifics cleanly.
+ * while keeping inline Arabic honorifics intact inside their prose sentences (never producing "Allah ()" or "Lut ()").
  */
-function buildCleanStoryParagraphs(rawStory: string): string[] {
-  const formatted = formatIslamicProse(rawStory, "en");
+export function buildCleanStoryParagraphs(rawStory: string, lang: ContentLang = "en"): string[] {
+  const formatted = formatIslamicProse(rawStory, lang);
   const rawParas = formatted
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -85,7 +95,7 @@ function buildCleanStoryParagraphs(rawStory: string): string[] {
 
   for (const para of rawParas) {
     const match = para.match(ARABIC_RUN_RE);
-    if (match) {
+    if (match && !isInlineArabicHonorific(match[0])) {
       const arabicPart = match[0].trim();
       const nonArabicPart = para.replace(match[0], "").trim();
       const fp = arabicPart.slice(0, 48);
@@ -100,7 +110,7 @@ function buildCleanStoryParagraphs(rawStory: string): string[] {
         if (fp && deduped[deduped.length - 1] !== arabicPart) {
           deduped.push(arabicPart);
         }
-        deduped.push(nonArabicPart);
+        deduped.push(formatIslamicProse(nonArabicPart, lang));
       } else {
         deduped.push(arabicPart);
       }
@@ -119,7 +129,6 @@ export default function QisasReader() {
   const { t } = useLanguage();
   const { toast } = useToast();
 
-  // Initialize synchronously from memory/fallback cache so zero jarring "Loading..." flash occurs
   const [prophet, setProphet] = useState<ProphetStory | null>(() =>
     prophetId ? getCachedProphetStorySync(prophetId) : null
   );
@@ -132,13 +141,14 @@ export default function QisasReader() {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [savedScrollY, setSavedScrollY] = useState(0);
+  const [continueDismissed, setContinueDismissed] = useState(false);
 
   const { contentLang } = useContentLanguage();
   const { prefs } = useBookReaderPrefs();
   const [translatedName, setTranslatedName] = useState("");
   const [translatedTitle, setTranslatedTitle] = useState("");
   const [translatedStory, setTranslatedStory] = useState("");
-  const [translatedTags, setTranslatedTags] = useState<string[]>([]);
   const [actualLang, setActualLang] = useState<ContentLang>("en");
   const [fromCache, setFromCache] = useState(false);
   const [offlineFallback, setOfflineFallback] = useState(false);
@@ -158,28 +168,45 @@ export default function QisasReader() {
           ? PROPHET_SUBTITLE_TRANSLATIONS[storyObj.id]?.[lang]
           : null;
 
-      const cleanParas = buildCleanStoryParagraphs(storyObj.story);
+      const cleanParas = buildCleanStoryParagraphs(storyObj.story, "en");
+      const lockedTotal = cleanParas.length;
 
       if (lang === "en") {
-        setTranslatedName(storyObj.name);
-        setTranslatedTitle(storyObj.title);
+        setTranslatedName(formatIslamicProse(storyObj.name, "en"));
+        setTranslatedTitle(formatIslamicProse(storyObj.title, "en"));
         setTranslatedStory(cleanParas.join("\n\n"));
-        setTranslatedTags(storyObj.tags || []);
         setActualLang("en");
         setFromCache(false);
         setOfflineFallback(false);
         setIsTranslating(false);
-        setDoneChunks(cleanParas.length);
-        setTotalChunks(cleanParas.length);
+        setDoneChunks(lockedTotal);
+        setTotalChunks(lockedTotal);
         return;
       }
 
       if (curatedName) setTranslatedName(curatedName);
       if (curatedTitle) setTranslatedTitle(curatedTitle);
+
+      // Synchronous memory cache fast-path (<1ms second open)
+      const syncCached = getBookTranslationFromCacheSync(`prophet:${storyObj.id}:${lang}`);
+      if (syncCached?.text) {
+        setTranslatedStory(
+          syncCached.paragraphs?.length ? syncCached.paragraphs.join("\n\n") : syncCached.text
+        );
+        if (!curatedName && syncCached.title) setTranslatedName(syncCached.title);
+        setActualLang(lang);
+        setFromCache(true);
+        setOfflineFallback(false);
+        setIsTranslating(false);
+        setDoneChunks(lockedTotal);
+        setTotalChunks(lockedTotal);
+        return;
+      }
+
       setIsTranslating(true);
       setOfflineFallback(false);
       setDoneChunks(0);
-      setTotalChunks(cleanParas.length);
+      setTotalChunks(lockedTotal);
 
       streamBookTranslation({
         module: "prophet",
@@ -199,15 +226,15 @@ export default function QisasReader() {
           setIsTranslating(!upd.isComplete);
           if (!curatedName && upd.title) setTranslatedName(upd.title);
           if (upd.offlineFallback) {
-            setTranslatedName(storyObj.name);
-            setTranslatedTitle(storyObj.title);
+            setTranslatedName(formatIslamicProse(storyObj.name, "en"));
+            setTranslatedTitle(formatIslamicProse(storyObj.title, "en"));
           }
         },
       }).catch((err) => {
         console.warn("Prophet streaming translation fallback:", err);
         if (!signal.aborted) {
-          setTranslatedName(storyObj.name);
-          setTranslatedTitle(storyObj.title);
+          setTranslatedName(formatIslamicProse(storyObj.name, "en"));
+          setTranslatedTitle(formatIslamicProse(storyObj.title, "en"));
           setTranslatedStory(cleanParas.join("\n\n"));
           setActualLang("en");
           setOfflineFallback(true);
@@ -224,13 +251,6 @@ export default function QisasReader() {
         translateIslamicText(storyObj.title, lang)
           .then((tl) => !signal.aborted && setTranslatedTitle(tl))
           .catch((err) => console.debug("Prophet title translation skipped:", err));
-      }
-      if (storyObj.tags?.length) {
-        translateIslamicBatch(storyObj.tags, lang)
-          .then((tags) => !signal.aborted && setTranslatedTags(tags))
-          .catch((err) => console.debug("Prophet tag translation skipped:", err));
-      } else {
-        setTranslatedTags([]);
       }
     },
     []
@@ -293,6 +313,8 @@ export default function QisasReader() {
       setLastRead(prophetId, "qisas");
       setIsBookmarked(checkBookmarked(prophetId, "qisas"));
       setScrollProgress(getReadingProgress(prophetId, "qisas"));
+      setSavedScrollY(getScrollPosition(prophetId, "qisas"));
+      setContinueDismissed(false);
     }
 
     async function loadData() {
@@ -318,8 +340,8 @@ export default function QisasReader() {
     };
   }, [prophetId]);
 
-  // Unified document scroll tracking (#main-content or window fallback)
   useEffect(() => {
+    if (!prophetId) return;
     const mainScrollEl = document.getElementById("main-content");
     const target: EventTarget = mainScrollEl || window;
 
@@ -331,14 +353,28 @@ export default function QisasReader() {
       const progress = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 100;
 
       setScrollProgress(Math.min(100, Math.max(0, progress)));
-      setReadingProgress(prophetId || "", progress, "qisas");
       setShowBackToTop(scrollTop > 300);
+
+      if (scrollTop > 60) {
+        setReadingProgress(prophetId, progress, "qisas");
+        setScrollPosition(prophetId, scrollTop, "qisas");
+        setContinueDismissed(true);
+      }
     };
 
     target.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
     return () => target.removeEventListener("scroll", handleScroll);
   }, [prophetId, prophet]);
+
+  const handleContinueScroll = () => {
+    const mainScrollEl = document.getElementById("main-content");
+    if (mainScrollEl) {
+      mainScrollEl.scrollTo({ top: savedScrollY, behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: savedScrollY, behavior: "smooth" });
+    }
+    setContinueDismissed(true);
+  };
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -371,21 +407,26 @@ export default function QisasReader() {
     }
   };
 
-  const goToPrevProphet = () => {
-    if (!prophet) return;
-    const currentIndex = allProphets.findIndex((item) => item.id === prophet.id);
+  const currentIndex = prophet ? allProphets.findIndex((item) => item.id === prophet.id) : -1;
+
+  const goToPrevProphet = useCallback(() => {
     if (currentIndex > 0) {
       navigate(`/qisas/${allProphets[currentIndex - 1].id}`);
     }
-  };
+  }, [currentIndex, allProphets, navigate]);
 
-  const goToNextProphet = () => {
-    if (!prophet) return;
-    const currentIndex = allProphets.findIndex((item) => item.id === prophet.id);
-    if (currentIndex < allProphets.length - 1) {
+  const goToNextProphet = useCallback(() => {
+    if (currentIndex >= 0 && currentIndex < allProphets.length - 1) {
       navigate(`/qisas/${allProphets[currentIndex + 1].id}`);
     }
-  };
+  }, [currentIndex, allProphets, navigate]);
+
+  const swipeHandlers = useReaderSwipe({
+    onPrev: goToPrevProphet,
+    onNext: goToNextProphet,
+    canPrev: currentIndex > 0,
+    canNext: currentIndex >= 0 && currentIndex < allProphets.length - 1,
+  });
 
   const handleQuranRefClick = (ref: string) => {
     const [surahPart] = ref.split(":");
@@ -396,61 +437,60 @@ export default function QisasReader() {
   };
 
   const renderContent = (content: string) => {
-    return content
+    const paragraphs = content
       .split(/\n{2,}/)
       .map((p) => p.trim())
-      .filter(Boolean)
-      .map((trimmed, index) => {
-        const quranRefMatch = trimmed.match(/^\d+:\d+(?:-\d+)?$/);
-        if (quranRefMatch) {
-          return (
-            <div
-              key={index}
-              className="my-3.5 p-3.5 bg-[var(--surface-2)] border-l-[3px] border-[var(--accent)] rounded-r-xl border border-[var(--border)] cursor-pointer hover:border-[var(--accent)] transition-colors"
-              onClick={() => handleQuranRefClick(trimmed)}
-            >
-              <p
-                className="font-arabic text-right text-[var(--accent-text)]"
-                dir="rtl"
-                style={{ fontSize: `${prefs.arabicFontSize}px` }}
-              >
-                {trimmed}
-              </p>
-            </div>
-          );
-        }
+      .filter(Boolean);
 
-        if (isPureArabicBlock(trimmed)) {
-          return (
-            <div
-              key={index}
-              className="my-4 p-3.5 rounded-xl bg-[var(--surface-2)] border-r-[3px] border-[var(--accent)] border border-[var(--border)]"
-            >
-              <p
-                className="font-arabic text-right text-[var(--accent-text)] break-words"
-                dir="rtl"
-                style={{
-                  fontSize: `${prefs.arabicFontSize}px`,
-                  lineHeight: getArabicLineHeight(prefs.lineSpacing),
-                }}
-              >
-                {trimmed}
-              </p>
-            </div>
-          );
-        }
-
+    return paragraphs.map((trimmed, index) => {
+      const quranRefMatch = trimmed.match(/^\d+:\d+(?:-\d+)?$/);
+      if (quranRefMatch) {
         return (
-          <BookProseParagraph
+          <ReaderArabicBlock
             key={index}
             text={trimmed}
-            actualLang={actualLang}
-            fontSize={prefs.bodyFontSize}
-            lineSpacing={prefs.lineSpacing}
-            className="text-[var(--text-primary)]"
+            arabicSize={prefs.arabicSize}
+            onClick={() => handleQuranRefClick(trimmed)}
           />
         );
-      });
+      }
+
+      if (isPureArabicBlock(trimmed) && !isInlineArabicHonorific(trimmed)) {
+        return (
+          <ReaderArabicBlock
+            key={index}
+            text={trimmed}
+            arabicSize={prefs.arabicSize}
+          />
+        );
+      }
+
+      const headingKind = classifyProseParagraph(trimmed, index);
+      if (headingKind === "h2" || headingKind === "h3") {
+        return (
+          <div key={index}>
+            {headingKind === "h2" && index > 0 && <ManuscriptDivider className="my-5" />}
+            <ReaderHeading
+              level={headingKind}
+              text={trimmed}
+              actualLang={actualLang}
+              clampTwoLines={false}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <BookProseParagraph
+          key={index}
+          text={trimmed}
+          actualLang={actualLang}
+          fontSize={prefs.bodySize}
+          lineSpacing={prefs.lineHeightMode}
+          className="text-[var(--text-primary)]"
+        />
+      );
+    });
   };
 
   if (loading && !prophet) {
@@ -469,15 +509,13 @@ export default function QisasReader() {
     );
   }
 
-  const currentIndex = allProphets.findIndex((item) => item.id === prophet.id);
   const visibleMentions = prophet.quranMentions.slice(0, 3);
   const extraMentions = Math.max(0, prophet.quranMentions.length - visibleMentions.length);
-  const headerName = translatedName || prophet.name;
-  const headerDir = actualLang === "ur" ? "rtl" : "ltr";
+  const headerName = formatIslamicProse(translatedName || prophet.name, actualLang);
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-transparent relative z-10 pb-28">
+      <div className="min-h-screen bg-transparent relative z-10 pb-28" {...swipeHandlers}>
         <div className="fixed top-0 left-0 right-0 h-1 bg-transparent z-50 pointer-events-none">
           <div
             className="h-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] transition-all duration-150"
@@ -485,12 +523,12 @@ export default function QisasReader() {
           />
         </div>
 
-        {/* Slim 52px Sticky Top Bar ONLY */}
+        {/* 2-line Clamped Sticky Top Bar — actions strictly on one row */}
         <header
           className="sticky top-0 z-40 bg-[var(--surface)] border-b border-[var(--border)] safe-top"
           style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
         >
-          <div className="max-w-3xl mx-auto px-3 h-[52px] flex items-center justify-between gap-2">
+          <div className="max-w-3xl mx-auto px-3 min-h-[56px] py-1.5 flex items-center justify-between gap-2">
             <Button
               variant="ghost"
               size="icon"
@@ -503,16 +541,17 @@ export default function QisasReader() {
 
             <div className="min-w-0 flex-1">
               <h2
-                dir={headerDir}
-                className={`text-sm sm:text-base font-bold text-[var(--text-primary)] truncate ${
-                  headerDir === "rtl" ? "font-urdu text-right" : "text-left"
+                dir="auto"
+                style={{ unicodeBidi: "plaintext", textAlign: actualLang === "ur" ? "right" : "left" }}
+                className={`text-sm sm:text-base font-bold text-[var(--text-primary)] line-clamp-2 leading-snug ${
+                  actualLang === "ur" ? "font-urdu" : ""
                 }`}
               >
                 <FormattedIslamicText text={headerName} />
               </h2>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1 shrink-0 flex-nowrap">
               <AaReaderControlsButton />
               <Button
                 variant="ghost"
@@ -540,49 +579,61 @@ export default function QisasReader() {
           </div>
         </header>
 
-        {/* Natural Scrolling Hero & Metadata (scrolls smoothly away for 85%+ reading surface) */}
+        {/* Scrollable Calligraphy Hero & Metadata */}
         <div className="max-w-3xl mx-auto px-4 pt-4 pb-3 space-y-3 border-b border-[var(--border)]/60">
           <ContentLanguageBar fullWidth />
 
-          <div className="w-full h-16 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center">
-            <span className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
+          <ChapterOpenerOrnament
+            badgeText={`${eraLabels[prophet.era]} · ${
+              contentLang === "ur" ? "سلسلہ انبیاء" : contentLang === "gu" ? "પયગંબર ક્રમ" : contentLang === "hi" ? "पैग़म्बर क्रम" : t("qisasProphetOf")
+            } ${prophet.number} / ${allProphets.length || 24}`}
+            arabicSubtitle={prophet.arabicName}
+          />
+
+          <div
+            className="w-full h-12 rounded-xl border border-[var(--border)] flex items-center justify-center"
+            style={{
+              backgroundColor: "var(--surface-2)",
+              backgroundImage: "radial-gradient(circle at 50% 50%, var(--accent-soft) 0%, transparent 72%)",
+            }}
+          >
+            <span
+              className="font-arabic leading-none"
+              dir="rtl"
+              style={{ color: "var(--accent-text)", fontSize: "20px" }}
+            >
               {prophet.arabicName}
             </span>
           </div>
 
-          <h1
-            dir={headerDir}
-            className={`text-xl sm:text-2xl font-bold text-[var(--text-primary)] ${
-              headerDir === "rtl" ? "font-urdu text-right leading-[2.0]" : "text-left"
-            }`}
-          >
-            <FormattedIslamicText text={headerName} />
-          </h1>
+          <ReaderHeading
+            level="h1"
+            text={headerName}
+            actualLang={actualLang}
+            clampTwoLines
+          />
 
           <p
-            dir={headerDir}
+            dir="auto"
+            style={{ unicodeBidi: "plaintext", textAlign: actualLang === "ur" ? "right" : "left" }}
             className={`text-sm sm:text-base text-[var(--text-secondary)] ${
-              headerDir === "rtl" ? "font-urdu text-right leading-[2.0]" : "text-left"
+              actualLang === "ur" ? "font-urdu" : ""
             }`}
           >
-            {translatedTitle || prophet.title}
+            <FormattedIslamicText text={formatIslamicProse(translatedTitle || prophet.title, actualLang)} />
           </p>
 
-          <p className="font-arabic text-lg text-[var(--accent-text)] text-right" dir="rtl">
+          <p className="font-arabic text-base text-[var(--accent-text)] text-right" dir="rtl">
             {prophet.arabicTitle}
           </p>
 
           <div className="flex items-center gap-2 flex-wrap">
             <span
-              className={`px-3 py-1 rounded-full text-xs font-medium text-[var(--accent-text)] bg-[var(--accent-soft)] border border-[var(--border)] ${
+              className={`px-3 py-1 rounded-full text-xs font-semibold border era-chip-${prophet.era} ${
                 contentLang === "ur" ? "font-urdu" : ""
               }`}
             >
               {eraLabels[prophet.era]}
-            </span>
-            <span className="text-xs text-[var(--text-secondary)]">
-              {contentLang === "ur" ? "سلسلہ انبیاء کرام" : contentLang === "gu" ? "પયગંબર ક્રમ" : contentLang === "hi" ? "पैग़म्बर क्रम" : t("qisasProphetOf")}{" "}
-              {prophet.number} / {allProphets.length || 24}
             </span>
           </div>
 
@@ -602,26 +653,29 @@ export default function QisasReader() {
                 </Badge>
               ))}
               {extraMentions > 0 && (
-                <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                <Badge variant="outline" className="text-[11px] text-[var(--text-secondary)]">
                   +{extraMentions} {t("more")}
                 </Badge>
               )}
             </div>
           )}
 
-          {(translatedTags.length ? translatedTags : prophet.tags).length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {(translatedTags.length ? translatedTags : prophet.tags).map((tag) => (
-                <Badge key={tag} variant="outline" className={`text-[11px] ${actualLang === "ur" ? "font-urdu" : ""}`}>
-                  {tag}
-                </Badge>
-              ))}
+          {prophet.tags.length > 0 && (
+            <ReaderTagChips tags={prophet.tags} contentLang={contentLang} />
+          )}
+
+          {!continueDismissed && savedScrollY > 120 && (
+            <div>
+              <ReaderContinueChip
+                progressPct={scrollProgress}
+                onContinue={handleContinueScroll}
+              />
             </div>
           )}
         </div>
 
-        {/* Full-Width Story Reading Body */}
-        <article className="max-w-3xl mx-auto px-4 pt-5 pb-6">
+        {/* Continuous Story Reading Body (68ch measure cap on wide viewports) */}
+        <article className="reader-prose-measure px-4 pt-5 pb-6">
           <ReaderStatusBanner
             targetLang={contentLang}
             actualLang={actualLang}
@@ -633,7 +687,7 @@ export default function QisasReader() {
             onRetry={() => setRetryTick((n) => n + 1)}
           />
 
-          <div>{renderContent(translatedStory || buildCleanStoryParagraphs(prophet.story).join("\n\n"))}</div>
+          <div>{renderContent(translatedStory || buildCleanStoryParagraphs(prophet.story, "en").join("\n\n"))}</div>
         </article>
 
         {/* Scroll-To-Top FAB cleanly positioned ABOVE Next/Prev pagination + BottomNav */}

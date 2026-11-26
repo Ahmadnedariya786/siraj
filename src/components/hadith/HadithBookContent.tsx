@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, BookOpen, ChevronRight, Copy, Bookmark } from "lucide-react";
+import { ArrowLeft, Search, BookOpen, ChevronRight, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,13 +21,16 @@ import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
   AaReaderControlsButton,
   BookProseParagraph,
+  CopyHadithMenuButton,
+  ReaderArabicBlock,
+  ReaderContinueChip,
   ReaderStatusBanner,
 } from "@/components/BookReaderControls";
 import {
   useBookReaderPrefs,
-  getArabicLineHeight,
   formatIslamicProse,
 } from "@/lib/reader-typography";
+import { getScrollPosition, setScrollPosition } from "@/lib/reading-storage";
 
 const SHOW_ALL_PAGE_SIZE = 300;
 
@@ -142,19 +145,8 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
               </Button>
             </div>
 
-            {/* Arabic Text — wide single-border container for crisp readability */}
-            <div className="bg-[var(--surface-2)] px-3.5 py-3 rounded-xl border border-[var(--border)] mb-3">
-              <p
-                className="font-arabic text-right text-[var(--text-primary)] break-words"
-                dir="rtl"
-                style={{
-                  fontSize: `${prefs.arabicFontSize}px`,
-                  lineHeight: getArabicLineHeight(prefs.lineSpacing),
-                }}
-              >
-                {hadith.arabic}
-              </p>
-            </div>
+            {/* Arabic Text — 12px padding on surface-2, right-aligned, line-height 2.0 */}
+            <ReaderArabicBlock text={hadith.arabic} arabicSize={prefs.arabicSize} className="mb-3" />
 
             <ManuscriptDivider />
 
@@ -172,21 +164,27 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
 
             {/* Translation Body */}
             {(translatedText || hadith.englishTranslation) && (
-              <BookProseParagraph
-                text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
-                actualLang={actualLang}
-                fontSize={prefs.bodyFontSize}
-                lineSpacing={prefs.lineSpacing}
-                className="text-[var(--text-primary)]"
-              />
+              <div className="reader-prose-measure">
+                <BookProseParagraph
+                  text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
+                  actualLang={actualLang}
+                  fontSize={prefs.bodySize}
+                  lineSpacing={prefs.lineHeightMode}
+                  className="text-[var(--text-primary)]"
+                />
+              </div>
             )}
 
             {/* Narrator */}
             {(translatedNarrator || hadith.narrator) && (
               <p
-                dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+                dir="auto"
+                style={{
+                  unicodeBidi: 'plaintext',
+                  textAlign: actualLang === 'ur' ? 'right' : 'left',
+                }}
                 className={`text-sm font-semibold text-[var(--accent-text)] mt-2 ${
-                  actualLang === 'ur' ? 'font-urdu text-right leading-[2.0]' : 'text-left'
+                  actualLang === 'ur' ? 'font-urdu' : ''
                 }`}
               >
                 {actualLang === 'ur' ? 'راوی:' : actualLang === 'gu' ? 'વર્ણનકર્તા:' : actualLang === 'hi' ? 'वर्णनकर्ता:' : 'Narrated by:'}{' '}
@@ -194,24 +192,23 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
               </p>
             )}
 
-            {/* Copy */}
+            {/* Copy (Arabic / Translation / Both) */}
             <div className="flex items-center gap-2 mt-2.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs rounded-lg hover:bg-primary/10"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const body = translatedText || hadith.englishTranslation || "";
-                  const text = `${hadith.arabic}\n\n${body}\n\n— ${collection} (${hadith.hadithNumber})`;
-                  navigator.clipboard.writeText(text).then(() => {
-                    toast({ title: "Copied to clipboard" });
+              <CopyHadithMenuButton
+                onCopyMode={(mode) => {
+                  const body = translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en');
+                  const ref = `${collection} (${hadith.hadithNumber})`;
+                  const payload =
+                    mode === 'arabic'
+                      ? `${hadith.arabic}\n\n— ${ref}`
+                      : mode === 'translation'
+                      ? `${body}\n\n— ${ref}`
+                      : `${hadith.arabic}\n\n${body}\n\n— ${ref}`;
+                  navigator.clipboard.writeText(payload).then(() => {
+                    toast({ title: `Copied ${mode === 'both' ? 'Arabic & translation' : mode}` });
                   });
                 }}
-              >
-                <Copy className="w-3.5 h-3.5 mr-1" />
-                Copy
-              </Button>
+              />
             </div>
           </div>
 
@@ -387,10 +384,44 @@ export function HadithBookContent() {
 
   const [displayCount, setDisplayCount] = useState(50);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const bookScrollKey = collection && book ? `book:${collection}:${book}` : '';
+  const [savedBookScrollY, setSavedBookScrollY] = useState<number>(() =>
+    bookScrollKey ? getScrollPosition(bookScrollKey, "hadith") : 0
+  );
+  const [continueDismissed, setContinueDismissed] = useState(false);
 
   useEffect(() => {
     setDisplayCount(50);
-  }, [searchTerm, book, collection]);
+    if (bookScrollKey) {
+      setSavedBookScrollY(getScrollPosition(bookScrollKey, "hadith"));
+      setContinueDismissed(false);
+    }
+  }, [searchTerm, book, collection, bookScrollKey]);
+
+  useEffect(() => {
+    if (!bookScrollKey) return;
+    const mainScrollEl = document.getElementById("main-content");
+    const target: EventTarget = mainScrollEl || window;
+    const onScroll = () => {
+      const y = mainScrollEl ? mainScrollEl.scrollTop : window.scrollY;
+      if (y > 60) {
+        setScrollPosition(bookScrollKey, y, "hadith");
+        setContinueDismissed(true);
+      }
+    };
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [bookScrollKey]);
+
+  const handleContinueBookScroll = () => {
+    const mainScrollEl = document.getElementById("main-content");
+    if (mainScrollEl) {
+      mainScrollEl.scrollTo({ top: savedBookScrollY, behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: savedBookScrollY, behavior: "smooth" });
+    }
+    setContinueDismissed(true);
+  };
 
   // Auto-load more hadith when the sentinel at the end of the list becomes visible
   useEffect(() => {
@@ -516,17 +547,21 @@ export function HadithBookContent() {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <h1 dir="auto" className={`text-lg sm:text-2xl font-bold text-foreground truncate ${contentLang === 'ur' ? 'font-urdu leading-[2.0]' : ''}`}>
+                <h1
+                  dir="auto"
+                  style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
+                  className={`font-bold text-[var(--text-primary)] line-clamp-2 leading-snug ${contentLang === 'ur' ? 'font-urdu' : ''}`}
+                >
                   {translatedBookName || (bookInfo?.name ?? `Book ${book}`)}
                 </h1>
                 {bookInfo?.arabicName && (
-                  <p className="text-muted-foreground font-arabic truncate" dir="rtl">
+                  <p className="text-[var(--text-secondary)] font-arabic truncate" dir="rtl">
                     {bookInfo.arabicName}
                   </p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
               <AaReaderControlsButton />
               <Badge variant="secondary" className="text-xs shrink-0">
                 {loading && hadithData.length === 0
@@ -536,6 +571,11 @@ export function HadithBookContent() {
             </div>
           </div>
           <ContentLanguageBar fullWidth />
+          {!continueDismissed && savedBookScrollY > 120 && (
+            <div>
+              <ReaderContinueChip onContinue={handleContinueBookScroll} />
+            </div>
+          )}
         </div>
 
         {/* Book Info */}
@@ -562,7 +602,11 @@ export function HadithBookContent() {
                 <h3 className="font-semibold text-foreground mb-2">
                   {contentLang === 'ur' ? 'تفصیل و تعارف' : contentLang === 'gu' ? 'વર્ણન' : contentLang === 'hi' ? 'विवरण' : 'Description'}
                 </h3>
-                <p className={`text-sm text-muted-foreground leading-relaxed ${contentLang === 'ur' ? 'font-urdu leading-[2.35] text-right' : isRtl ? 'font-arabic text-right' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
+                <p
+                  className={`text-sm text-[var(--text-secondary)] leading-relaxed ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
+                  dir="auto"
+                  style={{ unicodeBidi: 'plaintext' }}
+                >
                   {translatedBookDesc || bookInfo?.description || defaultBookDesc}
                 </p>
               </div>

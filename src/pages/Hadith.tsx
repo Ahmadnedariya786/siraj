@@ -1,11 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, Share2, Loader2, RefreshCw, Library, Bookmark } from "lucide-react";
+import { ArrowLeft, Share2, RefreshCw, Library, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { getDailyHadith as getDailyHadithFromCollections } from "@/lib/hadith";
-import { getAllCollections } from "@/data/hadith-collections";
 import { PageTransition } from "@/components/PageTransition";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
@@ -18,11 +17,12 @@ import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
   AaReaderControlsButton,
   BookProseParagraph,
+  CopyHadithMenuButton,
+  ReaderArabicBlock,
   ReaderStatusBanner,
 } from "@/components/BookReaderControls";
 import {
   useBookReaderPrefs,
-  getArabicLineHeight,
   formatIslamicProse,
 } from "@/lib/reader-typography";
 
@@ -96,7 +96,6 @@ const Hadith = () => {
       // Set or clear refresh seed
       let refreshSeed: number | null = null;
       if (isRefresh) {
-        const collectionCount = getAllCollections().length;
         refreshSeed = Math.floor(Math.random() * 100000) + 1;
         localStorage.setItem(REFRESH_SEED_KEY, String(refreshSeed));
       } else {
@@ -237,6 +236,26 @@ const Hadith = () => {
     }
   };
 
+  const handleCopyMode = async (mode: 'arabic' | 'translation' | 'both') => {
+    if (!hadith) return;
+    const trans = translatedText || formatIslamicProse(hadith.translation || '', 'en');
+    const ref = `${hadith.book}${hadith.number ? ` #${hadith.number}` : ''}`;
+    const payload =
+      mode === 'arabic'
+        ? `${hadith.hadith}\n\n— ${ref}`
+        : mode === 'translation'
+        ? `${trans}\n\n— ${ref}`
+        : `${hadith.hadith}\n\n${trans}\n\n— ${ref}`;
+    try {
+      await navigator.clipboard.writeText(payload);
+      toast({
+        title: `Copied ${mode === 'both' ? 'Arabic & translation' : mode}`,
+      });
+    } catch {
+      toast({ title: "Could not copy hadith", variant: "destructive" });
+    }
+  };
+
   return (
     <PageTransition>
     <div className="min-h-screen bg-transparent pb-4 relative overflow-hidden safe-top z-10" style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
@@ -255,29 +274,53 @@ const Hadith = () => {
             variant="ghost"
             size="icon"
             onClick={() => navigate("/hadith/collections")}
-            className="rounded-full bg-card border border-border/40 shadow-sm shrink-0"
+            className="rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-sm shrink-0"
           >
-            <ArrowLeft className="w-4 h-4 text-foreground/80" />
+            <ArrowLeft className="w-4 h-4 text-[var(--text-primary)]" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-foreground font-serif italic tracking-tight truncate">حديث اليوم</h1>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mt-0.5 truncate">Daily Hadith</p>
+            <h1
+              dir="auto"
+              style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
+              className="font-bold text-[var(--text-primary)] font-arabic tracking-tight line-clamp-2 leading-tight"
+            >
+              حديث اليوم
+            </h1>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] mt-0.5 line-clamp-2">
+              Daily Hadith
+            </p>
           </div>
-          <AaReaderControlsButton />
+          <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+            <AaReaderControlsButton />
+            {hadith && <CopyHadithMenuButton compact onCopyMode={handleCopyMode} />}
+          </div>
         </div>
 
         {/* 4-Language Selector Bar */}
         <ContentLanguageBar fullWidth />
 
         {loading ? (
-          <Card className="p-12 bg-card border-border/40 shadow-sm">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-xl bg-[#C9860A]/10 animate-pulse border border-[#C9860A]/20" />
-                <Loader2 className="w-8 h-8 animate-spin text-[#C9860A] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Loading Hadith...</p>
+          <Card
+            aria-busy="true"
+            aria-label="Loading daily hadith"
+            className="p-5 sm:p-6 border-[var(--border)] bg-[var(--surface)] shadow-sm space-y-4 animate-pulse"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="h-3.5 w-28 rounded bg-[var(--surface-2)]" />
+              <div className="h-3.5 w-20 rounded bg-[var(--surface-2)]" />
             </div>
+            <div className="rounded-xl p-3 bg-[var(--surface-2)] border border-[var(--border)] space-y-2.5">
+              <div className="h-5 w-full rounded bg-[var(--accent-soft)]" />
+              <div className="h-5 w-11/12 ml-auto rounded bg-[var(--accent-soft)]" />
+              <div className="h-5 w-3/4 ml-auto rounded bg-[var(--accent-soft)]" />
+            </div>
+            <div className="h-px w-full bg-[var(--border)]" />
+            <div className="space-y-2">
+              <div className="h-4 w-full rounded bg-[var(--surface-2)]" />
+              <div className="h-4 w-full rounded bg-[var(--surface-2)]" />
+              <div className="h-4 w-4/5 rounded bg-[var(--surface-2)]" />
+            </div>
+            <div className="h-6 w-36 rounded-full bg-[var(--accent-soft)]" />
           </Card>
         ) : hadith ? (
           <div className="space-y-4">
@@ -297,19 +340,7 @@ const Hadith = () => {
                   </div>
 
                   {/* Hadith Arabic text */}
-                  <div className="bg-[var(--surface-2)] px-4 py-3.5 rounded-2xl border border-[var(--border)]">
-                    <blockquote
-                      className="font-arabic text-right text-[var(--text-primary)] break-words"
-                      dir="rtl"
-                      style={{
-                        fontFamily: "'Amiri', 'Traditional Arabic', 'Scheherazade New', serif",
-                        lineHeight: getArabicLineHeight(prefs.lineSpacing),
-                        fontSize: `${prefs.arabicFontSize}px`,
-                      }}
-                    >
-                      {hadith.hadith}
-                    </blockquote>
-                  </div>
+                  <ReaderArabicBlock text={hadith.hadith} arabicSize={prefs.arabicSize} />
 
                   {/* Narrator (راوی) */}
                   {narratorLabel && (
@@ -318,7 +349,8 @@ const Hadith = () => {
                         className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border border-[var(--border)] bg-[var(--accent-soft)] text-[var(--accent-text)] ${
                           actualLang === 'ur' ? "font-urdu" : ""
                         }`}
-                        dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+                        dir="auto"
+                        style={{ unicodeBidi: 'plaintext' }}
                       >
                         {narratorLabel}
                       </span>
@@ -327,7 +359,7 @@ const Hadith = () => {
 
                   {/* Translation in Selected Language */}
                   {(translatedText || hadith.translation) && (
-                    <>
+                    <div className="reader-prose-measure">
                       <ManuscriptDivider />
                       <ReaderStatusBanner
                         targetLang={contentLang}
@@ -342,12 +374,12 @@ const Hadith = () => {
                         <BookProseParagraph
                           text={translatedText || formatIslamicProse(hadith.translation || '', 'en')}
                           actualLang={actualLang}
-                          fontSize={prefs.bodyFontSize}
-                          lineSpacing={prefs.lineSpacing}
+                          fontSize={prefs.bodySize}
+                          lineSpacing={prefs.lineHeightMode}
                           className="text-[var(--text-primary)]"
                         />
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>

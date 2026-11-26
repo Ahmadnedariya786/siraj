@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, BookOpen, Share2, Copy, Check, ChevronLeft, ChevronRight, Bookmark } from "lucide-react";
+import { ArrowLeft, BookOpen, Share2, ChevronLeft, ChevronRight, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 import { getHadithBookData } from "@/lib/hadith";
 import type { EnhancedHadith } from "@/data/hadith-collections";
 import { getCollectionByName } from "@/data/hadith-collections";
-import { getGradeBadgeClass, dedupeHadithGrade } from "@/lib/hadith-utils";
+import {
+  getGradeBadgeClass,
+  dedupeHadithGrade,
+  formatCollectionHadithCount,
+  formatCompilerDeath,
+} from "@/lib/hadith-utils";
 import { useHadithBookmarks } from "@/hooks/useHadithBookmarks";
 import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
 import {
@@ -21,13 +26,20 @@ import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
   AaReaderControlsButton,
   BookProseParagraph,
+  ChapterOpenerOrnament,
+  CopyHadithMenuButton,
+  ReaderArabicBlock,
+  ReaderContinueChip,
+  ReaderHeading,
   ReaderStatusBanner,
+  ReaderTagChips,
 } from "@/components/BookReaderControls";
 import {
   useBookReaderPrefs,
-  getArabicLineHeight,
   formatIslamicProse,
 } from "@/lib/reader-typography";
+import { getScrollPosition, setLastRead, setScrollPosition } from "@/lib/reading-storage";
+import { useReaderSwipe } from "@/hooks/useReaderSwipe";
 
 export function HadithDetail() {
   const { collection, book, hadithNumber } = useParams<{ collection: string; book: string; hadithNumber: string }>();
@@ -51,6 +63,12 @@ export function HadithDetail() {
   const [offlineFallback, setOfflineFallback] = useState(false);
   const [source, setSource] = useState<'scholar-edition' | 'chunked-api' | 'original'>('original');
   const [retryTick, setRetryTick] = useState(0);
+
+  const hadithKey = collection && book && hadithNumber ? `${collection}:${book}:${hadithNumber}` : '';
+  const [savedScrollY, setSavedScrollY] = useState<number>(() =>
+    hadithKey ? getScrollPosition(hadithKey, "hadith") : 0
+  );
+  const [continueDismissed, setContinueDismissed] = useState(false);
 
   const runTranslation = useCallback(async (mountedCheck: () => boolean) => {
     if (!hadith) return;
@@ -104,12 +122,23 @@ export function HadithDetail() {
   }, [runTranslation, retryTick]);
 
   useEffect(() => {
+    let active = true;
     async function loadHadith() {
       if (!collection || !book || !hadithNumber) return;
+      if (allHadith.length > 0) {
+        const inMemory = allHadith.find(
+          (h) => String(h.hadithNumber) === hadithNumber || String(h.id) === hadithNumber
+        );
+        if (inMemory) {
+          setHadith(inMemory);
+          setLoading(false);
+          return;
+        }
+      }
       setLoading(true);
       try {
         const data = await getHadithBookData(collection, book);
-        if (Array.isArray(data)) {
+        if (active && Array.isArray(data)) {
           setAllHadith(data);
           const found = data.find(
             (h) => String(h.hadithNumber) === hadithNumber || String(h.id) === hadithNumber
@@ -119,12 +148,45 @@ export function HadithDetail() {
       } catch (err) {
         console.warn("Failed to load hadith detail:", err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
-    if (!hadith) loadHadith();
-  }, [collection, book, hadithNumber]);
+    loadHadith();
+    if (hadithKey) {
+      setLastRead(hadithKey, "hadith");
+      setSavedScrollY(getScrollPosition(hadithKey, "hadith"));
+      setContinueDismissed(false);
+    }
+    return () => {
+      active = false;
+    };
+  }, [collection, book, hadithNumber, hadithKey]);
+
+  useEffect(() => {
+    if (!hadithKey) return;
+    const mainScrollEl = document.getElementById("main-content");
+    const target: EventTarget = mainScrollEl || window;
+    const onScroll = () => {
+      const y = mainScrollEl ? mainScrollEl.scrollTop : window.scrollY;
+      if (y > 60) {
+        setScrollPosition(hadithKey, y, "hadith");
+        setContinueDismissed(true);
+      }
+    };
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [hadithKey]);
+
+  const handleContinueScroll = () => {
+    const mainScrollEl = document.getElementById("main-content");
+    if (mainScrollEl) {
+      mainScrollEl.scrollTo({ top: savedScrollY, behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: savedScrollY, behavior: "smooth" });
+    }
+    setContinueDismissed(true);
+  };
 
   const currentIndex = allHadith.findIndex(
     (h) => String(h.hadithNumber) === hadithNumber
@@ -133,20 +195,38 @@ export function HadithDetail() {
   const prevHadith = currentIndex > 0 ? allHadith[currentIndex - 1] : null;
   const nextHadith = currentIndex >= 0 && currentIndex < allHadith.length - 1 ? allHadith[currentIndex + 1] : null;
 
-  const navigateToHadith = (h: EnhancedHadith) => {
+  const navigateToHadith = useCallback((h: EnhancedHadith) => {
     navigate(`/hadith/collections/${collection}/${book}/${h.hadithNumber}`, { replace: true });
     setHadith(h);
-    window.scrollTo(0, 0);
-  };
+    const mainScrollEl = document.getElementById("main-content");
+    if (mainScrollEl) {
+      mainScrollEl.scrollTop = 0;
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [navigate, collection, book]);
 
-  const handleCopy = async () => {
+  const swipeHandlers = useReaderSwipe({
+    onPrev: () => prevHadith && navigateToHadith(prevHadith),
+    onNext: () => nextHadith && navigateToHadith(nextHadith),
+    canPrev: Boolean(prevHadith),
+    canNext: Boolean(nextHadith),
+  });
+
+  const handleCopyMode = async (mode: 'arabic' | 'translation' | 'both') => {
     if (!hadith) return;
-    const body = translatedText || hadith.englishTranslation || "";
-    const text = `${hadith.arabic}\n\n${body}\n\n— ${hadith.collection ?? collection} (${hadith.hadithNumber})`;
+    const body = translatedText || formatIslamicProse(hadith.englishTranslation || "", 'en');
+    const ref = `${hadith.collection ?? collection} (${hadith.hadithNumber})`;
+    const text =
+      mode === 'arabic'
+        ? `${hadith.arabic}\n\n— ${ref}`
+        : mode === 'translation'
+        ? `${body}\n\n— ${ref}`
+        : `${hadith.arabic}\n\n${body}\n\n— ${ref}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast({ title: "Copied to clipboard" });
+      toast({ title: `Copied ${mode === 'both' ? 'Arabic & translation' : mode}` });
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast({ title: "Failed to copy", variant: "destructive" });
@@ -155,22 +235,22 @@ export function HadithDetail() {
 
   const handleShare = async () => {
     if (!hadith) return;
-    const body = translatedText || hadith.englishTranslation || "";
+    const body = translatedText || formatIslamicProse(hadith.englishTranslation || "", 'en');
     const text = `${hadith.arabic}\n\n${body}\n\n— ${hadith.collection ?? collection} (${hadith.hadithNumber})`;
     try {
       await navigator.share({ title: "Hadith", text });
     } catch {
-      handleCopy();
+      handleCopyMode('both');
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-transparent relative z-10">
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-          <div className="h-8 w-32 bg-muted rounded-lg animate-pulse" />
-          <div className="h-48 bg-muted/50 rounded-xl animate-pulse" />
-          <div className="h-32 bg-muted/50 rounded-xl animate-pulse" />
+        <div className="max-w-3xl mx-auto px-4 py-6 space-y-4 animate-pulse">
+          <div className="h-8 w-40 bg-[var(--surface-2)] rounded-lg" />
+          <div className="h-44 bg-[var(--surface-2)] rounded-xl" />
+          <div className="h-32 bg-[var(--surface-2)] rounded-xl" />
         </div>
       </div>
     );
@@ -192,21 +272,43 @@ export function HadithDetail() {
   const tags = Array.isArray(hadith.tags) ? hadith.tags : [];
   const bookmarked = isBookmarked(collection!, hadith.hadithNumber);
   const cleanGrade = dedupeHadithGrade(hadith.grade);
+  const collectionMeta = getCollectionByName(hadith.collection ?? collection ?? '');
 
   return (
-    <div className="min-h-screen bg-transparent relative z-10 safe-top">
-      <div className="max-w-3xl mx-auto px-4 py-5 space-y-5">
-        <div className="flex items-center gap-2.5">
-          <Button variant="ghost" size="icon" onClick={() => navigate(`/hadith/collections/${collection}/${book}`)} className="rounded-xl shrink-0">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex-1 min-w-0">
-            <h1 dir="auto" className="text-base sm:text-lg font-bold text-foreground truncate">Hadith #{hadith.hadithNumber}</h1>
-            <p dir="auto" className="text-xs text-muted-foreground truncate">
-              {getCollectionByName(hadith.collection ?? collection)?.title ?? hadith.collection ?? collection} — {hadith.bookName ?? `Book ${book}`}
-            </p>
+    <div
+      className="min-h-screen bg-transparent relative z-10 safe-top"
+      {...swipeHandlers}
+    >
+      <div className="max-w-3xl mx-auto px-4 py-5 space-y-4">
+        {/* 2-line clamped header; actions stay strictly on one row */}
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate(`/hadith/collections/${collection}/${book}`)}
+              className="rounded-xl shrink-0 mt-0.5"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex-1 min-w-0">
+              <h1
+                dir="auto"
+                style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
+                className="font-bold text-[var(--text-primary)] line-clamp-2 leading-tight"
+              >
+                Hadith #{hadith.hadithNumber}
+              </h1>
+              <p
+                dir="auto"
+                style={{ unicodeBidi: 'plaintext' }}
+                className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-snug mt-0.5"
+              >
+                {collectionMeta?.title ?? hadith.collection ?? collection} — {hadith.bookName ?? `Book ${book}`}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 flex-nowrap">
             <AaReaderControlsButton />
             <Button
               variant="ghost"
@@ -222,11 +324,13 @@ export function HadithDetail() {
               })}
               className="rounded-xl h-8 w-8"
             >
-              <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-primary text-primary" : "text-muted-foreground"}`} />
+              <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-primary text-primary" : "text-[var(--text-secondary)]"}`} />
             </Button>
-            <Button variant="ghost" size="icon" title="Copy hadith text" onClick={handleCopy} className="rounded-xl h-8 w-8">
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            </Button>
+            <CopyHadithMenuButton
+              compact
+              copied={copied}
+              onCopyMode={handleCopyMode}
+            />
             <Button variant="ghost" size="icon" title="Share hadith" onClick={handleShare} className="rounded-xl h-8 w-8">
               <Share2 className="w-4 h-4" />
             </Button>
@@ -257,8 +361,17 @@ export function HadithDetail() {
           </Button>
         </div>
 
+        <ChapterOpenerOrnament
+          badgeText={`${collectionMeta?.title ?? collection} · #${hadith.hadithNumber}`}
+          arabicSubtitle={collectionMeta?.arabicTitle}
+        />
+
+        {!continueDismissed && savedScrollY > 120 && (
+          <ReaderContinueChip onContinue={handleContinueScroll} />
+        )}
+
         <Card className="border-[var(--border)] bg-[var(--surface)]">
-          <CardContent className="p-4 sm:p-6 space-y-5">
+          <CardContent className="p-4 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline">#{hadith.hadithNumber}</Badge>
               {cleanGrade && (
@@ -267,32 +380,24 @@ export function HadithDetail() {
                 </Badge>
               )}
               {bookmarked && (
-                <Badge variant="outline" className="ml-auto text-xs bg-primary/10 text-primary border-primary/20">
+                <Badge variant="outline" className="ml-auto text-xs bg-[var(--accent-soft)] text-[var(--accent-text)] border-[var(--border)]">
                   Bookmarked
                 </Badge>
               )}
             </div>
 
-            <div className="bg-[var(--surface-2)] px-4 py-3.5 rounded-xl border border-[var(--border)]">
-              <p
-                className="font-arabic text-right text-[var(--text-primary)] break-words"
-                dir="rtl"
-                style={{
-                  fontSize: `${prefs.arabicFontSize}px`,
-                  lineHeight: getArabicLineHeight(prefs.lineSpacing),
-                }}
-              >
-                {hadith.arabic}
-              </p>
-            </div>
+            <ReaderArabicBlock text={hadith.arabic} arabicSize={prefs.arabicSize} />
 
             <ManuscriptDivider />
 
-            <div className="space-y-3">
+            <div className="space-y-3 reader-prose-measure">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                  {actualLang === 'ur' ? 'ترجمہ' : actualLang === 'gu' ? 'અનુવાદ' : actualLang === 'hi' ? 'अनुवाद' : 'Translation'}
-                </h3>
+                <ReaderHeading
+                  level="h3"
+                  text={actualLang === 'ur' ? 'ترجمہ' : actualLang === 'gu' ? 'અનુવાદ' : actualLang === 'hi' ? 'अनुवाद' : 'Translation'}
+                  actualLang={actualLang}
+                  clampTwoLines={false}
+                />
                 <ContentLanguageBar compact />
               </div>
 
@@ -310,8 +415,8 @@ export function HadithDetail() {
                 <BookProseParagraph
                   text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
                   actualLang={actualLang}
-                  fontSize={prefs.bodyFontSize}
-                  lineSpacing={prefs.lineSpacing}
+                  fontSize={prefs.bodySize}
+                  lineSpacing={prefs.lineHeightMode}
                   className="text-[var(--text-primary)]"
                 />
               )}
@@ -320,9 +425,10 @@ export function HadithDetail() {
             {hadith.narrator && (
               <p
                 className={`text-sm font-semibold text-[var(--accent-text)] ${
-                  actualLang === 'ur' ? 'font-urdu text-right leading-[2.0]' : 'text-left'
+                  actualLang === 'ur' ? 'font-urdu text-right' : 'text-left'
                 }`}
-                dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+                dir="auto"
+                style={{ unicodeBidi: 'plaintext' }}
               >
                 {actualLang === 'en'
                   ? `Narrated by: ${hadith.narrator}`
@@ -335,18 +441,29 @@ export function HadithDetail() {
             )}
 
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {tags.map((tag, i) => (
-                  <Badge key={i} variant="outline" className="text-xs">{tag}</Badge>
-                ))}
-              </div>
+              <ReaderTagChips tags={tags} contentLang={contentLang} />
             )}
 
-            <div className="pt-4 border-t border-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-muted-foreground">
-              <div><span className="font-medium text-foreground">Collection:</span> {getCollectionByName(hadith.collection ?? collection)?.title ?? hadith.collection ?? collection}</div>
-              {hadith.chapterName && <div><span className="font-medium text-foreground">Chapter:</span> {hadith.chapterName}</div>}
-              {hadith.bookName && <div><span className="font-medium text-foreground">Book:</span> {hadith.bookName}</div>}
-              <div><span className="font-medium text-foreground">Hadith Number:</span> {hadith.hadithNumber}</div>
+            <div className="pt-4 border-t border-[var(--border)] grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-[var(--text-secondary)]">
+              <div>
+                <span className="font-medium text-[var(--text-primary)]">Collection:</span>{' '}
+                {collectionMeta?.title ?? hadith.collection ?? collection}
+              </div>
+              {collectionMeta && (
+                <div>
+                  <span className="font-medium text-[var(--text-primary)]">Count:</span>{' '}
+                  {formatCollectionHadithCount(collectionMeta.totalHadith, collectionMeta.totalNarrations)}
+                </div>
+              )}
+              {collectionMeta?.death && (
+                <div>
+                  <span className="font-medium text-[var(--text-primary)]">Compiler:</span>{' '}
+                  {formatCompilerDeath(collectionMeta.death)}
+                </div>
+              )}
+              {hadith.chapterName && <div><span className="font-medium text-[var(--text-primary)]">Chapter:</span> {hadith.chapterName}</div>}
+              {hadith.bookName && <div><span className="font-medium text-[var(--text-primary)]">Book:</span> {hadith.bookName}</div>}
+              <div><span className="font-medium text-[var(--text-primary)]">Hadith Number:</span> {hadith.hadithNumber}</div>
             </div>
           </CardContent>
         </Card>

@@ -20,11 +20,11 @@ import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
   AaReaderControlsButton,
   BookProseParagraph,
+  ReaderArabicBlock,
   ReaderStatusBanner,
 } from "@/components/BookReaderControls";
 import {
   useBookReaderPrefs,
-  getArabicLineHeight,
   formatIslamicProse,
 } from "@/lib/reader-typography";
 
@@ -133,7 +133,7 @@ export function HadithCollections() {
   return (
     <div className="min-h-screen bg-transparent relative z-10 safe-top">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Header with Row 1 (Back + Title + Aa + Bookmark) and Row 2 (Full-Width Language Bar) */}
+        {/* Header with Row 1 (Back + 2-Line Clamped Title + One-Row Actions) and Row 2 (Full-Width Language Bar) */}
         <div className="space-y-3 mb-6">
           <div className="flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -146,13 +146,19 @@ export function HadithCollections() {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">Hadith Collections</h1>
-                <p className="text-muted-foreground text-xs sm:text-sm leading-snug">
+                <h1
+                  dir="auto"
+                  style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
+                  className="font-bold text-[var(--text-primary)] line-clamp-2 leading-tight"
+                >
+                  Hadith Collections
+                </h1>
+                <p className="text-[var(--text-secondary)] text-xs sm:text-sm leading-snug line-clamp-2">
                   Authentic Prophetic traditions
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
               <AaReaderControlsButton />
               <Button
                 variant="ghost"
@@ -223,30 +229,28 @@ export function HadithCollections() {
                     onRetry={() => setDailyRetryTick((n) => n + 1)}
                   />
                   {dailyHadith.arabic && (
-                    <p
-                      className="text-foreground font-arabic text-right break-words"
-                      dir="rtl"
-                      style={{
-                        fontSize: `${prefs.arabicFontSize}px`,
-                        lineHeight: getArabicLineHeight(prefs.lineSpacing),
-                      }}
-                    >
-                      {!isExpanded && dailyHadith.arabic.length > 200
-                        ? `${dailyHadith.arabic.slice(0, 200)}...`
-                        : dailyHadith.arabic}
-                    </p>
+                    <ReaderArabicBlock
+                      arabicSize={prefs.arabicSize}
+                      text={
+                        !isExpanded && dailyHadith.arabic.length > 200
+                          ? `${dailyHadith.arabic.slice(0, 200)}...`
+                          : dailyHadith.arabic
+                      }
+                    />
                   )}
-                  <BookProseParagraph
-                    text={
-                      !isExpanded && (translatedDailyContent || dailyHadith.content).length > 240
-                        ? `${(translatedDailyContent || dailyHadith.content).slice(0, 240)}...`
-                        : (translatedDailyContent || dailyHadith.content)
-                    }
-                    actualLang={actualDailyLang}
-                    fontSize={prefs.bodyFontSize}
-                    lineSpacing={prefs.lineSpacing}
-                    className="text-foreground/95"
-                  />
+                  <div className="reader-prose-measure">
+                    <BookProseParagraph
+                      text={
+                        !isExpanded && (translatedDailyContent || dailyHadith.content).length > 240
+                          ? `${(translatedDailyContent || dailyHadith.content).slice(0, 240)}...`
+                          : (translatedDailyContent || dailyHadith.content)
+                      }
+                      actualLang={actualDailyLang}
+                      fontSize={prefs.bodySize}
+                      lineSpacing={prefs.lineHeightMode}
+                      className="text-[var(--text-primary)]"
+                    />
+                  </div>
                   {((translatedDailyContent || dailyHadith.content).length > 240 || (dailyHadith.arabic && dailyHadith.arabic.length > 200)) && (
                     <button
                       type="button"
@@ -273,8 +277,19 @@ export function HadithCollections() {
                 </p>
               </>
             ) : (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              <div className="space-y-3 py-2 animate-pulse" aria-busy="true" aria-label="Loading daily hadith">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-lg bg-[var(--surface-2)]" />
+                  <div className="h-4 w-32 rounded bg-[var(--surface-2)]" />
+                </div>
+                <div className="rounded-2xl p-3 bg-[var(--surface-2)] border border-[var(--border)] space-y-2">
+                  <div className="h-5 w-full rounded bg-[var(--accent-soft)]" />
+                  <div className="h-5 w-4/5 ml-auto rounded bg-[var(--accent-soft)]" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 w-full rounded bg-[var(--surface-2)]" />
+                  <div className="h-4 w-5/6 rounded bg-[var(--surface-2)]" />
+                </div>
               </div>
             )}
           </div>

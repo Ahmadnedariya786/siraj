@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { useLanguage } from '@/contexts/LanguageContext-new';
-import { formatIslamicProse } from '@/lib/reader-typography';
+import { formatIslamicProse, getHonorificLabels, getReaderLineHeight } from '@/lib/reader-typography';
 
 export type ContentLang = 'en' | 'ur' | 'gu' | 'hi';
 export type BookModuleType = 'hadith' | 'seerah' | 'prophet' | 'generic';
@@ -43,8 +43,11 @@ export interface CachedBookTranslation {
   id: string; // ${module}:${itemId}:${lang}
   module: BookModuleType;
   itemId: string;
+  chapterId?: string;
   lang: ContentLang;
   title?: string;
+  paragraphs?: string[];
+  totalParagraphs?: number;
   text: string;
   source: 'scholar-edition' | 'chunked-api';
   updatedAt: number;
@@ -113,6 +116,10 @@ function openTranslationDb(): Promise<IDBDatabase | null> {
   });
 
   return idbPromise;
+}
+
+export function getBookTranslationFromCacheSync(cacheId: string): CachedBookTranslation | null {
+  return bookMemoryCache.get(cacheId) ?? null;
 }
 
 export async function getBookTranslationFromCache(cacheId: string): Promise<CachedBookTranslation | null> {
@@ -188,26 +195,23 @@ export function isPureArabicBlock(text: string): boolean {
 
 function tokenizeSacredPhrases(text: string): string {
   return text
-    .replace(/\(\s*ﷺ\s*\)|ﷺ|\(\s*(?:peace be upon him|pbuh|p\.b\.u\.h\.|s\.a\.w\.?|saw)\s*\)/gi, ' [[SC_PBUH]] ')
+    .replace(/\(\s*ﷺ\s*\)|ﷺ|\(\s*(?:peace be upon him|pbuh|p\.b\.u\.h\.|s\.a\.w\.?s?\.?|saws)\s*\)/gi, ' [[SC_PBUH]] ')
     .replace(/\b(?:peace be upon him|pbuh)\b/gi, ' [[SC_PBUH]] ')
-    .replace(/\(\s*(?:سُبْحَٰنَهُۥ وَتَعَٰلَىٰ|سبحانه وتعالى|SWT|s\.w\.t\.)\s*\)/gi, ' [[SC_SWT]] ')
-    .replace(/\(\s*(?:عَلَيْهِ ٱلسَّلَامُ|عليه السلام|AS|a\.s\.|alayhis[- ]salam)\s*\)/gi, ' [[SC_AS]] ')
-    .replace(/\(\s*(?:رَضِيَ اللَّهُ عَنْهُ|رضی اللہ عنہ|RA|r\.a\.)\s*\)/gi, ' [[SC_RA]] ')
+    .replace(/\(\s*(?:سُ?بْ?حَ?ٰ?نَهُۥ?\s*وَتَعَ?ٰ?لَىٰ?|سبحانه وتعالى|SWT|s\.w\.t\.?)\s*\)/giu, ' [[SC_SWT]] ')
+    .replace(/\(\s*(?:عَلَ?يْ?هِ\s*ٱ?ل?سَّ?لَ?امُ?|عليه السلام|AS|a\.s\.|alayhis[- ]salam|علیہ السلام|અ\.સ\.|अ\.स\.)\s*\)/giu, ' [[SC_AS]] ')
+    .replace(/\(\s*(?:رَضِ?يَ?\s*ٱ?للَّ?ٰ?هُ\s*عَ?نْ?هُ?م?ا?|رضی اللہ عنہ|RA|r\.a\.|ર\.અ\.|र\.अ\.)\s*\)/giu, ' [[SC_RA]] ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
 
 function restoreSacredPhrases(text: string, targetLang: ContentLang): string {
-  const pbuh = targetLang === 'ur' ? 'ﷺ' : 'ﷺ';
-  const swt = targetLang === 'ur' ? '(سبحانہ و تعالیٰ)' : targetLang === 'gu' ? '(SWT)' : targetLang === 'hi' ? '(SWT)' : '(SWT)';
-  const asPhrase = targetLang === 'ur' ? '(علیہ السلام)' : targetLang === 'gu' ? '(અ.સ.)' : targetLang === 'hi' ? '(अ.स.)' : '(AS)';
-  const raPhrase = targetLang === 'ur' ? '(رضی اللہ عنہ)' : targetLang === 'gu' ? '(ર.અ.)' : targetLang === 'hi' ? '(र.अ.)' : '(RA)';
+  const labels = getHonorificLabels(targetLang);
 
   return text
-    .replace(/\[\[\s*SC_PBUH\s*\]\]/gi, pbuh)
-    .replace(/\[\[\s*SC_SWT\s*\]\]/gi, swt)
-    .replace(/\[\[\s*SC_AS\s*\]\]/gi, asPhrase)
-    .replace(/\[\[\s*SC_RA\s*\]\]/gi, raPhrase)
+    .replace(/\[\[\s*SC_PBUH\s*\]\]/gi, labels.pbuh)
+    .replace(/\[\[\s*SC_SWT\s*\]\]/gi, labels.swt)
+    .replace(/\[\[\s*SC_AS\s*\]\]/gi, labels.as)
+    .replace(/\[\[\s*SC_RA\s*\]\]/gi, labels.ra)
     .replace(/\(\s*\)/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -215,30 +219,16 @@ function restoreSacredPhrases(text: string, targetLang: ContentLang): string {
 
 export function sanitizeIslamicHonorifics(text: string, targetLang: ContentLang): string {
   if (!text) return '';
+  const labels = getHonorificLabels(targetLang);
   let out = formatIslamicProse(restoreSacredPhrases(text, targetLang), targetLang);
 
-  if (targetLang === 'ur') {
-    out = out
-      .replace(/\((?:ﷺ|peace be upon him|pbuh|p\.b\.u\.h\.)\)/gi, 'ﷺ')
-      .replace(/\bpeace be upon him\b/gi, 'ﷺ')
-      .replace(/\b(?:PBUH|pbuh)\b/g, 'ﷺ')
-      .replace(/\((?:AS|a\.s\.|alayhis-salam|alayhis salam)\)/gi, '(علیہ السلام)')
-      .replace(/\((?:RA|r\.a\.|radiyallahu 'anhu|radiyallahu anhu)\)/gi, '(رضی اللہ عنہ)');
-  } else if (targetLang === 'gu') {
-    out = out
-      .replace(/\((?:ﷺ|peace be upon him|pbuh|p\.b\.u\.h\.)\)/gi, ' ﷺ')
-      .replace(/\bpeace be upon him\b/gi, 'ﷺ')
-      .replace(/\b(?:PBUH|pbuh)\b/g, 'ﷺ')
-      .replace(/\((?:AS|a\.s\.|alayhis-salam|alayhis salam)\)/gi, ' (અ.સ.)')
-      .replace(/\((?:RA|r\.a\.|radiyallahu 'anhu|radiyallahu anhu)\)/gi, ' (ર.અ.)');
-  } else if (targetLang === 'hi') {
-    out = out
-      .replace(/\((?:ﷺ|peace be upon him|pbuh|p\.b\.u\.h\.)\)/gi, ' ﷺ')
-      .replace(/\bpeace be upon him\b/gi, 'ﷺ')
-      .replace(/\b(?:PBUH|pbuh)\b/g, 'ﷺ')
-      .replace(/\((?:AS|a\.s\.|alayhis-salam|alayhis salam)\)/gi, ' (अ.स.)')
-      .replace(/\((?:RA|r\.a\.|radiyallahu 'anhu|radiyallahu anhu)\)/gi, ' (र.अ.)');
-  }
+  out = out
+    .replace(/\(\s*(?:ﷺ|peace be upon him|pbuh|p\.b\.u\.h\.|saws|s\.a\.w\.?s?\.?)\s*\)/gi, labels.pbuh)
+    .replace(/\bpeace be upon him\b/gi, labels.pbuh)
+    .replace(/\b(?:PBUH|pbuh)\b/g, labels.pbuh)
+    .replace(/\(\s*(?:AS|a\.s\.|alayhis-salam|alayhis salam)\s*\)/gi, labels.as)
+    .replace(/\(\s*(?:RA|r\.a\.|radiyallahu 'anhu|radiyallahu anhu)\s*\)/gi, labels.ra)
+    .replace(/\(\s*\(\s*(ﷺ|SWT|AS|RA|علیہ السلام|سبحانہ و تعالیٰ|رضی اللہ عنہ|અ\.સ\.|ર\.અ\.|अ\.स\.|र\.अ\.)\s*\)\s*\)/gu, '($1)');
 
   return out;
 }
@@ -559,21 +549,53 @@ export interface StreamBookOptions {
 }
 
 /**
+ * Translates a single source paragraph cleanly without mutating the locked paragraph denominator.
+ */
+async function translateSourceParagraphViaApi(
+  para: string,
+  targetLang: ContentLang
+): Promise<{ text: string; ok: boolean }> {
+  if (targetLang === 'en' || !para.trim()) {
+    return { text: para, ok: true };
+  }
+  if (isPureArabicBlock(para)) {
+    return { text: para, ok: true };
+  }
+  if (para.length <= 850) {
+    return translateSingleChunkViaApi(para, targetLang);
+  }
+  const subChunks = splitTranslationChunks(para, 850);
+  const translatedSubs: string[] = [];
+  let anyOk = false;
+  for (const sub of subChunks) {
+    const res = await translateSingleChunkViaApi(sub, targetLang);
+    translatedSubs.push(res.text);
+    if (res.ok) anyOk = true;
+  }
+  return {
+    text: sanitizeIslamicHonorifics(translatedSubs.join(' '), targetLang),
+    ok: anyOk,
+  };
+}
+
+/**
  * Translates multi-paragraph chapters (Seerah, Prophets) progressively:
- * 1) Checks permanent IndexedDB (`siraj_translated_books_v1`) -> 0ms offline load
- * 2) Translates first 2-3 paragraphs immediately so user starts reading < 1.5s
- * 3) Streams remaining chunks (`<= 850` chars each) keeping pure Arabic blocks untouched
- * 4) Saves completed translation permanently to IndexedDB
- * 5) Falls back honestly to English (`actualLang: 'en'`, `offlineFallback: true`) if offline
+ * 1) Checks permanent IndexedDB (`siraj_translated_books_v1`) -> <50ms offline load
+ * 2) Locks denominator `N = sourceParagraphs.length` at stream start (never mutates during stream)
+ * 3) Translates first 3 paragraphs immediately so user starts reading right away
+ * 4) Streams remaining paragraphs keeping pure Arabic blocks untouched
+ * 5) Saves translated paragraphs permanently to IndexedDB per `(chapterId, lang)`
+ * 6) Falls back honestly to English (`actualLang: 'en'`, `offlineFallback: true`) if offline
  */
 export async function streamBookTranslation(opts: StreamBookOptions): Promise<void> {
   const { module, itemId, title, englishParagraphs, targetLang, signal, onUpdate } = opts;
   const cleanParas = englishParagraphs
     .map((p) => formatIslamicProse(p, 'en'))
     .filter(Boolean);
+  const lockedDenominator = cleanParas.length;
   const fullEnText = cleanParas.join('\n\n');
 
-  if (targetLang === 'en' || cleanParas.length === 0) {
+  if (targetLang === 'en' || lockedDenominator === 0) {
     onUpdate({
       title: title ? formatIslamicProse(title, 'en') : undefined,
       text: fullEnText,
@@ -581,8 +603,8 @@ export async function streamBookTranslation(opts: StreamBookOptions): Promise<vo
       fromCache: false,
       offlineFallback: false,
       source: 'original',
-      doneChunks: cleanParas.length,
-      totalChunks: cleanParas.length,
+      doneChunks: lockedDenominator,
+      totalChunks: lockedDenominator,
       isComplete: true,
     });
     return;
@@ -592,59 +614,72 @@ export async function streamBookTranslation(opts: StreamBookOptions): Promise<vo
   const cached = await getBookTranslationFromCache(cacheId);
   if (cached?.text) {
     if (signal?.aborted) return;
+    const cachedText = cached.paragraphs?.length
+      ? cached.paragraphs.join('\n\n')
+      : cached.text;
+    const cachedCount = cached.paragraphs?.length ?? lockedDenominator;
     onUpdate({
       title: cached.title || title,
-      text: cached.text,
+      text: cachedText,
       actualLang: targetLang,
       fromCache: true,
       offlineFallback: false,
       source: cached.source,
-      doneChunks: 1,
-      totalChunks: 1,
+      doneChunks: lockedDenominator || cachedCount,
+      totalChunks: lockedDenominator || cachedCount,
       isComplete: true,
     });
     return;
   }
 
-  // Group paragraphs into chunks <= 850 chars while tracking paragraph order
-  // Keep individual paragraphs separated via a unique delimiter inside chunks where possible,
-  // or translate paragraph-chunks cleanly
-  const workChunks: string[] = [];
-  for (const para of cleanParas) {
-    if (para.length <= 850) {
-      workChunks.push(para);
-    } else {
-      workChunks.push(...splitTranslationChunks(para, 850));
-    }
-  }
-
-  const totalChunks = workChunks.length;
-  const translatedChunks: string[] = [...workChunks];
+  const translatedParas: string[] = [...cleanParas];
   let succeededCount = 0;
 
-  let translatedTitle = title ? formatIslamicProse(title, 'en') : undefined;
-  if (title && !signal?.aborted) {
-    const titleRes = await translateSingleChunkViaApi(title, targetLang);
-    if (titleRes.ok) {
-      translatedTitle = titleRes.text;
-    }
+  // Emit initial progress with locked denominator immediately
+  if (!signal?.aborted) {
+    onUpdate({
+      title: title ? formatIslamicProse(title, 'en') : undefined,
+      text: fullEnText,
+      actualLang: 'en',
+      fromCache: false,
+      offlineFallback: false,
+      source: 'chunked-api',
+      doneChunks: 0,
+      totalChunks: lockedDenominator,
+      isComplete: false,
+    });
   }
 
-  // First batch: translate first 3 chunks immediately so reader sees target language right away!
-  const firstBatchCount = Math.min(3, totalChunks);
-  for (let i = 0; i < totalChunks; ) {
+  let translatedTitle = title ? formatIslamicProse(title, 'en') : undefined;
+  const titlePromise =
+    title && !signal?.aborted
+      ? translateSingleChunkViaApi(title, targetLang).then((titleRes) => {
+          if (titleRes.ok) {
+            translatedTitle = titleRes.text;
+          }
+        })
+      : Promise.resolve();
+
+  // First batch: translate first 3 paragraphs immediately alongside title
+  const firstBatchCount = Math.min(3, lockedDenominator);
+  for (let i = 0; i < lockedDenominator; ) {
     if (signal?.aborted) return;
 
     const batchSize = i === 0 ? firstBatchCount : 2;
-    const endIdx = Math.min(i + batchSize, totalChunks);
-    const results = await Promise.all(
-      workChunks.slice(i, endIdx).map((ch) => translateSingleChunkViaApi(ch, targetLang))
-    );
+    const endIdx = Math.min(i + batchSize, lockedDenominator);
+    const batchPromises = cleanParas
+      .slice(i, endIdx)
+      .map((para) => translateSourceParagraphViaApi(para, targetLang));
+
+    const results =
+      i === 0
+        ? (await Promise.all([titlePromise, ...batchPromises])).slice(1) as Array<{ text: string; ok: boolean }>
+        : await Promise.all(batchPromises);
 
     let batchOk = 0;
     results.forEach((res, offsetIdx) => {
       if (res.ok) {
-        translatedChunks[i + offsetIdx] = res.text;
+        translatedParas[i + offsetIdx] = res.text;
         succeededCount++;
         batchOk++;
       }
@@ -661,7 +696,7 @@ export async function streamBookTranslation(opts: StreamBookOptions): Promise<vo
           offlineFallback: true,
           source: 'original',
           doneChunks: 0,
-          totalChunks,
+          totalChunks: lockedDenominator,
           isComplete: true,
         });
       }
@@ -669,31 +704,36 @@ export async function streamBookTranslation(opts: StreamBookOptions): Promise<vo
     }
 
     i = endIdx;
-    const isComplete = i >= totalChunks;
+    const isComplete = i >= lockedDenominator;
 
     if (!signal?.aborted) {
       onUpdate({
         title: translatedTitle,
-        text: translatedChunks.slice(0, i).join('\n\n') + (isComplete ? '' : `\n\n${workChunks.slice(i).join('\n\n')}`),
+        text:
+          translatedParas.slice(0, i).join('\n\n') +
+          (isComplete ? '' : `\n\n${cleanParas.slice(i).join('\n\n')}`),
         actualLang: targetLang,
         fromCache: false,
         offlineFallback: false,
         source: 'chunked-api',
         doneChunks: i,
-        totalChunks,
+        totalChunks: lockedDenominator,
         isComplete,
       });
     }
   }
 
   if (succeededCount > 0 && !signal?.aborted) {
-    const finalJoined = translatedChunks.join('\n\n');
+    const finalJoined = translatedParas.join('\n\n');
     await saveBookTranslationToCache({
       id: cacheId,
       module,
       itemId,
+      chapterId: itemId,
       lang: targetLang,
       title: translatedTitle,
+      paragraphs: translatedParas,
+      totalParagraphs: lockedDenominator,
       text: finalJoined,
       source: 'chunked-api',
       updatedAt: Date.now(),
@@ -779,6 +819,178 @@ export async function translateIslamicBatch(
   return Promise.all(texts.map((t) => translateIslamicText(t, targetLang)));
 }
 
+// ─── Curated & Cached Tag Chip Translator (Never Expose English Slugs in UR/GU/HI) ─
+
+const CURATED_TAG_TRANSLATIONS: Record<string, { ur: string; gu: string; hi: string }> = {
+  ahzab: { ur: 'غزوۂ احزاب', gu: 'અહઝાબ', hi: 'अहज़ाब' },
+  'arab-history': { ur: 'تاریخِ عرب', gu: 'અરબ ઇતિહાસ', hi: 'अरब इतिहास' },
+  ark: { ur: 'کشتیِ نوح', gu: 'નૂહનું વહાણ', hi: 'नूह की नाव' },
+  ascension: { ur: 'معراج النبی ﷺ', gu: 'મેરાજ', hi: 'मेराज' },
+  badr: { ur: 'غزوۂ بدر', gu: 'બદ્રની લડાઈ', hi: 'बद्र की जंग' },
+  battle: { ur: 'غزوہ', gu: 'જંગ', hi: 'जंग' },
+  birth: { ur: 'ولادتِ باسعادت', gu: 'જન્મ', hi: 'जन्म' },
+  'birth-miracle': { ur: 'معجزاتی ولادت', gu: 'ચમત્કારિક જન્મ', hi: 'चमत्कारिक जन्म' },
+  'children-of-israel': { ur: 'بنی اسرائیل', gu: 'બની ઇઝરાયેલ', hi: 'बनी इस्राईल' },
+  conquest: { ur: 'فتحِ مکہ', gu: 'ફતેહ', hi: 'फ़तह' },
+  covenant: { ur: 'عہد و میثاق', gu: 'કરાર', hi: 'अहद' },
+  creation: { ur: 'تخلیقِ کائنات', gu: 'સર્જન', hi: 'सृष्टि' },
+  death: { ur: 'وصالِ مبارک', gu: 'વફાત', hi: 'वफ़ात' },
+  dreams: { ur: 'تعبیرِ خواب', gu: 'સ્વપ્ન', hi: 'ख़्वाब' },
+  'early-life': { ur: 'ابتدائی حیات', gu: 'પ્રારંભિક જીવન', hi: 'प्रारंभिक जीवन' },
+  exodus: { ur: 'ہجرتِ بنی اسرائیل', gu: 'હિજરત', hi: 'पलायन' },
+  farewell: { ur: 'حجۃ الوداع', gu: 'અંતિમ વિદાય', hi: 'विदाई' },
+  'final-days': { ur: 'آخری ایام', gu: 'અંતિમ દિવસો', hi: 'अंतिम दिन' },
+  fire: { ur: 'آگ کا معجزہ', gu: 'અગ્નિ પરીક્ષા', hi: 'अग्नि परीक्षा' },
+  'first-prophet': { ur: 'پہلے نبی', gu: 'પ્રથમ પયગંબર', hi: 'प्रथम नबी' },
+  flood: { ur: 'طوفانِ نوح', gu: 'મહાપૂર', hi: 'महाप्रलय' },
+  hijrah: { ur: 'ہجرتِ مدینہ', gu: 'હિજરત', hi: 'हिजरत' },
+  hudaibiyah: { ur: 'صلحِ حدیبیہ', gu: 'હુદૈબિયા સંધિ', hi: 'हुदैबिया संधि' },
+  idolatry: { ur: 'بت پرستی کا رد', gu: 'મૂર્તિપૂજા વિરોધ', hi: 'मूर्तिपूजा विरोध' },
+  illness: { ur: 'ابتلا و بیماری', gu: 'બીમારીમાં સબ્ર', hi: 'बीमारी में सब्र' },
+  justice: { ur: 'عدل و انصاف', gu: 'ન્યાય', hi: 'न्याय' },
+  kaaba: { ur: 'خانہ کعبہ', gu: 'કાબા શરીફ', hi: 'काबा शरीफ़' },
+  kingdom: { ur: 'سلطنت و حکمرانی', gu: 'શાસન', hi: 'सल्तनत' },
+  lineage: { ur: 'نسبِ مبارک', gu: 'વંશાવળી', hi: 'वंश' },
+  madinah: { ur: 'مدینہ منورہ', gu: 'મદીના', hi: 'मदीना' },
+  makkah: { ur: 'مکہ مکرمہ', gu: 'મક્કા', hi: 'मक्का' },
+  migration: { ur: 'ہجرت', gu: 'હિજરત', hi: 'हिजरत' },
+  military: { ur: 'سرایا و مہمات', gu: 'લશ્કરી અભિયાન', hi: 'सैन्य अभियान' },
+  miracles: { ur: 'معجزات', gu: 'મોઅજેઝા', hi: 'मोजिज़ात' },
+  monotheism: { ur: 'توحید', gu: 'તૌહીદ', hi: 'तौहीद' },
+  patience: { ur: 'صبر و استقامت', gu: 'સબ્ર અને ધીરજ', hi: 'सब्र और धैर्य' },
+  persecution: { ur: 'مظالم و صبر', gu: 'અત્યાચાર અને ધીરજ', hi: 'अत्याचार व सब्र' },
+  pharaoh: { ur: 'فرعون', gu: 'ફિરઔન', hi: 'फ़िरऔन' },
+  pilgrimage: { ur: 'حج و عمرہ', gu: 'હજ', hi: 'हज' },
+  prayer: { ur: 'نماز و دعا', gu: 'નમાઝ અને દુઆ', hi: 'नमाज़ और दुआ' },
+  'pre-islam': { ur: 'عہدِ جاہلیت', gu: 'ઇસ્લામ પૂર્વે', hi: 'इस्लाम-पूर्व' },
+  preaching: { ur: 'دعوت و تبلیغ', gu: 'દાઅવત', hi: 'दावत व प्रचार' },
+  prophecy: { ur: 'نبوت', gu: 'પયગંબરી', hi: 'नुबुव्वत' },
+  repentance: { ur: 'توبہ و استغفار', gu: 'તૌબા', hi: 'तौबा' },
+  return: { ur: 'واپسی', gu: 'વાપસી', hi: 'वापसी' },
+  revelation: { ur: 'نزولِ وحی', gu: 'વહીનું અવતરણ', hi: 'वह्य का अवतरण' },
+  sacrifice: { ur: 'قربانی', gu: 'કુરબાની', hi: 'क़ुर्बानी' },
+  shepherd: { ur: 'گلہ بانی', gu: 'ભરવાડ', hi: 'चरवाहा' },
+  society: { ur: 'اسلامی معاشرہ', gu: 'ઇસ્લામી સમાજ', hi: 'इस्लामी समाज' },
+  taif: { ur: 'سفرِ طائف', gu: 'તાઇફ યાત્રા', hi: 'ताइफ़ की यात्रा' },
+  trade: { ur: 'تجارت', gu: 'વેપાર', hi: 'व्यापार' },
+  treaty: { ur: 'معاہدہ', gu: 'સંધિ', hi: 'संधि' },
+  trial: { ur: 'آزمائش', gu: 'કસોટી', hi: 'आज़माइश' },
+  tribes: { ur: 'قبائلِ عرب', gu: 'કબીલાઓ', hi: 'क़बीले' },
+  uhud: { ur: 'غزوۂ احد', gu: 'ઉહુદની લડાઈ', hi: 'उहुद की जंग' },
+  well: { ur: 'کنواں', gu: 'કૂવો', hi: 'कुआं' },
+  whale: { ur: 'مچھلی کا واقعہ', gu: 'માછલીની ઘટના', hi: 'मछली की घटना' },
+  wisdom: { ur: 'حکمت و دانائی', gu: 'હિકમત', hi: 'हिकमत' },
+  intentions: { ur: 'نیت', gu: 'નિયત', hi: 'नीयत' },
+  actions: { ur: 'اعمال', gu: 'કર્મો', hi: 'अमल' },
+  faith: { ur: 'ایمان', gu: 'ઈમાન', hi: 'ईमान' },
+  companions: { ur: 'صحابہ کرام', gu: 'સહાબા', hi: 'सहाबा' },
+  virtue: { ur: 'فضیلت', gu: 'ફઝીલત', hi: 'फ़ज़ीलत' },
+  islam: { ur: 'اسلام', gu: 'ઇસ્લામ', hi: 'इस्लाम' },
+  general: { ur: 'عمومی', gu: 'સામાન્ય', hi: 'सामान्य' },
+  charity: { ur: 'صدقہ و خیرات', gu: 'સદકો', hi: 'सदक़ा' },
+  knowledge: { ur: 'علم', gu: 'જ્ઞાન', hi: 'इल्म' },
+  manners: { ur: 'اخلاق و آداب', gu: 'શિષ્ટાચાર', hi: 'अख़लाक़' },
+};
+
+function normalizeTagSlug(tag: string): string {
+  return tag.trim().toLowerCase().replace(/\s+/g, '-');
+}
+
+export function formatEnglishTagLabel(tag: string): string {
+  return tag
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+/**
+ * Synchronous tag lookup for UI chips.
+ * In UR/GU/HI, unresolved tags return `null` so the UI renders skeleton chips
+ * instead of flashing raw English slugs.
+ */
+export function getCachedTagsSync(
+  tags: string[],
+  targetLang: ContentLang
+): { labels: Array<string | null>; allReady: boolean } {
+  if (!tags || tags.length === 0) return { labels: [], allReady: true };
+  if (targetLang === 'en') {
+    return {
+      labels: tags.map((t) => formatEnglishTagLabel(t)),
+      allReady: true,
+    };
+  }
+
+  let allReady = true;
+  const labels = tags.map((rawTag) => {
+    const slug = normalizeTagSlug(rawTag);
+    const curated = CURATED_TAG_TRANSLATIONS[slug]?.[targetLang];
+    if (curated) return curated;
+
+    const cleanPhrase = formatIslamicProse(rawTag.replace(/[-_]+/g, ' ').trim(), 'en');
+    const cacheKey = `${CONTENT_TRANSLATION_CACHE_PREFIX}${targetLang}_${fastHash(cleanPhrase)}`;
+    if (memoryCache.has(cacheKey)) {
+      return memoryCache.get(cacheKey)!;
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(cacheKey);
+        if (stored) {
+          memoryCache.set(cacheKey, stored);
+          return stored;
+        }
+      }
+    } catch {
+      // Ignore storage access restriction
+    }
+    allReady = false;
+    return null;
+  });
+
+  return { labels, allReady };
+}
+
+export async function translateTagsBatch(
+  tags: string[],
+  targetLang: ContentLang
+): Promise<{ labels: Array<string | null>; allReady: boolean }> {
+  const syncRes = getCachedTagsSync(tags, targetLang);
+  if (syncRes.allReady || targetLang === 'en') {
+    return syncRes;
+  }
+
+  const out: Array<string | null> = [...syncRes.labels];
+  let resolvedCount = 0;
+
+  await Promise.all(
+    tags.map(async (rawTag, idx) => {
+      if (out[idx]) {
+        resolvedCount++;
+        return;
+      }
+      const cleanPhrase = rawTag.replace(/[-_]+/g, ' ').trim();
+      const res = await translateSingleChunkViaApi(cleanPhrase, targetLang);
+      if (res.ok && res.text && res.text.toLowerCase() !== cleanPhrase.toLowerCase()) {
+        const cacheKey = `${CONTENT_TRANSLATION_CACHE_PREFIX}${targetLang}_${fastHash(formatIslamicProse(cleanPhrase, 'en'))}`;
+        memoryCache.set(cacheKey, res.text);
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(cacheKey, res.text);
+          }
+        } catch {
+          // Ignore quota error
+        }
+        out[idx] = res.text;
+        resolvedCount++;
+      }
+    })
+  );
+
+  return {
+    labels: out,
+    allReady: resolvedCount === tags.length,
+  };
+}
+
 export function getStoredContentLang(globalLang?: string): ContentLang {
   try {
     const saved = localStorage.getItem(CONTENT_LANG_STORAGE_KEY) as ContentLang | null;
@@ -851,7 +1063,7 @@ export function useContentLanguage() {
         fontFamily: 'var(--font-urdu)',
         direction: 'rtl' as const,
         textAlign: 'right' as const,
-        lineHeight: 2.0,
+        lineHeight: getReaderLineHeight('ur', 'standard'),
         paddingTop: '4px',
         paddingBottom: '4px',
       };
@@ -859,7 +1071,7 @@ export function useContentLanguage() {
     return {
       direction: 'ltr' as const,
       textAlign: 'left' as const,
-      lineHeight: 1.65,
+      lineHeight: getReaderLineHeight(contentLang, 'standard'),
     };
   }, [contentLang]);
 

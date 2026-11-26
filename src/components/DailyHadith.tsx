@@ -4,7 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { MessageCircle, RefreshCw, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { pickNonRepeatingIndex } from "@/lib/non-repeating-picker";
-import { getAllCollections, EnhancedHadith } from "@/data/hadith-collections";
+import { EnhancedHadith } from "@/data/hadith-collections";
+import { BookProseParagraph, ReaderArabicBlock } from "@/components/BookReaderControls";
+import { useBookReaderPrefs } from "@/lib/reader-typography";
 
 // Sample enhanced hadith data (would be loaded from collections in production)
 const enhancedHadithData: EnhancedHadith[] = [
@@ -54,6 +56,7 @@ interface Hadith {
 const HADITH_HISTORY_KEY = "dashboard-hadith-history";
 
 export function DailyHadith() {
+  const { prefs } = useBookReaderPrefs();
   const [hadithIndex, setHadithIndex] = useState(() =>
     pickNonRepeatingIndex({
       storageKey: HADITH_HISTORY_KEY,
@@ -124,16 +127,17 @@ export function DailyHadith() {
           </div>
         </div>
         
-        {/* Glass card for Arabic text */}
-        <div className="glass-card p-4 rounded-xl">
-          <p className="text-lg font-arabic text-right leading-loose text-foreground" dir="rtl">
-            {hadith.arabic}
-          </p>
+        <ReaderArabicBlock text={hadith.arabic} arabicSize={prefs.arabicSize} />
+
+        <div className="reader-prose-measure">
+          <BookProseParagraph
+            text={hadith.englishTranslation || ''}
+            actualLang="en"
+            fontSize={prefs.bodySize}
+            lineSpacing={prefs.lineHeightMode}
+            className="text-[var(--text-primary)]"
+          />
         </div>
-        
-        <p className="text-sm text-muted-foreground italic leading-relaxed">
-          "{hadith.englishTranslation}"
-        </p>
         
         <div className="flex items-center gap-2">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-accent-foreground/30 to-transparent" />

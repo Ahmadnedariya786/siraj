@@ -11,14 +11,14 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { PageTransition } from "@/components/PageTransition";
+import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
 import { goBackOrFallback } from "@/lib/navigation";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import {
   useContentLanguage,
   streamBookTranslation,
-  translateIslamicBatch,
+  getBookTranslationFromCacheSync,
   isPureArabicBlock,
   type ContentLang,
 } from "@/lib/content-translator";
@@ -26,13 +26,18 @@ import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
   AaReaderControlsButton,
   BookProseParagraph,
-  ReaderStatusBanner,
+  ChapterOpenerOrnament,
   FormattedIslamicText,
+  ReaderArabicBlock,
+  ReaderContinueChip,
+  ReaderHeading,
+  ReaderStatusBanner,
+  ReaderTagChips,
 } from "@/components/BookReaderControls";
 import {
   useBookReaderPrefs,
   formatIslamicProse,
-  getArabicLineHeight,
+  classifyProseParagraph,
 } from "@/lib/reader-typography";
 import {
   loadSeerahChapter,
@@ -42,11 +47,14 @@ import {
 } from "@/lib/seerah";
 import {
   getReadingProgress,
+  getScrollPosition,
   isBookmarked as checkBookmarked,
   setLastRead,
   setReadingProgress,
+  setScrollPosition,
   toggleBookmark,
 } from "@/lib/reading-storage";
+import { useReaderSwipe } from "@/hooks/useReaderSwipe";
 
 type PeriodKey = SeerahChapterSummary["period"];
 
@@ -61,13 +69,14 @@ export default function SeerahReader() {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [savedScrollY, setSavedScrollY] = useState(0);
+  const [continueDismissed, setContinueDismissed] = useState(false);
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
   const { contentLang } = useContentLanguage();
   const { prefs } = useBookReaderPrefs();
   const [translatedTitle, setTranslatedTitle] = useState("");
   const [translatedContent, setTranslatedContent] = useState("");
-  const [translatedTags, setTranslatedTags] = useState<string[]>([]);
   const [actualLang, setActualLang] = useState<ContentLang>("en");
   const [fromCache, setFromCache] = useState(false);
   const [offlineFallback, setOfflineFallback] = useState(false);
@@ -82,24 +91,40 @@ export default function SeerahReader() {
         .split(/\n{2,}/)
         .map((p) => p.trim())
         .filter(Boolean);
+      const lockedTotal = cleanParagraphs.length;
 
       if (lang === "en") {
         setTranslatedTitle(formatIslamicProse(chap.title, "en"));
         setTranslatedContent(cleanParagraphs.join("\n\n"));
-        setTranslatedTags(chap.tags || []);
         setActualLang("en");
         setFromCache(false);
         setOfflineFallback(false);
         setIsTranslating(false);
-        setDoneChunks(cleanParagraphs.length);
-        setTotalChunks(cleanParagraphs.length);
+        setDoneChunks(lockedTotal);
+        setTotalChunks(lockedTotal);
+        return;
+      }
+
+      // Synchronous memory cache fast-path (<1ms on second open)
+      const syncCached = getBookTranslationFromCacheSync(`seerah:${chap.id}:${lang}`);
+      if (syncCached?.text) {
+        setTranslatedTitle(syncCached.title || formatIslamicProse(chap.title, "en"));
+        setTranslatedContent(
+          syncCached.paragraphs?.length ? syncCached.paragraphs.join("\n\n") : syncCached.text
+        );
+        setActualLang(lang);
+        setFromCache(true);
+        setOfflineFallback(false);
+        setIsTranslating(false);
+        setDoneChunks(lockedTotal);
+        setTotalChunks(lockedTotal);
         return;
       }
 
       setIsTranslating(true);
       setOfflineFallback(false);
       setDoneChunks(0);
-      setTotalChunks(cleanParagraphs.length);
+      setTotalChunks(lockedTotal);
 
       streamBookTranslation({
         module: "seerah",
@@ -129,16 +154,6 @@ export default function SeerahReader() {
           setIsTranslating(false);
         }
       });
-
-      if (chap.tags?.length) {
-        translateIslamicBatch(chap.tags, lang)
-          .then((tags) => {
-            if (!signal.aborted) setTranslatedTags(tags);
-          })
-          .catch((err) => console.debug("Seerah tag translation skipped:", err));
-      } else {
-        setTranslatedTags([]);
-      }
     },
     []
   );
@@ -201,6 +216,8 @@ export default function SeerahReader() {
         setLastRead(chapterId, "seerah");
         setIsBookmarked(checkBookmarked(chapterId, "seerah"));
         setScrollProgress(getReadingProgress(chapterId, "seerah"));
+        setSavedScrollY(getScrollPosition(chapterId, "seerah"));
+        setContinueDismissed(false);
       } catch (error) {
         console.error("Failed to load chapter:", error);
       } finally {
@@ -216,6 +233,7 @@ export default function SeerahReader() {
 
   // Unified document scroll tracking (#main-content inside LayoutManager or window fallback)
   useEffect(() => {
+    if (!chapterId) return;
     const mainScrollEl = document.getElementById("main-content");
     const target: EventTarget = mainScrollEl || window;
 
@@ -227,14 +245,28 @@ export default function SeerahReader() {
       const progress = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 100;
 
       setScrollProgress(Math.min(100, Math.max(0, progress)));
-      setReadingProgress(chapterId || "", progress, "seerah");
       setShowBackToTop(scrollTop > 300);
+
+      if (scrollTop > 60) {
+        setReadingProgress(chapterId, progress, "seerah");
+        setScrollPosition(chapterId, scrollTop, "seerah");
+        setContinueDismissed(true);
+      }
     };
 
     target.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
     return () => target.removeEventListener("scroll", handleScroll);
   }, [chapterId, chapter]);
+
+  const handleContinueScroll = () => {
+    const mainScrollEl = document.getElementById("main-content");
+    if (mainScrollEl) {
+      mainScrollEl.scrollTo({ top: savedScrollY, behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: savedScrollY, behavior: "smooth" });
+    }
+    setContinueDismissed(true);
+  };
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -267,60 +299,71 @@ export default function SeerahReader() {
     }
   };
 
-  const goToPrevChapter = () => {
-    if (!chapter) return;
-    const currentIndex = allChapters.findIndex((item) => item.id === chapter.id);
+  const currentIndex = chapter ? allChapters.findIndex((item) => item.id === chapter.id) : -1;
+
+  const goToPrevChapter = useCallback(() => {
     if (currentIndex > 0) {
       navigate(`/seerah/${allChapters[currentIndex - 1].id}`);
     }
-  };
+  }, [currentIndex, allChapters, navigate]);
 
-  const goToNextChapter = () => {
-    if (!chapter) return;
-    const currentIndex = allChapters.findIndex((item) => item.id === chapter.id);
-    if (currentIndex < allChapters.length - 1) {
+  const goToNextChapter = useCallback(() => {
+    if (currentIndex >= 0 && currentIndex < allChapters.length - 1) {
       navigate(`/seerah/${allChapters[currentIndex + 1].id}`);
     }
-  };
+  }, [currentIndex, allChapters, navigate]);
+
+  const swipeHandlers = useReaderSwipe({
+    onPrev: goToPrevChapter,
+    onNext: goToNextChapter,
+    canPrev: currentIndex > 0,
+    canNext: currentIndex >= 0 && currentIndex < allChapters.length - 1,
+  });
 
   const renderContent = (content: string) => {
-    return content
+    const paragraphs = content
       .split(/\n{2,}/)
       .map((p) => p.trim())
-      .filter(Boolean)
-      .map((paragraph, index) => {
-        const quranRefMatch = paragraph.match(/^\d+:\d+(?:-\d+)?$/);
-        if (quranRefMatch || isPureArabicBlock(paragraph)) {
-          return (
-            <div
-              key={index}
-              className="my-4 p-3.5 bg-[var(--surface-2)] border-r-[3px] border-[var(--accent)] rounded-xl border border-[var(--border)]"
-            >
-              <p
-                className="font-arabic text-right text-[var(--accent-text)] break-words"
-                dir="rtl"
-                style={{
-                  fontSize: `${prefs.arabicFontSize}px`,
-                  lineHeight: getArabicLineHeight(prefs.lineSpacing),
-                }}
-              >
-                {paragraph}
-              </p>
-            </div>
-          );
-        }
+      .filter(Boolean);
 
+    return paragraphs.map((paragraph, index) => {
+      const quranRefMatch = paragraph.match(/^\d+:\d+(?:-\d+)?$/);
+      if (quranRefMatch || isPureArabicBlock(paragraph)) {
         return (
-          <BookProseParagraph
+          <ReaderArabicBlock
             key={index}
             text={paragraph}
-            actualLang={actualLang}
-            fontSize={prefs.bodyFontSize}
-            lineSpacing={prefs.lineSpacing}
-            className="text-[var(--text-primary)]"
+            arabicSize={prefs.arabicSize}
           />
         );
-      });
+      }
+
+      const headingKind = classifyProseParagraph(paragraph, index);
+      if (headingKind === "h2" || headingKind === "h3") {
+        return (
+          <div key={index}>
+            {headingKind === "h2" && index > 0 && <ManuscriptDivider className="my-5" />}
+            <ReaderHeading
+              level={headingKind}
+              text={paragraph}
+              actualLang={actualLang}
+              clampTwoLines={false}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <BookProseParagraph
+          key={index}
+          text={paragraph}
+          actualLang={actualLang}
+          fontSize={prefs.bodySize}
+          lineSpacing={prefs.lineHeightMode}
+          className="text-[var(--text-primary)]"
+        />
+      );
+    });
   };
 
   if (loading && !chapter) {
@@ -339,13 +382,15 @@ export default function SeerahReader() {
     );
   }
 
-  const currentIndex = allChapters.findIndex((item) => item.id === chapter.id);
   const displayTitle = formatIslamicProse(translatedTitle || chapter.title, actualLang);
-  const titleDir = actualLang === "ur" && translatedTitle && translatedTitle !== chapter.title ? "rtl" : "ltr";
 
   return (
     <PageTransition>
-      <div ref={pageContainerRef} className="min-h-screen bg-transparent relative z-10 pb-28">
+      <div
+        ref={pageContainerRef}
+        className="min-h-screen bg-transparent relative z-10 pb-28"
+        {...swipeHandlers}
+      >
         {/* Reading Progress Bar */}
         <div className="fixed top-0 left-0 right-0 h-1 bg-transparent z-50 pointer-events-none">
           <div
@@ -354,12 +399,12 @@ export default function SeerahReader() {
           />
         </div>
 
-        {/* Slim 52px Sticky Top Bar ONLY — zero cramped multiline metadata or icon collisions */}
+        {/* 2-line Clamped Sticky Top Bar — actions strictly on one row */}
         <header
           className="sticky top-0 z-40 bg-[var(--surface)] border-b border-[var(--border)] safe-top"
           style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
         >
-          <div className="max-w-3xl mx-auto px-3 h-[52px] flex items-center justify-between gap-2">
+          <div className="max-w-3xl mx-auto px-3 min-h-[56px] py-1.5 flex items-center justify-between gap-2">
             <Button
               variant="ghost"
               size="icon"
@@ -372,16 +417,17 @@ export default function SeerahReader() {
 
             <div className="min-w-0 flex-1">
               <h2
-                dir={titleDir}
-                className={`text-sm sm:text-base font-bold text-[var(--text-primary)] truncate ${
-                  titleDir === "rtl" ? "font-urdu text-right" : "text-left"
+                dir="auto"
+                style={{ unicodeBidi: "plaintext", textAlign: actualLang === "ur" ? "right" : "left" }}
+                className={`text-sm sm:text-base font-bold text-[var(--text-primary)] line-clamp-2 leading-snug ${
+                  actualLang === "ur" ? "font-urdu" : ""
                 }`}
               >
                 <FormattedIslamicText text={displayTitle} />
               </h2>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1 shrink-0 flex-nowrap">
               <AaReaderControlsButton />
               <Button
                 variant="ghost"
@@ -409,46 +455,40 @@ export default function SeerahReader() {
           </div>
         </header>
 
-        {/* Scrollable Chapter Intro (scrolls naturally away while reading) */}
-        <div className="max-w-3xl mx-auto px-4 pt-4 pb-2 space-y-3 border-b border-[var(--border)]/60">
+        {/* Scrollable Chapter Intro */}
+        <div className="max-w-3xl mx-auto px-4 pt-4 pb-3 space-y-3 border-b border-[var(--border)]/60">
           <ContentLanguageBar fullWidth />
 
-          <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)] flex-wrap pt-1">
-            <span className="font-semibold text-[var(--accent-text)]">{periodLabels[chapter.period]}</span>
-            <span>•</span>
-            <span>
-              {contentLang === "ur" ? "باب" : contentLang === "gu" ? "પ્રકરણ" : contentLang === "hi" ? "अध्याय" : t("chapter")} {chapter.number} / {allChapters.length}
-            </span>
-          </div>
+          <ChapterOpenerOrnament
+            badgeText={`${periodLabels[chapter.period]} · ${
+              contentLang === "ur" ? "باب" : contentLang === "gu" ? "પ્રકરણ" : contentLang === "hi" ? "अध्याय" : t("chapter")
+            } ${chapter.number} / ${allChapters.length}`}
+            arabicSubtitle={chapter.arabicTitle}
+          />
 
-          <h1
-            dir={titleDir}
-            className={`text-lg sm:text-xl font-bold text-[var(--text-primary)] leading-snug ${
-              titleDir === "rtl" ? "font-urdu text-right leading-[2.0]" : "text-left"
-            }`}
-          >
-            <FormattedIslamicText text={displayTitle} />
-          </h1>
+          <ReaderHeading
+            level="h1"
+            text={displayTitle}
+            actualLang={actualLang}
+            clampTwoLines
+          />
 
-          {chapter.arabicTitle && (
-            <p className="font-arabic text-xl text-[var(--accent-text)] text-right" dir="rtl">
-              {chapter.arabicTitle}
-            </p>
+          {chapter.tags.length > 0 && (
+            <ReaderTagChips tags={chapter.tags} contentLang={contentLang} />
           )}
 
-          {(translatedTags.length ? translatedTags : chapter.tags).length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pb-2">
-              {(translatedTags.length ? translatedTags : chapter.tags).map((tag) => (
-                <Badge key={tag} variant="outline" className={`text-[11px] ${actualLang === "ur" ? "font-urdu" : ""}`}>
-                  {tag}
-                </Badge>
-              ))}
+          {!continueDismissed && savedScrollY > 120 && (
+            <div>
+              <ReaderContinueChip
+                progressPct={scrollProgress}
+                onContinue={handleContinueScroll}
+              />
             </div>
           )}
         </div>
 
-        {/* Full-Width Book Reading Body */}
-        <article className="max-w-3xl mx-auto px-4 pt-5 pb-6">
+        {/* Continuous Book Reading Body (68ch measure cap on wide viewports) */}
+        <article className="reader-prose-measure px-4 pt-5 pb-6">
           <ReaderStatusBanner
             targetLang={contentLang}
             actualLang={actualLang}
@@ -463,7 +503,7 @@ export default function SeerahReader() {
           <div>{renderContent(translatedContent || formatIslamicProse(chapter.content, "en"))}</div>
         </article>
 
-        {/* Scroll-To-Top FAB cleanly positioned ABOVE Next/Prev pagination + BottomNav */}
+        {/* Scroll-To-Top FAB positioned ABOVE Next/Prev pagination + BottomNav */}
         {showBackToTop && (
           <div
             className="fixed right-4 z-50"

@@ -10,6 +10,7 @@ import { getHadithCollectionMetadata } from "@/lib/hadith";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import { AaReaderControlsButton } from "@/components/BookReaderControls";
+import { formatCollectionHadithCount, formatCompilerDeath } from "@/lib/hadith-utils";
 
 export function HadithBookView() {
   const { collection } = useParams<{ collection: string }>();
@@ -137,23 +138,24 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
             </div>
             <div>
               <h3
-                className={`font-semibold text-foreground group-hover:text-primary transition-colors ${contentLang === 'ur' ? 'font-urdu text-right leading-[2.35]' : isRtl ? 'font-arabic text-right' : ''}`}
-                dir={isRtl ? 'rtl' : 'ltr'}
+                className={`font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-text)] transition-colors line-clamp-2 ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
+                dir="auto"
+                style={{ unicodeBidi: 'plaintext' }}
               >
                 {translatedName}
               </h3>
-              <p className="text-sm text-muted-foreground font-arabic" dir="rtl">
+              <p className="text-sm text-[var(--text-secondary)] font-arabic" dir="rtl">
                 {displayArabicName}
               </p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          <ChevronRight className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-[var(--accent-text)] transition-colors shrink-0" />
         </div>
 
         {book.hadithCount && (
           <div className="flex items-center gap-2">
-            <Users className="w-3 h-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">
+            <Users className="w-3 h-3 text-[var(--text-secondary)]" />
+            <span className="text-xs text-[var(--text-secondary)]">
               {book.hadithCount} {contentLang === 'ur' ? 'احادیث' : contentLang === 'gu' ? 'હદીસ' : contentLang === 'hi' ? 'हदीस' : 'hadith'}
             </span>
           </div>
@@ -161,8 +163,9 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
 
         {book.description && (
           <p
-            className={`text-xs text-muted-foreground line-clamp-2 ${contentLang === 'ur' ? 'font-urdu text-right leading-[2.35]' : isRtl ? 'font-arabic text-right' : ''}`}
-            dir={isRtl ? 'rtl' : 'ltr'}
+            className={`text-xs text-[var(--text-secondary)] line-clamp-2 ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
+            dir="auto"
+            style={{ unicodeBidi: 'plaintext' }}
           >
             {translatedDesc || book.description}
           </p>
@@ -221,13 +224,19 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <h1 dir="auto" className="text-lg sm:text-2xl font-bold text-foreground truncate">{collectionData.title}</h1>
-                <p className="text-muted-foreground font-arabic truncate" dir="rtl">
+                <h1
+                  dir="auto"
+                  style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
+                  className="font-bold text-[var(--text-primary)] line-clamp-2 leading-tight"
+                >
+                  {collectionData.title}
+                </h1>
+                <p className="text-[var(--text-secondary)] font-arabic truncate" dir="rtl">
                   {collectionData.arabicTitle}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
               <AaReaderControlsButton />
               <Badge variant="secondary" className="text-xs shrink-0 max-w-[110px] truncate">
                 {collectionData.authenticity}
@@ -242,30 +251,36 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <h3 className="font-semibold text-foreground mb-2">
+                <h3 className="font-semibold text-[var(--text-primary)] mb-2">
                   {contentLang === 'ur' ? 'مؤلف' : contentLang === 'gu' ? 'સંકલનકર્તા' : contentLang === 'hi' ? 'संकलनकर्ता' : 'Compiler'}
                 </h3>
-                <p className="text-sm text-muted-foreground">{collectionData.author}</p>
-                <p className="text-xs text-muted-foreground">{collectionData.compilerPeriod}</p>
+                <p className="text-sm text-[var(--text-secondary)]">{collectionData.author}</p>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  {[formatCompilerDeath(collectionData.death), collectionData.compilerPeriod].filter(Boolean).join(' · ')}
+                </p>
               </div>
               <div>
-                <h3 className="font-semibold text-foreground mb-2">
+                <h3 className="font-semibold text-[var(--text-primary)] mb-2">
                   {contentLang === 'ur' ? 'اعداد و شمار' : contentLang === 'gu' ? 'આંકડાકીય માહિતી' : contentLang === 'hi' ? 'आंकड़े' : 'Statistics'}
                 </h3>
                 <div className="space-y-1">
                   <p className="text-sm">
                     <span className="font-medium">{collectionData.totalBooks}</span> {contentLang === 'ur' ? 'کتب' : contentLang === 'gu' ? 'પુસ્તકો' : contentLang === 'hi' ? 'किताबें' : 'Books'}
                   </p>
-                  <p className="text-sm">
-                    <span className="font-medium">{collectionData.totalHadith.toLocaleString()}</span> {contentLang === 'ur' ? 'احادیث' : contentLang === 'gu' ? 'હદીસ' : contentLang === 'hi' ? 'हदीस' : 'Hadith'}
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
+                    {formatCollectionHadithCount(collectionData.totalHadith, collectionData.totalNarrations)}
                   </p>
                 </div>
               </div>
               <div>
-                <h3 className="font-semibold text-foreground mb-2">
+                <h3 className="font-semibold text-[var(--text-primary)] mb-2">
                   {contentLang === 'ur' ? 'تعارف و تفصیل' : contentLang === 'gu' ? 'વિગતો' : contentLang === 'hi' ? 'विवरण' : 'Description'}
                 </h3>
-                <p className={`text-sm text-muted-foreground leading-relaxed ${contentLang === 'ur' ? 'font-urdu leading-[2.35] text-right' : isRtl ? 'font-arabic text-right' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
+                <p
+                  className={`text-sm text-[var(--text-secondary)] leading-relaxed ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
+                  dir="auto"
+                  style={{ unicodeBidi: 'plaintext' }}
+                >
                   {translatedCollectionDesc || collectionData.description}
                 </p>
               </div>

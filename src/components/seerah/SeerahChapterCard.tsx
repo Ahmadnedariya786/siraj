@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
+import { ReaderTagChips } from "@/components/BookReaderControls";
 import type { SeerahChapterSummary } from "@/lib/seerah";
 
 interface SeerahChapterCardProps {
@@ -9,13 +10,6 @@ interface SeerahChapterCardProps {
   onClick: () => void;
   index: number;
 }
-
-const periodColors: Record<SeerahChapterSummary["period"], string> = {
-  "pre-prophethood": "from-blue-500 to-blue-600",
-  makkan: "from-amber-500 to-amber-600",
-  madinan: "from-teal-600 to-cyan-700",
-  "final-days": "from-purple-500 to-purple-600",
-};
 
 export function SeerahChapterCard({ chapter, onClick, index }: SeerahChapterCardProps) {
   const { t } = useLanguage();
@@ -28,8 +22,8 @@ export function SeerahChapterCard({ chapter, onClick, index }: SeerahChapterCard
       return;
     }
     let isMounted = true;
-    translateIslamicText(chapter.title, contentLang).then(t => {
-      if (isMounted) setTranslatedTitle(t);
+    translateIslamicText(chapter.title, contentLang).then((val) => {
+      if (isMounted) setTranslatedTitle(val);
     });
     return () => { isMounted = false; };
   }, [chapter.title, contentLang]);
@@ -43,55 +37,54 @@ export function SeerahChapterCard({ chapter, onClick, index }: SeerahChapterCard
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      whileHover={{ scale: 1.02 }}
+      transition={{ delay: Math.min(index * 0.04, 0.25) }}
+      whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-card rounded-[28px] p-5 cursor-pointer border border-border/50 hover:border-[#D4AF37]/30 transition-all duration-300"
+      className="bg-[var(--surface)] rounded-[22px] p-4 cursor-pointer border border-[var(--border)] hover:border-[var(--accent)]/50 transition-all duration-200 space-y-2.5"
     >
-      <div
-        className={`w-12 h-12 rounded-full bg-gradient-to-br ${periodColors[chapter.period]} flex items-center justify-center mb-4 shadow-lg`}
-      >
-        <span className="text-white font-bold text-lg">{chapter.number}</span>
-      </div>
-
-      <h3
-        className={`text-foreground font-semibold text-lg mb-1 ${contentLang === 'ur' ? 'font-urdu text-right leading-[2.35]' : isRtl ? 'font-arabic text-right' : ''}`}
-        dir={isRtl ? 'rtl' : 'ltr'}
-      >
-        {translatedTitle}
-      </h3>
-
-      <p className="font-arabic text-xl text-muted-foreground mb-3" dir="rtl">
-        {chapter.arabicTitle}
-      </p>
-
-      <div className="inline-flex items-center mb-3">
+      <div className="flex items-center justify-between gap-2">
+        {/* Royal Restyled Chapter Medallion */}
+        <div
+          className="w-10 h-10 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center shrink-0"
+          style={{
+            backgroundImage: 'radial-gradient(circle at center, var(--accent-soft) 0%, transparent 72%)',
+          }}
+        >
+          <span className="text-[var(--accent-text)] font-bold text-sm font-mono">{chapter.number}</span>
+        </div>
         <span
-          className={`px-3 py-1 rounded-full text-xs font-medium text-white bg-gradient-to-r ${periodColors[chapter.period]}`}
+          className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border period-chip-${chapter.period} ${
+            contentLang === 'ur' ? 'font-urdu' : ''
+          }`}
         >
           {periodLabels[chapter.period]}
         </span>
       </div>
 
+      <h3
+        className={`text-[var(--text-primary)] font-semibold text-base line-clamp-2 leading-snug ${
+          contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'
+        }`}
+        dir="auto"
+        style={{ unicodeBidi: 'plaintext' }}
+      >
+        {translatedTitle}
+      </h3>
+
+      <p className="font-arabic text-lg text-[var(--accent-text)] text-right truncate" dir="rtl">
+        {chapter.arabicTitle}
+      </p>
+
       {chapter.tags.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {chapter.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="px-2 py-1 rounded-md text-xs border border-border/60 text-muted-foreground"
-            >
-              {tag}
-            </span>
-          ))}
-          {chapter.tags.length > 3 && (
-            <span className="px-2 py-1 rounded-md text-xs text-muted-foreground">
-              +{chapter.tags.length - 3} {t("more")}
-            </span>
-          )}
-        </div>
+        <ReaderTagChips
+          tags={chapter.tags}
+          contentLang={contentLang}
+          limit={3}
+          moreLabel={t("more")}
+        />
       )}
     </motion.div>
   );

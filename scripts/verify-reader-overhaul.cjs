@@ -114,10 +114,11 @@ async function runTests() {
 
   // 1. Typography, Sanitizer, Line Heights & Bidi Helper
   const typoMod = bundleModule('src/lib/reader-typography.ts', customReq);
-  assert.strictEqual(typoMod.DEFAULT_READER_PREFS.bodyFontSize, 15);
-  assert.strictEqual(typoMod.DEFAULT_READER_PREFS.arabicFontSize, 20);
-  assert.strictEqual(typoMod.getReaderLineHeight('en', 'standard'), 1.65);
-  assert.strictEqual(typoMod.getReaderLineHeight('ur', 'standard'), 2.0);
+  assert.strictEqual(typoMod.DEFAULT_READER_PREFS.bodySize, 15);
+  assert.strictEqual(typoMod.DEFAULT_READER_PREFS.arabicSize, 22);
+  assert.strictEqual(typoMod.getReaderLineHeight('en', 'standard'), 1.75);
+  assert.strictEqual(typoMod.getReaderLineHeight('ur', 'standard'), 2.5);
+  assert.strictEqual(typoMod.getArabicLineHeight('standard'), 2.0);
 
   const sanitized = typoMod.formatIslamicProse(
     'Indeed, whom Allah () would punish on that day\nwill know that Prophet () and Ibrahim () spoke truth ().',
@@ -129,13 +130,13 @@ async function runTests() {
   assert.ok(!sanitized.includes('()'), `Found stray (): ${sanitized}`);
   assert.ok(!sanitized.includes('\n'), `Mid-sentence wrap newline not unwrapped: ${sanitized}`);
 
-  assert.strictEqual(typoMod.getReaderBlockDirection('en').dir, 'ltr');
+  assert.strictEqual(typoMod.getReaderBlockDirection('en').dir, 'auto');
   assert.strictEqual(typoMod.getReaderBlockDirection('en').textAlign, 'left');
-  assert.strictEqual(typoMod.getReaderBlockDirection('gu').dir, 'ltr');
-  assert.strictEqual(typoMod.getReaderBlockDirection('hi').dir, 'ltr');
-  assert.strictEqual(typoMod.getReaderBlockDirection('ur').dir, 'rtl');
+  assert.strictEqual(typoMod.getReaderBlockDirection('gu').dir, 'auto');
+  assert.strictEqual(typoMod.getReaderBlockDirection('hi').dir, 'auto');
+  assert.strictEqual(typoMod.getReaderBlockDirection('ur').dir, 'auto');
   assert.strictEqual(typoMod.getReaderBlockDirection('ur').textAlign, 'right');
-  console.log('[PASS] 1: Typography defaults (15px/20px), Allah () sanitizer & strict LTR/RTL direction');
+  console.log('[PASS] 1: Typography defaults (15px/22px), Allah () sanitizer & strict LTR/RTL direction');
 
   // 2. Hadith Grade Deduplication
   const hadithUtils = bundleModule('src/lib/hadith-utils.ts', customReq);
@@ -220,9 +221,10 @@ async function runTests() {
     targetLang: 'ur',
     onUpdate: (u) => offlineUpdates.push(u),
   });
-  assert.strictEqual(offlineUpdates[0].offlineFallback, true);
-  assert.strictEqual(offlineUpdates[0].actualLang, 'en');
-  assert.ok(offlineUpdates[0].text.includes('Allah (SWT)'), 'Offline English fallback must still sanitize Allah ()');
+  const finalOffline = offlineUpdates[offlineUpdates.length - 1];
+  assert.strictEqual(finalOffline.offlineFallback, true);
+  assert.strictEqual(finalOffline.actualLang, 'en');
+  assert.ok(finalOffline.text.includes('Allah (SWT)'), 'Offline English fallback must still sanitize Allah ()');
   console.log('[PASS] 3: CapacitorHttp chunked translation, urd-* scholar edition, cache hit & honest offline fallback');
 
   // 4. Prophets 24 Count Parity + Transparent Theme Backgrounds + FAB Positioning + Blur/Shadow Lock

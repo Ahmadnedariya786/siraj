@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { PageTransition } from "@/components/PageTransition";
 import { SeerahChapterCard } from "@/components/seerah/SeerahChapterCard";
 import { goBackOrFallback } from "@/lib/navigation";
-import { getLastRead, getReadingProgress, type ReadingFeature } from "@/lib/reading-storage";
+import { getLastRead, getReadingProgress } from "@/lib/reading-storage";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
@@ -192,18 +192,26 @@ export default function SeerahHome() {
         <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
           {/* Header with Row 1 (Back + Title) and Row 2 (Full-Width Language Bar) */}
           <div className="space-y-3 mb-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => goBackOrFallback(navigate, '/services')}
-                className="rounded-xl"
+                className="rounded-xl shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <h1 className="text-2xl font-bold text-foreground truncate">{t("seerah")}</h1>
-                <p className="text-muted-foreground text-sm truncate">{t("seerahDescription")}</p>
+                <h1
+                  dir="auto"
+                  style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
+                  className="font-bold text-[var(--text-primary)] line-clamp-2 leading-tight"
+                >
+                  {t("seerah")}
+                </h1>
+                <p className="text-[var(--text-secondary)] text-xs sm:text-sm line-clamp-2 leading-snug">
+                  {t("seerahDescription")}
+                </p>
               </div>
             </div>
             <ContentLanguageBar fullWidth />
@@ -213,51 +221,60 @@ export default function SeerahHome() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="relative overflow-hidden rounded-[32px] shadow-2xl shadow-blue-900/20 mb-8"
+            className="relative overflow-hidden rounded-[24px] border border-[var(--border)] shadow-xl mb-6"
+            style={{ background: 'var(--surface)' }}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460]" />
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4AF37]/10 rounded-full blur-[20px] -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#D4AF37]/10 rounded-full blur-[20px] translate-y-1/2 -translate-x-1/2" />
-            <div className="absolute inset-0 bg-white/[0.02]" />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'radial-gradient(circle at top right, var(--accent-soft) 0%, transparent 65%)',
+              }}
+            />
 
-            <div className="relative z-10 p-8">
-              <div className="flex items-center gap-2 mb-4">
-                <BookOpen className="w-4 h-4 text-[#e0c097]" />
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-white/90">
+            <div className="relative z-10 p-5 sm:p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <BookOpen className="w-4 h-4 text-[var(--accent)]" />
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-[var(--accent-text)]">
                   {t("seerah")}
                 </span>
               </div>
 
               <h2
-                className={`text-3xl font-bold text-white mb-2 ${contentLang === 'ur' ? 'font-urdu text-right leading-[2.35]' : isRtl ? 'font-arabic text-right' : ''}`}
-                dir={isRtl ? 'rtl' : 'ltr'}
+                className={`font-bold text-[var(--text-primary)] mb-2 line-clamp-2 ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
+                dir="auto"
+                style={{
+                  fontSize: '24px',
+                  lineHeight: contentLang === 'ur' ? 1.85 : 1.25,
+                  unicodeBidi: 'plaintext',
+                }}
               >
                 {translatedMetaTitle || metadata?.title || "Ar-Raheeq Al-Makhtum (The Sealed Nectar)"}
               </h2>
-              <p className="font-arabic text-2xl text-white/90 mb-4" dir="rtl">
+              <p className="font-arabic text-xl text-[var(--accent-text)] mb-3 text-right" dir="rtl">
                 {metadata?.arabicTitle || "الرحيق المختوم"}
               </p>
 
               {(metadata?.author || metadata?.arabicAuthor) && (
-                <div className="flex items-center gap-4 mb-4">
-                  {metadata?.author && <span className="text-white/60 text-sm">{metadata.author}</span>}
-                  {metadata?.author && metadata?.arabicAuthor && <span className="text-white/40 text-sm">•</span>}
-                  {metadata?.arabicAuthor && <span className="text-white/60 text-sm">{metadata.arabicAuthor}</span>}
+                <div className="flex items-center gap-3 flex-wrap mb-3">
+                  {metadata?.author && <span className="text-[var(--text-secondary)] text-xs sm:text-sm">{metadata.author}</span>}
+                  {metadata?.author && metadata?.arabicAuthor && <span className="text-[var(--border)] text-sm">•</span>}
+                  {metadata?.arabicAuthor && <span className="text-[var(--text-secondary)] text-xs sm:text-sm font-arabic">{metadata.arabicAuthor}</span>}
                 </div>
               )}
 
               <p
-                className={`text-white/70 text-sm mb-6 ${contentLang === 'ur' ? 'font-urdu text-right text-base leading-[2.35]' : isRtl ? 'font-arabic text-right text-base' : ''}`}
-                dir={isRtl ? 'rtl' : 'ltr'}
+                className={`text-[var(--text-secondary)] text-sm mb-4 ${contentLang === 'ur' ? 'font-urdu text-right text-base leading-[2.3]' : isRtl ? 'font-arabic text-right text-base' : 'text-left'}`}
+                dir="auto"
+                style={{ unicodeBidi: 'plaintext' }}
               >
-                {translatedMetaDesc || metadata?.description || "A comprehensive biography of Prophet Muhammad (peace be upon him)."}
+                {translatedMetaDesc || metadata?.description || "A comprehensive biography of Prophet Muhammad (ﷺ)."}
               </p>
 
-              <div className="flex items-center gap-4">
-                <Badge className="bg-blue-950/40 text-blue-200 border border-blue-500/30">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <Badge className="bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--border)]">
                   {metadata?.totalChapters || chapters.length || 17} {t("seerahChapters")}
                 </Badge>
-                <Badge className="bg-blue-950/40 text-blue-200 border border-blue-500/30 font-semibold">
+                <Badge className="bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] font-semibold">
                   EN • اردو • ગુજ • हिं
                 </Badge>
               </div>
@@ -322,8 +339,8 @@ export default function SeerahHome() {
                 onClick={() => setPeriodFilter(period)}
                 className={
                   periodFilter === period
-                    ? "bg-[#D4AF37] text-white border-[#D4AF37]"
-                    : ""
+                    ? "bg-[var(--accent)] text-[var(--on-accent)] border-[var(--accent)]"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
                 }
               >
                 {periodLabels[period]}
@@ -346,31 +363,31 @@ export default function SeerahHome() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-card rounded-[28px] p-6 border border-border/50"
+            className="bg-[var(--surface)] rounded-[24px] p-5 border border-[var(--border)]"
           >
-            <h3 className="text-lg font-semibold text-foreground mb-4">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
               {contentLang === 'ur' ? 'خلاصہ و ابواب' : contentLang === 'gu' ? 'વિહંગાવલોકન' : contentLang === 'hi' ? 'अवलोकन' : t("overview")}
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-[#D4AF37]">
+                <div className="text-2xl font-bold text-[var(--accent-text)]">
                   {metadata?.totalChapters || chapters.length || 17}
                 </div>
-                <div className="text-sm text-muted-foreground">{contentLang === 'ur' ? 'کل ابواب' : contentLang === 'gu' ? 'કુલ પ્રકરણો' : contentLang === 'hi' ? 'कुल अध्याय' : t("seerahChapters")}</div>
+                <div className="text-sm text-[var(--text-secondary)]">{contentLang === 'ur' ? 'کل ابواب' : contentLang === 'gu' ? 'કુલ પ્રકરણો' : contentLang === 'hi' ? 'कुल अध्याय' : t("seerahChapters")}</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-500">
+                <div className="text-2xl font-bold text-[var(--accent)]">
                   {chapters.filter((chapter) => chapter.period === "pre-prophethood").length}
                 </div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-[var(--text-secondary)]">
                   {periodLabels["pre-prophethood"]}
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-amber-500">
+                <div className="text-2xl font-bold text-[var(--accent-text)]">
                   {chapters.filter((chapter) => chapter.period === "makkan").length}
                 </div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-[var(--text-secondary)]">
                   {periodLabels["makkan"]}
                 </div>
               </div>
@@ -378,7 +395,7 @@ export default function SeerahHome() {
                 <div className="text-2xl font-bold text-[var(--accent)]">
                   {chapters.filter((chapter) => chapter.period === "madinan").length}
                 </div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-[var(--text-secondary)]">
                   {periodLabels["madinan"]}
                 </div>
               </div>

@@ -53,3 +53,29 @@ export function getGradeLabel(grade?: string): string {
       return clean || "Unspecified";
   }
 }
+
+/**
+ * Canonical Hadith collection counts formatting:
+ * e.g. "7,277 ahadith (14,769 narrations incl. repeats)" when repeat count is distinct,
+ * otherwise "1,217 ahadith".
+ */
+export function formatCollectionHadithCount(
+  totalHadith: number,
+  totalNarrations?: number
+): string {
+  const uniqueFormatted = Number(totalHadith || 0).toLocaleString();
+  if (totalNarrations && totalNarrations > totalHadith) {
+    return `${uniqueFormatted} ahadith (${totalNarrations.toLocaleString()} narrations incl. repeats)`;
+  }
+  return `${uniqueFormatted} ahadith`;
+}
+
+/**
+ * Formats compiler death date cleanly: "256 AH / 870 CE" -> "Died: 256 AH".
+ */
+export function formatCompilerDeath(death?: string): string {
+  const raw = (death || '').split('/')[0].trim();
+  if (!raw) return '';
+  if (/^died:/i.test(raw)) return raw;
+  return `Died: ${raw}`;
+}
