@@ -55,6 +55,7 @@ import { useLanguage } from "@/contexts/LanguageContext-new";
 import { getWorshipJournalStrings } from "@/lib/worship-journal-i18n";
 import { useSajdahTracker } from "@/lib/sajdah-tracker";
 import { getSajdahI18n } from "@/lib/sajdah-i18n";
+import { convertGregorianToHijri, getStoredHijriOffset } from "@/lib/hijri-date";
 
 const PRAYERS: { key: PrayerName; label: string; sunnahMax: number; sunnahCycleLabel: string }[] = [
   { key: "fajr", label: "Fajr", sunnahMax: 2, sunnahCycleLabel: "2 Sunnah Before" },
@@ -92,6 +93,22 @@ export default function PrayerStats() {
   const [daySchedule, setDaySchedule] = useState<any>(null);
   const [isOfflineTimes, setIsOfflineTimes] = useState(false);
   const [selectedFastCategory, setSelectedFastCategory] = useState<FastCategory>("sunnah");
+  const [hijriOffset, setHijriOffset] = useState<number>(() => getStoredHijriOffset());
+
+  useEffect(() => {
+    const syncOffset = () => setHijriOffset(getStoredHijriOffset());
+    window.addEventListener("hijri-date-offset-changed", syncOffset);
+    window.addEventListener("storage", syncOffset);
+    return () => {
+      window.removeEventListener("hijri-date-offset-changed", syncOffset);
+      window.removeEventListener("storage", syncOffset);
+    };
+  }, []);
+
+  const unifiedHijri = useMemo(
+    () => convertGregorianToHijri(selectedDate, hijriOffset),
+    [selectedDate, hijriOffset]
+  );
 
   // Read location coordinates
   const { lat, lon } = useMemo(() => {
@@ -171,10 +188,10 @@ export default function PrayerStats() {
 
   // Auto-detected recommended fast
   const recommendedFast = useMemo(() => {
-    const hDay = daySchedule?.date?.hijri?.day ? parseInt(daySchedule.date.hijri.day, 10) : undefined;
-    const hMonth = daySchedule?.date?.hijri?.month?.number ? parseInt(daySchedule.date.hijri.month.number, 10) : undefined;
+    const hDay = unifiedHijri?.hijriDay ?? (daySchedule?.date?.hijri?.day ? parseInt(daySchedule.date.hijri.day, 10) : undefined);
+    const hMonth = unifiedHijri?.hijriMonthNumber ?? (daySchedule?.date?.hijri?.month?.number ? parseInt(daySchedule.date.hijri.month.number, 10) : undefined);
     return getRecommendedFast(selectedDate, hDay, hMonth);
-  }, [selectedDate, daySchedule]);
+  }, [selectedDate, unifiedHijri, daySchedule]);
 
   // Set default fast category when switching days
   useEffect(() => {
@@ -274,12 +291,15 @@ export default function PrayerStats() {
   }, [selectedDate, language]);
 
   const formattedHijri = useMemo(() => {
+    if (unifiedHijri) {
+      return `${unifiedHijri.hijriDay} ${unifiedHijri.hijriMonthEn}`;
+    }
     if (daySchedule?.date?.hijri) {
       const h = daySchedule.date.hijri;
       return `${h.day} ${h.month.en}`;
     }
     return "";
-  }, [daySchedule]);
+  }, [unifiedHijri, daySchedule]);
 
   // Times mapping for the 5 prayers + Suhoor/Iftaar
   const prayerTimesMap = useMemo(() => {

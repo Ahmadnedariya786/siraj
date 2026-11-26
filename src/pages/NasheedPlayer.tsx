@@ -441,11 +441,31 @@ export default function NasheedPlayer() {
                                     <p className="text-xs mt-1 opacity-60">Tap ♥ on any track to save it</p>
                                 </>
                             ) : activeTab === 'recent' ? (
-                                <>
-                                    <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                                    <p className="font-medium text-sm">Nothing played yet</p>
-                                    <p className="text-xs mt-1 opacity-60">Your history will appear here</p>
-                                </>
+                                recentlyPlayed.length > 0 && (selectedAuthors.length > 0 || searchQuery.trim().length > 0) ? (
+                                    <>
+                                        <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                                        <p className="font-medium text-sm">No matching recent tracks</p>
+                                        <p className="text-xs mt-1 opacity-70">Clear your active filter to see your playback history</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setInputValue('');
+                                                setSearchQuery('');
+                                                clearAuthors();
+                                            }}
+                                            className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-text)] transition-opacity active:opacity-80"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                            Clear filter
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                                        <p className="font-medium text-sm">Nothing played yet</p>
+                                        <p className="text-xs mt-1 opacity-60">Your history will appear here</p>
+                                    </>
+                                )
                             ) : (
                                 <>
                                     <Music2 className="w-10 h-10 mx-auto mb-3 opacity-20" />

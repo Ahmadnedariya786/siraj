@@ -6,6 +6,7 @@
 import { importantIslamicDates } from '@/data/islamic-dates';
 import { islamicCalendarService, type IslamicCalendarInfo } from '@/lib/islamic-calendar-service';
 import { localNotifications } from '@/lib/local-notifications';
+import { convertGregorianToHijri, convertHijriToGregorian, getStoredHijriOffset } from '@/lib/hijri-date';
 
 export interface IslamicEventNotification {
   id: string;
@@ -92,29 +93,51 @@ class IslamicEventsService {
 
   private hijriDateCache: Map<string, Date> = new Map();
 
-  private async getGregorianDateForHijriEvent(hijriMonth: number, hijriDay: number, year: number): Promise<Date> {
-    const cacheKey = `${hijriMonth}-${hijriDay}-${year}`;
+  async getGregorianDateForHijriEvent(
+    hijriMonth: number,
+    hijriDay: number,
+    year: number,
+    offset: number = getStoredHijriOffset()
+  ): Promise<Date> {
+    const safeOffset = Number.isFinite(offset) ? Math.trunc(offset) : 0;
+    const cacheKey = `${hijriMonth}-${hijriDay}-${year}-${safeOffset}`;
     const cached = this.hijriDateCache.get(cacheKey);
     if (cached) return cached;
 
-    const startDate = new Date(year, 0, 1);
+    // Support direct Hijri years (e.g. 1447..1450) via single-source resolver
+    if (year < 1700) {
+      const resolved = convertHijriToGregorian(year, hijriMonth, hijriDay, safeOffset);
+      if (resolved?.gregorianDate) {
+        this.hijriDateCache.set(cacheKey, resolved.gregorianDate);
+        return resolved.gregorianDate;
+      }
+    }
 
-    for (let dayOffset = 0; dayOffset < 365; dayOffset++) {
+    const startDate = new Date(year, 0, 1, 12, 0, 0, 0);
+    let fallbackDay29: Date | null = null;
+
+    // Scan 400 days to cross leap years and Gregorian year boundaries cleanly
+    for (let dayOffset = 0; dayOffset < 400; dayOffset++) {
       const checkDate = new Date(startDate);
       checkDate.setDate(startDate.getDate() + dayOffset);
 
-      try {
-        const islamicDate = islamicCalendarService.calculateIslamicDate(checkDate);
-        const month = Number(islamicDate.hijri.month.number);
-        const day = Number(islamicDate.hijri.day);
+      const hijri = convertGregorianToHijri(checkDate, safeOffset);
+      if (!hijri) continue;
 
-        if (month === hijriMonth && day === hijriDay) {
-          this.hijriDateCache.set(cacheKey, checkDate);
-          return checkDate;
-        }
-      } catch (error) {
-        continue;
+      if (hijri.hijriMonthNumber === hijriMonth && hijri.hijriDay === hijriDay) {
+        this.hijriDateCache.set(cacheKey, checkDate);
+        return checkDate;
       }
+
+      if (hijriDay === 30 && hijri.hijriMonthNumber === hijriMonth && hijri.hijriDay === 29 && !fallbackDay29) {
+        fallbackDay29 = checkDate;
+      }
+    }
+
+    // 29-day lunar month (e.g., Ramadan 1448 AH): resolve day 30 gracefully to day 29
+    if (hijriDay === 30 && fallbackDay29) {
+      this.hijriDateCache.set(cacheKey, fallbackDay29);
+      return fallbackDay29;
     }
 
     throw new Error(`Could not find Gregorian date for Hijri ${hijriMonth}-${hijriDay}`);

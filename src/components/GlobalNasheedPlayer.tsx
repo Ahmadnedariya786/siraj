@@ -417,10 +417,10 @@ export function GlobalNasheedPlayer() {
             <>
                 <audio ref={audioRef} preload="auto" playsInline />
                 <div className="fixed bottom-24 left-0 right-0 z-[100] px-4">
-                    {/* Plain div with inline style — guaranteed dark regardless of light/dark theme */}
+                    {/* Solid themed mini player card */}
                     <div
-                        className="w-full max-w-lg mx-auto backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden border border-[var(--border)]"
-                        style={{ background: 'rgba(24,24,27,0.97)', color: '#fff' }}
+                        className="w-full max-w-lg mx-auto shadow-2xl rounded-2xl overflow-hidden border border-[var(--border)]"
+                        style={{ background: 'var(--surface)', color: 'var(--text-primary)' }}
                     >
                         {/* Progress bar — clickable to seek */}
                         <div
@@ -467,8 +467,8 @@ export function GlobalNasheedPlayer() {
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="font-bold text-sm truncate leading-none mb-0.5" style={{ color: '#fff' }}>{currentTrack.title}</p>
-                                    <p className="text-[11px] truncate leading-none uppercase tracking-wider font-medium" style={{ color: '#a1a1aa' }}>
+                                    <p className="font-bold text-sm truncate leading-none mb-0.5 text-[var(--text-primary)]">{currentTrack.title}</p>
+                                    <p className="text-[11px] truncate leading-none uppercase tracking-wider font-medium text-[var(--text-secondary)]">
                                         {isBuffering ? '● Buffering…' : isError ? 'Retrying…' : currentTrack.artist}
                                     </p>
                                 </div>
@@ -476,10 +476,10 @@ export function GlobalNasheedPlayer() {
 
                             {/* Controls */}
                             <div className="flex items-center gap-1 shrink-0">
-                                <Button size="icon" variant="ghost" onClick={prevTrack} disabled={!hasPrev || showSpinner} className="hover:bg-white/10 rounded-full w-8 h-8 disabled:opacity-30" style={{ color: '#a1a1aa' }}>
+                                <Button size="icon" variant="ghost" onClick={prevTrack} disabled={!hasPrev || showSpinner} className="hover:bg-[var(--surface-2)] text-[var(--text-secondary)] rounded-full w-8 h-8 disabled:opacity-30">
                                     <SkipBack className="w-4 h-4 fill-current" />
                                 </Button>
-                                <Button size="icon" variant="ghost" onClick={togglePlayback} className="hover:bg-white/10 rounded-full w-9 h-9" style={{ color: '#fff' }}>
+                                <Button size="icon" variant="ghost" onClick={togglePlayback} className="hover:bg-[var(--surface-2)] text-[var(--text-primary)] rounded-full w-9 h-9">
                                     {showSpinner ? (
                                         <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent animate-spin rounded-full" />
                                     ) : isPlaying ? (
@@ -488,10 +488,10 @@ export function GlobalNasheedPlayer() {
                                         <Play className="w-4 h-4 fill-current ml-0.5" />
                                     )}
                                 </Button>
-                                <Button size="icon" variant="ghost" onClick={nextTrack} disabled={!hasNext || showSpinner} className="hover:bg-white/10 rounded-full w-8 h-8 disabled:opacity-30" style={{ color: '#a1a1aa' }}>
+                                <Button size="icon" variant="ghost" onClick={nextTrack} disabled={!hasNext || showSpinner} className="hover:bg-[var(--surface-2)] text-[var(--text-secondary)] rounded-full w-8 h-8 disabled:opacity-30">
                                     <SkipForward className="w-4 h-4 fill-current" />
                                 </Button>
-                                <Button size="icon" variant="ghost" onClick={() => { pause(); updateState({ currentTrack: null, queue: [], currentIndex: -1 }); cancelRetry(); }} className="hover:bg-white/10 rounded-full w-7 h-7" style={{ color: '#52525b' }}>
+                                <Button size="icon" variant="ghost" onClick={() => { pause(); updateState({ currentTrack: null, queue: [], currentIndex: -1 }); cancelRetry(); }} className="hover:bg-[var(--surface-2)] text-[var(--text-secondary)] rounded-full w-7 h-7">
                                     <X className="w-3.5 h-3.5" />
                                 </Button>
                             </div>
@@ -507,46 +507,46 @@ export function GlobalNasheedPlayer() {
         <>
             <audio ref={audioRef} preload="auto" playsInline />
             <div
-                className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center backdrop-blur-sm animate-in fade-in p-4 pb-8"
+                className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center animate-in fade-in p-4 pb-8"
                 onClick={() => setIsExpanded(false)}
             >
                 <div
                     className="w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-4 duration-300 rounded-3xl overflow-hidden border border-[var(--border)]"
-                    style={{ background: '#18181b', color: '#fff' }}
+                    style={{ background: 'var(--surface)', color: 'var(--text-primary)' }}
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
                     <div className="flex items-center justify-between px-5 pt-5 pb-3">
                         <div>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold mb-1">Now Playing</p>
-                            <p className="text-xs text-[var(--accent)] font-medium">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] font-bold mb-1">Now Playing</p>
+                            <p className="text-xs text-[var(--accent-text)] font-medium">
                                 {currentIndex + 1} / {queue.length} tracks
                             </p>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)} className="rounded-full hover:bg-white/10 text-zinc-400 hover:text-white">
+                        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)} className="rounded-full hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                             <ChevronDown className="w-5 h-5" />
                         </Button>
                     </div>
 
                     {/* Album Art */}
                     <div className="mx-5 mb-5">
-                        <div className="aspect-square bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden shadow-inner border border-[var(--border)]">
+                        <div className="aspect-square bg-[var(--surface-2)] rounded-2xl flex flex-col items-center justify-center relative overflow-hidden shadow-inner border border-[var(--border)]">
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,_var(--accent-soft)_0%,_transparent_60%)]" />
 
                             {showSpinner ? (
                                 <div className="flex flex-col items-center gap-3">
                                     <div className="w-12 h-12 border-4 border-[var(--accent)]/30 border-t-[var(--accent)] animate-spin rounded-full" />
-                                    <p className="text-xs text-zinc-400 animate-pulse">
+                                    <p className="text-xs text-[var(--text-secondary)] animate-pulse">
                                         {isBuffering ? 'Buffering… slow connection detected' : 'Loading…'}
                                     </p>
-                                    {isBuffering && <Wifi className="w-5 h-5 text-amber-400 opacity-70 animate-pulse" />}
+                                    {isBuffering && <Wifi className="w-5 h-5 text-[var(--accent)] opacity-70 animate-pulse" />}
                                 </div>
                             ) : isError ? (
                                 <div className="flex flex-col items-center gap-3">
                                     <WifiOff className="w-12 h-12 text-red-400/50" />
-                                    <p className="text-xs text-zinc-400 text-center px-6">
+                                    <p className="text-xs text-[var(--text-secondary)] text-center px-6">
                                         Connection failed. Retrying…<br />
-                                        <span className="text-zinc-600">Check your internet connection</span>
+                                        <span className="opacity-70">Check your internet connection</span>
                                     </p>
                                 </div>
                             ) : (
@@ -573,8 +573,8 @@ export function GlobalNasheedPlayer() {
 
                     {/* Track Info */}
                     <div className="px-5 mb-4">
-                        <h3 className="font-bold text-xl text-white truncate leading-tight">{currentTrack.title}</h3>
-                        <p className="text-sm text-[var(--accent)] font-medium mt-0.5 truncate">{currentTrack.artist}</p>
+                        <h3 className="font-bold text-xl text-[var(--text-primary)] truncate leading-tight">{currentTrack.title}</h3>
+                        <p className="text-sm text-[var(--accent-text)] font-medium mt-0.5 truncate">{currentTrack.artist}</p>
                     </div>
 
                     {/* Seek Bar */}
@@ -596,9 +596,9 @@ export function GlobalNasheedPlayer() {
                                 setProgress(v);
                                 setSeekValue(v);
                             }}
-                            className="cursor-pointer [&_[role=slider]]:bg-[var(--accent)] [&_[role=slider]]:border-0"
+                            className="cursor-pointer"
                         />
-                        <div className="flex justify-between text-xs font-mono text-zinc-500">
+                        <div className="flex justify-between text-xs font-mono text-[var(--text-secondary)]">
                             <span>{formatTime(seekValue)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
@@ -608,19 +608,27 @@ export function GlobalNasheedPlayer() {
                     <div className="px-5 mb-4">
                         <div className="flex items-center justify-between">
                             <Button variant="ghost" size="icon" onClick={toggleShuffle}
-                                className={`rounded-full w-10 h-10 transition-all ${isShuffled ? 'text-[var(--accent)] bg-[var(--accent-soft)]' : 'text-zinc-500 hover:text-white hover:bg-white/10'}`}>
+                                className={`rounded-full w-10 h-10 transition-all ${isShuffled ? 'text-[var(--accent)] bg-[var(--accent-soft)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]'}`}>
                                 <Shuffle className="w-4 h-4" />
                             </Button>
 
                             <Button size="icon" variant="ghost" onClick={prevTrack} disabled={!hasPrev}
-                                className="text-white hover:text-[var(--accent)] hover:bg-white/10 rounded-full w-12 h-12 disabled:opacity-30">
+                                className="text-[var(--text-primary)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] rounded-full w-12 h-12 disabled:opacity-30">
                                 <SkipBack className="w-6 h-6 fill-current" />
                             </Button>
 
-                            <Button size="icon" onClick={togglePlayback}
-                                className="h-16 w-16 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform bg-[var(--accent)] text-[var(--on-accent)] border-0">
+                            <Button
+                                size="icon"
+                                onClick={togglePlayback}
+                                className="h-16 w-16 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-transform border-0"
+                                style={{
+                                    background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2, var(--accent)) 100%)',
+                                    color: 'var(--on-accent)',
+                                    boxShadow: '0 6px 20px var(--accent-glow)',
+                                }}
+                            >
                                 {showSpinner ? (
-                                    <div className="w-6 h-6 border-4 border-white/30 border-t-white animate-spin rounded-full" />
+                                    <div className="w-6 h-6 border-4 border-[var(--on-accent)]/30 border-t-[var(--on-accent)] animate-spin rounded-full" />
                                 ) : isPlaying ? (
                                     <Pause className="w-8 h-8 fill-current" />
                                 ) : (
@@ -629,12 +637,12 @@ export function GlobalNasheedPlayer() {
                             </Button>
 
                             <Button size="icon" variant="ghost" onClick={nextTrack} disabled={!hasNext}
-                                className="text-white hover:text-[var(--accent)] hover:bg-white/10 rounded-full w-12 h-12 disabled:opacity-30">
+                                className="text-[var(--text-primary)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] rounded-full w-12 h-12 disabled:opacity-30">
                                 <SkipForward className="w-6 h-6 fill-current" />
                             </Button>
 
                             <Button variant="ghost" size="icon" onClick={cycleRepeat}
-                                className={`rounded-full w-10 h-10 transition-all ${repeatActive ? 'text-[var(--accent)] bg-[var(--accent-soft)]' : 'text-zinc-500 hover:text-white hover:bg-white/10'}`}>
+                                className={`rounded-full w-10 h-10 transition-all ${repeatActive ? 'text-[var(--accent)] bg-[var(--accent-soft)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]'}`}>
                                 <RepeatIcon className="w-4 h-4" />
                             </Button>
                         </div>

@@ -1197,10 +1197,26 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
         }
       }
 
-      const totalIssues = domIssues + storageIssues;
+      const recordedEntries = getDiagnosticEntries();
+      const recordedErrors = recordedEntries.filter(
+        (e) =>
+          e.category === 'REACT_CRASH' ||
+          e.category === 'RUNTIME_ERROR' ||
+          e.category === 'PROMISE_REJECTION' ||
+          e.category === 'CONSOLE_ERROR'
+      );
+      const recordedErrorCount = recordedErrors.length;
+      const totalIssues = recordedErrorCount + domIssues + storageIssues;
 
-      // Update flight breadcrumbs with clean info verification event
-      recordBreadcrumb('SELF_TEST_OK', `Diagnostic capture pipeline verified — ${totalIssues} real errors found`);
+      const summaryMsg =
+        recordedErrorCount > 0
+          ? `Diagnostic Capture Verified — ${recordedErrorCount} recorded error(s) captured`
+          : totalIssues > 0
+          ? `Diagnostic Capture Verified — ${totalIssues} diagnostic issue(s) captured`
+          : 'Diagnostic Capture Verified — 0 real errors found';
+
+      // Update flight breadcrumbs with accurate capture verification status
+      recordBreadcrumb('SELF_TEST_OK', summaryMsg);
 
       // Refresh diagnostic state and breadcrumbs
       setDiagnosticEvents(getDiagnosticEntries());
@@ -1208,7 +1224,7 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
 
       toast({
         title: 'Diagnostic Capture Verified',
-        description: `✓ Diagnostic Capture Verified — ${totalIssues} real errors found`,
+        description: `✓ ${summaryMsg}`,
       });
     } catch (err) {
       toast({

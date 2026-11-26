@@ -286,7 +286,12 @@ export function convertHijriToGregorian(
     }
   }
 
-  // Fallback for 30th day of a 29-day Umm al-Qura month
+  // Fallback for 30th day of a 29-day Umm al-Qura month: resolve cleanly to day 29
+  if (safeDay === 30) {
+    const resolvedLastDay = convertHijriToGregorian(safeYear, safeMonth, 29, safeOffset);
+    if (resolvedLastDay) return resolvedLastDay;
+  }
+
   const monthInfo = CANONICAL_HIJRI_MONTHS[safeMonth - 1] || CANONICAL_HIJRI_MONTHS[0];
   const pad = (n: number) => String(n).padStart(2, '0');
   return {

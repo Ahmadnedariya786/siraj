@@ -9,6 +9,7 @@ import { shouldShowMenstrualFeatures } from "@/lib/gender-settings";
 import { getQazaStats } from "@/lib/qaza-tracker";
 import { getSajdahI18n } from "@/lib/sajdah-i18n";
 import { useSajdahTracker } from "@/lib/sajdah-tracker";
+import { useReciters } from "@/hooks/useReciters";
 import {
     Radio, Target, Heart, Calculator,
     Star, Trophy, Coins, Calendar, Library, Tv, Sparkles, HeartHandshake, BookOpen, BookText, Moon, Headphones,
@@ -85,6 +86,8 @@ export default function Services() {
     const showNoorCycle = shouldShowMenstrualFeatures();
     const sajdahI18n = useMemo(() => getSajdahI18n(language), [language]);
     const { totalPendingCount: sajdahPendingCount, madhab: sajdahMadhab } = useSajdahTracker();
+    const { reciters } = useReciters();
+    const liveReciterCount = reciters.length > 0 ? reciters.length : 299;
 
     const [pendingQazaCount, setPendingQazaCount] = useState(() => {
         try {
@@ -122,7 +125,16 @@ export default function Services() {
             icon: Sparkles,
             keywords: ["sajdah", "sujud", "tilawat", "prostration"],
         },
-        { title: ui.quranAudio, subtitle: ui.quranAudioSub, path: "/quran-audio", icon: Headphones },
+        {
+            title: ui.quranAudio,
+            subtitle: ui.quranAudioSub.replace(/(?:289|299|২৮৯|২৯৯)/, (m) =>
+                m === '২৮৯' || m === '২৯৯'
+                    ? String(liveReciterCount).replace(/[0-9]/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)])
+                    : String(liveReciterCount)
+            ),
+            path: "/quran-audio",
+            icon: Headphones,
+        },
         { title: ui.nasheeds, subtitle: ui.nasheedsSub, path: "/nasheeds", icon: Music },
         { title: ui.liveMecca, subtitle: ui.liveMeccaSub, path: "/live", icon: Tv },
         { title: ui.hadith, subtitle: ui.hadithSub, path: "/hadith/collections", icon: BookText },
@@ -141,7 +153,7 @@ export default function Services() {
         { title: ui.calendar, subtitle: ui.calendarSub, path: "/calendar", icon: Calendar },
         { title: ui.ebooks, subtitle: ui.ebooksSub, path: "/ebooks", icon: Library },
         { title: ui.tafsir, subtitle: ui.tafsirSub, path: "/tafsir", icon: BookOpen },
-    ], [ui, showNoorCycle, sajdahI18n, sajdahMadhab]);
+    ], [ui, showNoorCycle, sajdahI18n, sajdahMadhab, liveReciterCount]);
 
     const conditionalServices = useMemo(() => {
         const list: typeof baseServices = [];

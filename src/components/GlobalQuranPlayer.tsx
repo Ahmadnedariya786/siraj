@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { useReciters } from "@/hooks/useReciters";
-import { AlertCircle, Pause, Play, User, Volume2, X, ChevronUp, ChevronDown, Repeat, SkipBack, SkipForward } from "lucide-react";
+import { Pause, Play, User, X, ChevronDown, Repeat, SkipBack, SkipForward, Search, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Slider } from "./ui/slider";
 import { androidAudioHelper } from "@/lib/android-audio-helper";
 import { useGlobalRadio } from "@/lib/global-radio"; // To pause radio
@@ -36,6 +36,8 @@ export function GlobalQuranPlayer() {
 
     const [isExpanded, setIsExpanded] = useState(false);
     const [isRepeating, setIsRepeating] = useState(false);
+    const [isReciterPickerOpen, setIsReciterPickerOpen] = useState(false);
+    const [reciterSearch, setReciterSearch] = useState("");
     // Local seek position drives the slider + time labels at full update rate
     // WITHOUT touching the global store (which notifies every useGlobalQuran
     // consumer and writes localStorage). Global progress is pushed at ~1Hz.
@@ -234,6 +236,12 @@ export function GlobalQuranPlayer() {
         }
     }, [surahName, reciter]);
 
+    const filteredReciters = useMemo(() => {
+        const q = reciterSearch.trim().toLowerCase();
+        if (!q) return reciters;
+        return reciters.filter((r) => r.name.toLowerCase().includes(q));
+    }, [reciters, reciterSearch]);
+
     // Render nothing if no surah selected or if currently on Live Mecca
     if (!surahNumber || isLiveRoute) return <audio ref={audioRef} />;
 
@@ -258,22 +266,22 @@ export function GlobalQuranPlayer() {
                 <div className="fixed bottom-24 left-0 right-0 z-[100] px-4">
                     <Card className="w-full max-w-lg mx-auto bg-card border-border shadow-2xl rounded-full p-2 pr-4 flex items-center justify-between transition-transform duration-300 hover:scale-[1.02] animate-in slide-in-from-bottom border relative overflow-hidden">
                         {/* Progress bar in mini player */}
-                        <div className="absolute left-4 right-4 bottom-2 h-1 bg-muted rounded-full">
+                        <div className="absolute left-4 right-4 bottom-2 h-1 bg-[var(--surface-2)] rounded-full">
                           <div
-                            className="h-full bg-[#C9860A] rounded-full transition-all duration-200 ease-linear"
+                            className="h-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2,var(--accent))] rounded-full transition-all duration-200 ease-linear"
                             style={{ width: duration > 0 ? `${Math.min(100, (seekValue / duration) * 100)}%` : "0%" }}
                           />
                         </div>
 
                         <div className="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer" onClick={() => setIsExpanded(true)}>
                             {/* Rotating Vinyl Icon */}
-                            <div className={`w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0 border border-primary/20 ${isPlaying ? 'animate-spin-slow' : ''}`}>
-                                <Play className="w-4 h-4 text-primary fill-current" />
+                            <div className={`w-10 h-10 rounded-full bg-[var(--accent-soft)] flex items-center justify-center shrink-0 border border-[var(--border)] ${isPlaying ? 'animate-spin-slow' : ''}`}>
+                                <Play className="w-4 h-4 text-[var(--accent)] fill-current" />
                             </div>
 
                             <div className="min-w-0 pr-2">
-                                <p className="font-bold text-sm truncate leading-none mb-1 text-foreground">{surahName}</p>
-                                <p className="text-xs text-muted-foreground truncate leading-none uppercase tracking-wider font-medium">{reciter?.name}</p>
+                                <p className="font-bold text-sm truncate leading-none mb-1 text-[var(--text-primary)]">{surahName}</p>
+                                <p className="text-xs text-[var(--text-secondary)] truncate leading-none uppercase tracking-wider font-medium">{reciter?.name}</p>
                             </div>
                         </div>
 
@@ -284,15 +292,16 @@ export function GlobalQuranPlayer() {
                                 variant={isRepeating ? "default" : "ghost"}
                                 size="icon"
                                 className="h-8 w-8 rounded-full"
+                                style={isRepeating ? { background: 'var(--accent)', color: 'var(--on-accent)' } : undefined}
                                 onClick={() => setIsRepeating((prev) => !prev)}
                                 title={isRepeating ? "Disable repeat" : "Enable repeat"}
                             >
                                 <Repeat className="w-4 h-4" />
                             </Button>
 
-                            <Button size="icon" variant="ghost" onClick={togglePlayback} disabled={isLoading} className="text-foreground hover:text-primary hover:bg-muted rounded-full w-9 h-9">
+                            <Button size="icon" variant="ghost" onClick={togglePlayback} disabled={isLoading} className="text-[var(--text-primary)] hover:text-[var(--accent)] hover:bg-[var(--surface-2)] rounded-full w-9 h-9">
                                 {isLoading ? (
-                                    <div className="w-4 h-4 border-2 border-primary border-t-transparent animate-spin rounded-full" />
+                                    <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent animate-spin rounded-full" />
                                 ) : isPlaying ? (
                                     <Pause className="w-4 h-4 fill-current" />
                                 ) : (
@@ -315,7 +324,7 @@ export function GlobalQuranPlayer() {
     return (
         <>
             <audio ref={audioRef} />
-            <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-200 p-4" onClick={() => setIsExpanded(false)}>
+            <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center animate-in fade-in duration-200 p-4" onClick={() => setIsExpanded(false)}>
                 <div
                     className="w-full max-w-md rounded-[24px] border border-[var(--border)] p-6 space-y-6 shadow-2xl transition-all"
                     style={{
@@ -419,20 +428,25 @@ export function GlobalQuranPlayer() {
                             </span>
                         </div>
 
-                        {/* Reciter Select */}
+                        {/* Themed Reciter Picker Trigger (replaces clipped dark system dropdown) */}
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Reciter</label>
-                            <Select value={reciter?.id} onValueChange={handleReciterChange}>
-                                <SelectTrigger className="h-11 rounded-xl">
-                                    <User className="w-4 h-4 me-2 text-[var(--accent-text)]" />
-                                    <SelectValue placeholder="Select Reciter" />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-[200px] z-[200]">
-                                    {reciters.map(r => (
-                                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <label className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Reciter</label>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setReciterSearch("");
+                                    setIsReciterPickerOpen(true);
+                                }}
+                                className="w-full h-11 px-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] flex items-center justify-between gap-2 text-left transition-colors hover:border-[var(--accent)]"
+                            >
+                                <span className="flex items-center gap-2 min-w-0 flex-1">
+                                    <User className="w-4 h-4 shrink-0 text-[var(--accent-text)]" />
+                                    <span className="text-sm font-medium truncate">
+                                        {reciter?.name || "Select Reciter"}
+                                    </span>
+                                </span>
+                                <ChevronDown className="w-4 h-4 shrink-0 text-[var(--text-secondary)]" />
+                            </button>
                         </div>
 
                         {/* 2. 20-Bar CSS Soundwave Visualizer (height: 20px) */}
@@ -515,9 +529,19 @@ export function GlobalQuranPlayer() {
                                 <SkipBack className="w-5 h-5" />
                             </Button>
 
-                            <Button size="icon" className="h-16 w-16 rounded-full shadow-lg hover:scale-105 transition-transform" onClick={togglePlayback} disabled={isLoading}>
+                            <Button
+                                size="icon"
+                                className="h-16 w-16 rounded-full shadow-lg hover:scale-105 transition-transform border-0"
+                                style={{
+                                    background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2, var(--accent)) 100%)',
+                                    color: 'var(--on-accent)',
+                                    boxShadow: '0 6px 20px var(--accent-glow)',
+                                }}
+                                onClick={togglePlayback}
+                                disabled={isLoading}
+                            >
                                 {isLoading ? (
-                                    <div className="w-6 h-6 border-4 border-primary-foreground border-t-transparent animate-spin rounded-full" />
+                                    <div className="w-6 h-6 border-4 border-[var(--on-accent)] border-t-transparent animate-spin rounded-full" />
                                 ) : isPlaying ? (
                                     <Pause className="w-8 h-8 fill-current" />
                                 ) : (
@@ -534,6 +558,108 @@ export function GlobalQuranPlayer() {
                     </div>
                 </div>
             </div>
+
+            {isReciterPickerOpen && typeof document !== 'undefined' && createPortal(
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Choose Reciter"
+                    className="fixed inset-0 flex items-end sm:items-center justify-center p-2 sm:p-4"
+                    style={{ zIndex: 99999, background: 'rgba(0, 0, 0, 0.72)' }}
+                    onClick={() => setIsReciterPickerOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-[calc(100vw-16px)] sm:max-w-md rounded-2xl border border-[var(--border)] shadow-2xl flex flex-col overflow-hidden"
+                        style={{
+                            maxHeight: '78dvh',
+                            background: 'var(--surface)',
+                            color: 'var(--text-primary)',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] shrink-0">
+                            <div className="min-w-0">
+                                <h4 className="text-sm font-bold text-[var(--text-primary)]">Select Reciter</h4>
+                                <p className="text-[11px] text-[var(--text-secondary)]">
+                                    {filteredReciters.length} of {reciters.length} reciters
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsReciterPickerOpen(false)}
+                                aria-label="Close reciter picker"
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--surface-2)]"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="p-3 border-b border-[var(--border)] shrink-0">
+                            <div className="relative">
+                                <Search className="w-4 h-4 text-[var(--text-secondary)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={reciterSearch}
+                                    onChange={(e) => setReciterSearch(e.target.value)}
+                                    placeholder="Search reciter or riwayah..."
+                                    autoFocus
+                                    className="w-full h-10 pl-9 pr-9 rounded-xl text-sm border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] outline-none focus:border-[var(--accent)]"
+                                />
+                                {reciterSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setReciterSearch("")}
+                                        aria-label="Clear reciter search"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--surface)]"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                            {filteredReciters.length === 0 ? (
+                                <p className="text-center text-xs text-[var(--text-secondary)] py-8">
+                                    No reciters match "{reciterSearch}".
+                                </p>
+                            ) : (
+                                filteredReciters.map((r) => {
+                                    const selected = reciter?.id === r.id;
+                                    return (
+                                        <button
+                                            key={r.id}
+                                            type="button"
+                                            onClick={() => {
+                                                handleReciterChange(r.id);
+                                                setIsReciterPickerOpen(false);
+                                            }}
+                                            className="w-full px-3 py-2.5 rounded-xl flex items-center justify-between gap-2 text-left border transition-colors"
+                                            style={selected ? {
+                                                background: 'var(--accent-soft)',
+                                                borderColor: 'var(--accent)',
+                                                color: 'var(--text-primary)',
+                                            } : {
+                                                background: 'transparent',
+                                                borderColor: 'transparent',
+                                                color: 'var(--text-primary)',
+                                            }}
+                                        >
+                                            <span className="text-xs sm:text-sm font-medium leading-snug line-clamp-2 break-words flex-1 min-w-0">
+                                                {r.name}
+                                            </span>
+                                            {selected && (
+                                                <Check className="w-4 h-4 shrink-0 text-[var(--accent-text)]" />
+                                            )}
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </>
     );
 }

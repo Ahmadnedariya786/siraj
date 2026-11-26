@@ -1,7 +1,6 @@
 // v2.0.3 - Fixed Missing useMemo import
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Moon, Star, ChevronLeft, ChevronRight, X, ArrowLeft, Sparkles, Gift, Heart, Landmark, ArrowRightLeft, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +47,21 @@ interface CalendarDay {
 
 export { normalizeHijriMonth };
 export const HIJRI_MONTHS_LIST = CANONICAL_HIJRI_MONTHS;
+
+const HIJRI_SELECT_SHORT_NAMES: Record<number, string> = {
+  1: 'Muharram',
+  2: 'Safar',
+  3: 'Rabīʿ I',
+  4: 'Rabīʿ II',
+  5: 'Jumādā I',
+  6: 'Jumādā II',
+  7: 'Rajab',
+  8: 'Shaʿbān',
+  9: 'Ramaḍān',
+  10: 'Shawwāl',
+  11: 'Dhū al-Qaʿdah',
+  12: 'Dhū al-Ḥijjah',
+};
 
 export { convertGregorianToHijri, convertHijriToGregorian };
 
@@ -635,9 +649,9 @@ export default function IslamicCalendar() {
               ) : (
                 /* Mode 2: Hijri to Gregorian */
                 <div className="space-y-3.5">
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-[64px_minmax(0,1fr)_76px] gap-2 w-full">
                     {/* Day Input */}
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <label className="text-[11px] font-semibold text-[var(--text-primary)]">Day</label>
                       <input
                         type="number"
@@ -645,28 +659,28 @@ export default function IslamicCalendar() {
                         max="30"
                         value={hijriDayInput}
                         onChange={(e) => setHijriDayInput(Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                        className="w-full h-10 px-2.5 rounded-xl text-center text-sm font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors"
+                        className="w-full h-10 px-2 rounded-xl text-center text-sm font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors"
                       />
                     </div>
 
                     {/* Month Dropdown */}
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <label className="text-[11px] font-semibold text-[var(--text-primary)]">Month</label>
                       <select
                         value={hijriMonthInput}
                         onChange={(e) => setHijriMonthInput(parseInt(e.target.value, 10) || 1)}
-                        className="w-full h-10 px-1.5 rounded-xl text-xs font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+                        className="w-full h-10 px-2 rounded-xl text-xs font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
                       >
                         {HIJRI_MONTHS_LIST.map((m) => (
                           <option key={m.number} value={m.number}>
-                            {m.number}. {m.en}
+                            {m.number}. {HIJRI_SELECT_SHORT_NAMES[m.number] || m.en}
                           </option>
                         ))}
                       </select>
                     </div>
 
                     {/* Year Input */}
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <label className="text-[11px] font-semibold text-[var(--text-primary)]">Year (AH)</label>
                       <input
                         type="number"
@@ -674,7 +688,7 @@ export default function IslamicCalendar() {
                         max="1600"
                         value={hijriYearInput}
                         onChange={(e) => setHijriYearInput(Math.max(1, parseInt(e.target.value, 10) || 1448))}
-                        className="w-full h-10 px-2.5 rounded-xl text-center text-sm font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors"
+                        className="w-full h-10 px-2 rounded-xl text-center text-sm font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors"
                       />
                     </div>
                   </div>
