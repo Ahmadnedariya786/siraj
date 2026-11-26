@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import i18n from '@/lib/i18n-new';
+import i18n, { ensureLocaleLoaded } from '@/lib/i18n-new';
 import {
   type LanguageCode,
   LANGUAGES,
@@ -166,6 +166,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
         await persistLanguage(lang);
       }
 
+      await ensureLocaleLoaded(lang);
       setLanguageState(lang);
       i18n.changeLanguage(lang);
       applyLanguageSideEffects(lang);
@@ -192,15 +193,18 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
       document.documentElement.dir = (lang === 'ar' || lang === 'ur') ? 'rtl' : 'ltr';
       document.documentElement.lang = lang;
       setLanguageState(lang);
-      i18n.changeLanguage(lang);
       applyLanguageSideEffects(lang);
       persistLanguage(lang);
+      ensureLocaleLoaded(lang)
+        .then(() => {
+          i18n.changeLanguage(lang);
+          sendWidgetStrings(i18n.t.bind(i18n));
+        })
+        .catch((err) => {
+          console.warn('Could not load locale bundle:', lang, err);
+        });
 
       window.dispatchEvent(new CustomEvent('noor:language-changed', { detail: lang }));
-
-      queueMicrotask(() => {
-        sendWidgetStrings(i18n.t.bind(i18n));
-      });
     },
     [i18n]
   );

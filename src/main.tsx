@@ -50,21 +50,20 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { localNotifications } from "@/lib/local-notifications";
 import { whenIdle } from "@/lib/performance-optimizations";
 import './lib/i18n-new'; // Initialize new offline-first i18n
 
-// Initialize local notifications on the first idle slice so it doesn't compete
-// with the initial paint / Capacitor bridge startup (reduces startup jank).
+// Initialize local notifications strictly after first paint / idle so it never blocks WebView boot
 whenIdle(() => {
   markStartupStep('notification-service-init-idle');
-  try {
-    void localNotifications.initialize();
-  } catch (e) {
-    console.warn("localNotifications.initialize failed:", e);
-  } finally {
-    completeStartupStep('notification-service-init-idle');
-  }
+  import('@/lib/local-notifications')
+    .then(({ localNotifications }) => localNotifications.initialize())
+    .catch((e) => {
+      console.warn("localNotifications.initialize failed:", e);
+    })
+    .finally(() => {
+      completeStartupStep('notification-service-init-idle');
+    });
 });
 
 import { LanguageProvider } from "@/contexts/LanguageContext-new";

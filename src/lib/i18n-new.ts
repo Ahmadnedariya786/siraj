@@ -4,26 +4,47 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 
 import { SUPPORTED_CODES, DEFAULT_LANGUAGE } from '@/lib/language-config';
 
-// Import all locale JSON files (bundled by Vite — no HTTP backend needed)
+// Only English is bundled synchronously in the main chunk; non-active locales load as split chunks
 import enTranslations from '../locales/en.json';
-import arTranslations from '../locales/ar.json';
-import urTranslations from '../locales/ur.json';
-import guTranslations from '../locales/gu.json';
-import hiTranslations from '../locales/hi.json';
-import bnTranslations from '../locales/bn.json';
-import ruTranslations from '../locales/ru.json';
-import frTranslations from '../locales/fr.json';
 
-// Build i18next resources object
+const loadedLocales = new Set<string>(['en']);
+
+export async function ensureLocaleLoaded(lang: string): Promise<void> {
+  if (!lang || loadedLocales.has(lang)) return;
+  let mod: { default: Record<string, unknown> } | null = null;
+  switch (lang) {
+    case 'ar':
+      mod = await import('../locales/ar.json');
+      break;
+    case 'ur':
+      mod = await import('../locales/ur.json');
+      break;
+    case 'gu':
+      mod = await import('../locales/gu.json');
+      break;
+    case 'hi':
+      mod = await import('../locales/hi.json');
+      break;
+    case 'bn':
+      mod = await import('../locales/bn.json');
+      break;
+    case 'ru':
+      mod = await import('../locales/ru.json');
+      break;
+    case 'fr':
+      mod = await import('../locales/fr.json');
+      break;
+    default:
+      return;
+  }
+  if (mod?.default) {
+    i18n.addResourceBundle(lang, 'translation', mod.default, true, true);
+    loadedLocales.add(lang);
+  }
+}
+
 const resources = {
   en: { translation: enTranslations },
-  ar: { translation: arTranslations },
-  ur: { translation: urTranslations },
-  gu: { translation: guTranslations },
-  hi: { translation: hiTranslations },
-  bn: { translation: bnTranslations },
-  ru: { translation: ruTranslations },
-  fr: { translation: frTranslations },
 };
 
 // Initialize i18next

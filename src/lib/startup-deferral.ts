@@ -16,6 +16,20 @@ export function deferNonCriticalStartup(callback: () => void, timeoutMs = 300): 
 }
 
 /**
+ * Runs a non-critical task strictly AFTER first paint via rAF + requestIdleCallback
+ * (with setTimeout fallback) so cold boot & splash handoff never stall.
+ */
+export function deferAfterFirstPaint(callback: () => void, timeoutMs = 250): void {
+  if (typeof window === 'undefined') return;
+  const scheduleIdle = () => deferNonCriticalStartup(callback, timeoutMs);
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => scheduleIdle());
+  } else {
+    setTimeout(scheduleIdle, timeoutMs);
+  }
+}
+
+/**
  * Primes secondary non-critical catalogs during browser idle time:
  * 1. Quiz rewards catalog & store state
  * 2. Nasheed library index
@@ -25,17 +39,17 @@ export function primeNonCriticalMetadata(): void {
   deferNonCriticalStartup(() => {
     try {
       // 1. Prime Quiz rewards & store metadata
-      import('@/lib/quiz-store').catch(() => {});
-      import('@/lib/variable-rewards').catch(() => {});
+      import('@/lib/quiz-store').catch((err) => console.debug('Idle prime quiz-store skipped:', err));
+      import('@/lib/variable-rewards').catch((err) => console.debug('Idle prime variable-rewards skipped:', err));
 
       // 2. Prime Nasheed library index
-      import('@/data/nasheeds.json').catch(() => {});
-      import('@/lib/global-nasheed').catch(() => {});
+      import('@/data/nasheeds.json').catch((err) => console.debug('Idle prime nasheeds skipped:', err));
+      import('@/lib/global-nasheed').catch((err) => console.debug('Idle prime global-nasheed skipped:', err));
 
       // 3. Prime Services grid secondary metadata
-      import('@/pages/Services').catch(() => {});
-    } catch {
-      // Non-critical startup prime error ignored
+      import('@/pages/Services').catch((err) => console.debug('Idle prime Services skipped:', err));
+    } catch (err) {
+      console.debug('Idle metadata prime skipped:', err);
     }
-  }, 400);
+  }, 3500);
 }

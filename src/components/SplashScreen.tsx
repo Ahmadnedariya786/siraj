@@ -106,13 +106,13 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
         }
     }, []);
 
-    // Strict failsafe timer: forces splash dismissal at 1200ms regardless of parent re-renders
+    // Strict failsafe timer: forces splash dismissal at 550ms regardless of parent re-renders
     useEffect(() => {
         forceReleaseSplashScrollLock();
 
         const failsafeTimer = setTimeout(() => {
             triggerComplete();
-        }, 1200);
+        }, 550);
 
         return () => {
             clearTimeout(failsafeTimer);
@@ -165,9 +165,9 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
             };
         }
 
-        // Animate progress smoothly from 15% to 100% over ~850ms
+        // Snappy progress reveal over ~320ms followed by crisp 140ms fade (<= 460ms total)
         const startTime = performance.now();
-        const duration = 850;
+        const duration = 320;
         let animFrameId: number;
 
         const updateProgress = (now: number) => {
@@ -182,13 +182,10 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
                 animFrameId = requestAnimationFrame(updateProgress);
             } else {
                 setProgress(100);
-                // Pause 40ms at 100%, then trigger crisp, fast 150ms exit transition
+                setIsFading(true);
                 setTimeout(() => {
-                    setIsFading(true);
-                    setTimeout(() => {
-                        triggerComplete();
-                    }, 150);
-                }, 40);
+                    triggerComplete();
+                }, 140);
             }
         };
 

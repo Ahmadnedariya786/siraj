@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { autoBackup } from '@/lib/backup-service';
 
 const ACTIVITY_TIMEOUT = 20 * 60 * 1000;
 const FIRST_BACKUP_DELAY = 5 * 1000;
@@ -19,10 +18,11 @@ export function useAutoBackup(onBackup?: () => void) {
 
   const runBackup = useCallback(async () => {
     try {
+      const { autoBackup } = await import('@/lib/backup-service');
       await autoBackup();
       onBackupRef.current?.();
     } catch (error) {
-      // Silent fail — the 20-minute cadence retries automatically.
+      console.debug('Auto backup deferred retry:', error);
     }
   }, []);
 

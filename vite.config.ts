@@ -38,12 +38,14 @@ export default defineConfig(({ mode }) => ({
     modulePreload: {
       polyfill: false,
       resolveDependencies: (filename, deps) => {
-        // Exclude heavy vendor chunks from modulepreload (they're lazy-loaded)
+        // Exclude heavy secondary vendor chunks from modulepreload (they load lazily on route navigation)
         return deps.filter(dep =>
           !dep.includes('pdf-vendor') &&
           !dep.includes('charts') &&
           !dep.includes('radix-ui') &&
-          !dep.includes('animations')
+          !dep.includes('animations') &&
+          !dep.includes('hls') &&
+          !dep.includes('html2canvas')
         );
       }
     },
@@ -96,6 +98,11 @@ export default defineConfig(({ mode }) => ({
           // react-i18next from React causes createContext timing issues.
           // React Query
           'react-query': ['@tanstack/react-query'],
+          // Media & export vendors isolated from cold-boot entry
+          'hls': ['hls.js'],
+          'html2canvas': ['html2canvas'],
+          // Router vendor chunk
+          'vendor-router': ['react-router-dom'],
           // Carousel vendor chunk
           'carousel': ['embla-carousel-react'],
         },

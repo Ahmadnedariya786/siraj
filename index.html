@@ -8,9 +8,20 @@
       try {
         var savedTheme = localStorage.getItem('noor-theme') || localStorage.getItem('noor_theme') || localStorage.getItem('theme') || 'oxford-gold';
         var valid = ['oxford-gold', 'kiswah-noir', 'istanbul-sapphire', 'imperial-violet', 'burgundy-velvet', 'desert-scroll', 'madinah-emerald', 'persian-indigo'];
+        var bgMap = {
+          'oxford-gold': '#060911',
+          'kiswah-noir': '#060608',
+          'istanbul-sapphire': '#050912',
+          'imperial-violet': '#0B0514',
+          'burgundy-velvet': '#0B0B0B',
+          'desert-scroll': '#100806',
+          'madinah-emerald': '#040D09',
+          'persian-indigo': '#0B0724'
+        };
         if (valid.indexOf(savedTheme) === -1) savedTheme = 'oxford-gold';
         document.documentElement.setAttribute('data-theme', savedTheme);
         document.documentElement.className = 'dark ' + savedTheme + ' splash-active';
+        document.documentElement.style.backgroundColor = bgMap[savedTheme] || '#060911';
 
         // Check user startup splash preference
         var splashEnabled = localStorage.getItem('splash_enabled');
@@ -58,8 +69,8 @@
         }
 
         // Native unconditional failsafe timer: forces removal of splash screen and releases scroll lock
-        // after 1800ms under all conditions, even if React or any external script throws or hangs.
-        setTimeout(dismissInitialSplash, 1800);
+        // after 850ms under all conditions, even if React or any external script throws or hangs.
+        setTimeout(dismissInitialSplash, 850);
 
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', function () {
@@ -348,7 +359,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #090D16;
+      background: var(--bg-base, #060911);
       overflow: hidden;
       z-index: 2147483647;
       pointer-events: all;
@@ -414,10 +425,18 @@
   </style>
 </head>
 
-<body class="splash-active">
-  <!-- Static pre-React splash element: clean minimal dark background (#090D16) removed immediately upon React render to eliminate mid-splash double-logo jump -->
-  <div id="initial-splash" class="static-splash" aria-hidden="true" style="position:fixed;inset:0;width:100vw;height:100dvh;background:#090D16;z-index:2147483647;pointer-events:all;"></div>
-  <div id="root"></div>
+<body class="splash-active" style="background:var(--bg-base,#060911);">
+  <!-- Instant theme-matched first-paint shell in #root (zero blank screen gap before JS parses) -->
+  <div id="root">
+    <div id="boot-pre-paint-mark" style="min-height:100dvh;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-base,#060911);color:var(--accent-text,#F2C97D);user-select:none;">
+      <svg width="56" height="56" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <rect x="14" y="14" width="36" height="36" rx="3" stroke="var(--accent,#DCA349)" stroke-width="2" />
+        <rect x="14" y="14" width="36" height="36" rx="3" stroke="var(--accent,#DCA349)" stroke-width="2" transform="rotate(45 32 32)" />
+        <circle cx="32" cy="32" r="9" stroke="var(--accent-text,#F2C97D)" stroke-width="1.8" />
+      </svg>
+      <div style="margin-top:14px;font-size:15px;font-weight:800;letter-spacing:0.24em;text-transform:uppercase;color:var(--accent-text,#F2C97D);">SIRAJ</div>
+    </div>
+  </div>
 
   <!-- Permanent HTML-Level Boot Watchdog: Prevents black screen freezes if JS mount throws or halts -->
   <script>
@@ -437,7 +456,7 @@
       setTimeout(function () {
         var root = document.getElementById('root');
         var splash = document.getElementById('initial-splash');
-        var isRootEmpty = !root || root.childElementCount === 0 || root.innerHTML.trim() === '';
+        var isRootEmpty = !root || root.childElementCount === 0 || root.innerHTML.trim() === '' || !!document.getElementById('boot-pre-paint-mark');
 
         if (isRootEmpty) {
           if (splash) {
