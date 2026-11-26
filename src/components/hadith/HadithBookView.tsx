@@ -9,6 +9,7 @@ import { getCollectionByName, HadithCollection, HadithBook } from "@/data/hadith
 import { getHadithCollectionMetadata } from "@/lib/hadith";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
+import { AaReaderControlsButton } from "@/components/BookReaderControls";
 
 export function HadithBookView() {
   const { collection } = useParams<{ collection: string }>();
@@ -174,7 +175,7 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
   // Show loading while fetching remote metadata
   if (metadataLoading && !remoteCollectionData) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-transparent relative z-10 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-muted-foreground">
           <Loader2 className="w-8 h-8 animate-spin" />
           <span className="text-lg">Loading collection...</span>
@@ -185,7 +186,7 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
 
   if (!collectionData) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-transparent relative z-10 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-foreground mb-2">
             Collection Not Found
@@ -205,12 +206,12 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
   }
 
   return (
-    <div className="min-h-screen bg-background safe-top">
+    <div className="min-h-screen bg-transparent relative z-10 safe-top">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Header with Row 1 (Back + Title + Authenticity) and Row 2 (Full-Width Language Bar) */}
+        {/* Header with Row 1 (Back + Title + Aa + Authenticity) and Row 2 (Full-Width Language Bar) */}
         <div className="space-y-3 mb-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -220,15 +221,18 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">{collectionData.title}</h1>
+                <h1 dir="auto" className="text-lg sm:text-2xl font-bold text-foreground truncate">{collectionData.title}</h1>
                 <p className="text-muted-foreground font-arabic truncate" dir="rtl">
                   {collectionData.arabicTitle}
                 </p>
               </div>
             </div>
-            <Badge variant="secondary" className="text-xs shrink-0">
-              {collectionData.authenticity}
-            </Badge>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <AaReaderControlsButton />
+              <Badge variant="secondary" className="text-xs shrink-0 max-w-[110px] truncate">
+                {collectionData.authenticity}
+              </Badge>
+            </div>
           </div>
           <ContentLanguageBar fullWidth />
         </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, BookOpen, Sparkles, RefreshCw, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,23 @@ import { getAllCollections, HadithCollection } from "@/data/hadith-collections";
 import { getDailyHadith as getDailyHadithFromCollections } from "@/lib/hadith";
 import { motion } from "framer-motion";
 import { goBackOrFallback } from "@/lib/navigation";
-import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
+import {
+  useContentLanguage,
+  translateHadithContent,
+  translateIslamicText,
+  type ContentLang,
+} from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
+import {
+  AaReaderControlsButton,
+  BookProseParagraph,
+  ReaderStatusBanner,
+} from "@/components/BookReaderControls";
+import {
+  useBookReaderPrefs,
+  getArabicLineHeight,
+  formatIslamicProse,
+} from "@/lib/reader-typography";
 
 function extractNarrator(englishText: string, fallback?: string): string {
   if (fallback && fallback !== "Unknown" && fallback.trim()) return fallback.trim();
@@ -33,29 +48,55 @@ export function HadithCollections() {
   const allCollections = useMemo(() => getAllCollections(), []);
   const [dailyHadith, setDailyHadith] = useState<{ title: string; content: string; arabic: string; subtitle: string; reference: string; reflection: string } | null>(null);
 
-  const { contentLang, isRtl } = useContentLanguage();
+  const { contentLang } = useContentLanguage();
+  const { prefs } = useBookReaderPrefs();
   const [translatedDailyContent, setTranslatedDailyContent] = useState("");
   const [translatedDailyNarrator, setTranslatedDailyNarrator] = useState("");
+  const [actualDailyLang, setActualDailyLang] = useState<ContentLang>('en');
+  const [dailyFromCache, setDailyFromCache] = useState(false);
+  const [dailyOfflineFallback, setDailyOfflineFallback] = useState(false);
+  const [dailySource, setDailySource] = useState<'scholar-edition' | 'chunked-api' | 'original'>('original');
+  const [dailyRetryTick, setDailyRetryTick] = useState(0);
 
-  useEffect(() => {
+  const runDailyTranslation = useCallback(async (mountedCheck: () => boolean) => {
     if (!dailyHadith) return;
     if (contentLang === 'en') {
-      setTranslatedDailyContent(dailyHadith.content);
-      setTranslatedDailyNarrator(dailyHadith.reflection);
+      if (mountedCheck()) {
+        setTranslatedDailyContent(formatIslamicProse(dailyHadith.content, 'en'));
+        setTranslatedDailyNarrator(dailyHadith.reflection);
+        setActualDailyLang('en');
+        setDailyFromCache(false);
+        setDailyOfflineFallback(false);
+        setDailySource('original');
+      }
       return;
     }
-    let isMounted = true;
-    Promise.all([
-      translateIslamicText(dailyHadith.content, contentLang),
-      translateIslamicText(dailyHadith.reflection, contentLang),
-    ]).then(([tContent, tReflection]) => {
-      if (isMounted) {
-        setTranslatedDailyContent(tContent);
-        setTranslatedDailyNarrator(tReflection);
-      }
+
+    const res = await translateHadithContent({
+      collection: dailyHadith.subtitle,
+      hadithNumber: dailyHadith.reference.replace(/[^\d]/g, '') || 'daily',
+      englishText: dailyHadith.content,
+      targetLang: contentLang,
     });
-    return () => { isMounted = false; };
+    const tReflection = res.offlineFallback
+      ? dailyHadith.reflection
+      : await translateIslamicText(dailyHadith.reflection, contentLang);
+
+    if (mountedCheck()) {
+      setTranslatedDailyContent(res.text);
+      setTranslatedDailyNarrator(tReflection);
+      setActualDailyLang(res.actualLang);
+      setDailyFromCache(res.fromCache);
+      setDailyOfflineFallback(res.offlineFallback);
+      setDailySource(res.source);
+    }
   }, [dailyHadith, contentLang]);
+
+  useEffect(() => {
+    let isMounted = true;
+    runDailyTranslation(() => isMounted);
+    return () => { isMounted = false; };
+  }, [runDailyTranslation, dailyRetryTick]);
 
   useEffect(() => {
     getDailyHadithFromCollections().then(h => {
@@ -90,12 +131,12 @@ export function HadithCollections() {
   };
 
   return (
-    <div className="min-h-screen bg-background safe-top">
+    <div className="min-h-screen bg-transparent relative z-10 safe-top">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Header with Row 1 (Back + Title + Bookmark) and Row 2 (Full-Width Language Bar) */}
+        {/* Header with Row 1 (Back + Title + Aa + Bookmark) and Row 2 (Full-Width Language Bar) */}
         <div className="space-y-3 mb-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -106,20 +147,23 @@ export function HadithCollections() {
               </Button>
               <div className="flex-1 min-w-0">
                 <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">Hadith Collections</h1>
-                <p className="text-muted-foreground text-xs sm:text-sm truncate">
-                  Explore authentic Hadith from available collections
+                <p className="text-muted-foreground text-xs sm:text-sm leading-snug">
+                  Authentic Prophetic traditions
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/hadith/bookmarks")}
-              className="rounded-xl shrink-0"
-              title="View bookmarked hadith"
-            >
-              <Bookmark className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <AaReaderControlsButton />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/hadith/bookmarks")}
+                className="rounded-xl h-8 w-8 shrink-0"
+                title="View bookmarked hadith"
+              >
+                <Bookmark className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
           <ContentLanguageBar fullWidth />
         </div>
@@ -168,22 +212,41 @@ export function HadithCollections() {
                   </Button>
                 </div>
                 
-                <div className="bg-[var(--surface-2)] rounded-2xl p-4 sm:p-5 border border-[var(--border)] mb-3 space-y-3">
+                <div className="bg-[var(--surface-2)] rounded-2xl p-4 border border-[var(--border)] mb-3 space-y-3">
+                  <ReaderStatusBanner
+                    targetLang={contentLang}
+                    actualLang={actualDailyLang}
+                    fromCache={dailyFromCache}
+                    source={dailySource}
+                    offlineFallback={dailyOfflineFallback}
+                    isStreaming={false}
+                    onRetry={() => setDailyRetryTick((n) => n + 1)}
+                  />
                   {dailyHadith.arabic && (
-                    <p className="text-foreground text-xl md:text-2xl font-arabic text-right leading-loose break-words" dir="rtl">
+                    <p
+                      className="text-foreground font-arabic text-right break-words"
+                      dir="rtl"
+                      style={{
+                        fontSize: `${prefs.arabicFontSize}px`,
+                        lineHeight: getArabicLineHeight(prefs.lineSpacing),
+                      }}
+                    >
                       {!isExpanded && dailyHadith.arabic.length > 200
                         ? `${dailyHadith.arabic.slice(0, 200)}...`
                         : dailyHadith.arabic}
                     </p>
                   )}
-                  <p
-                    className={`text-foreground/90 text-sm sm:text-base font-normal leading-relaxed break-words ${contentLang === 'ur' ? 'font-urdu text-right leading-[2.35] text-lg' : isRtl ? 'font-arabic text-right text-lg' : ''}`}
-                    dir={isRtl ? 'rtl' : 'ltr'}
-                  >
-                    {!isExpanded && (translatedDailyContent || dailyHadith.content).length > 240
-                      ? `${(translatedDailyContent || dailyHadith.content).slice(0, 240)}...`
-                      : (translatedDailyContent || dailyHadith.content)}
-                  </p>
+                  <BookProseParagraph
+                    text={
+                      !isExpanded && (translatedDailyContent || dailyHadith.content).length > 240
+                        ? `${(translatedDailyContent || dailyHadith.content).slice(0, 240)}...`
+                        : (translatedDailyContent || dailyHadith.content)
+                    }
+                    actualLang={actualDailyLang}
+                    fontSize={prefs.bodyFontSize}
+                    lineSpacing={prefs.lineSpacing}
+                    className="text-foreground/95"
+                  />
                   {((translatedDailyContent || dailyHadith.content).length > 240 || (dailyHadith.arabic && dailyHadith.arabic.length > 200)) && (
                     <button
                       type="button"
@@ -202,8 +265,8 @@ export function HadithCollections() {
                 </div>
                 
                 <p
-                  className={`text-muted-foreground text-xs sm:text-sm font-medium italic ${contentLang === 'ur' ? 'font-urdu text-right leading-[2.35]' : isRtl ? 'font-arabic text-right' : ''}`}
-                  dir={isRtl ? 'rtl' : 'ltr'}
+                  className={`text-muted-foreground text-xs sm:text-sm font-medium ${actualDailyLang === 'ur' ? 'font-urdu text-right leading-[2.0]' : 'text-left'}`}
+                  dir={actualDailyLang === 'ur' ? 'rtl' : 'ltr'}
                   style={{ unicodeBidi: 'isolate' }}
                 >
                   {translatedDailyNarrator || dailyHadith.reflection}

@@ -10,6 +10,7 @@ import { getQazaStats } from "@/lib/qaza-tracker";
 import { getSajdahI18n } from "@/lib/sajdah-i18n";
 import { useSajdahTracker } from "@/lib/sajdah-tracker";
 import { useReciters } from "@/hooks/useReciters";
+import { TOTAL_PROPHETS_COUNT } from "@/lib/qisas";
 import {
     Radio, Target, Heart, Calculator,
     Star, Trophy, Coins, Calendar, Library, Tv, Sparkles, HeartHandshake, BookOpen, BookText, Moon, Headphones,
@@ -139,7 +140,16 @@ export default function Services() {
         { title: ui.liveMecca, subtitle: ui.liveMeccaSub, path: "/live", icon: Tv },
         { title: ui.hadith, subtitle: ui.hadithSub, path: "/hadith/collections", icon: BookText },
         { title: ui.seerah, subtitle: ui.seerahSub, path: "/seerah", icon: BookOpen },
-        { title: ui.prophets, subtitle: ui.prophetsSub, path: "/qisas", icon: Users },
+        {
+            title: ui.prophets,
+            subtitle: ui.prophetsSub.replace(/(?:24|25|২৪|২৫)/, (m) =>
+                m === '২৪' || m === '২৫'
+                    ? String(TOTAL_PROPHETS_COUNT).replace(/[0-9]/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)])
+                    : String(TOTAL_PROPHETS_COUNT)
+            ),
+            path: "/qisas",
+            icon: Users,
+        },
         { title: ui.radio, subtitle: ui.radioSub, path: "/quran-radio", icon: Radio },
         { title: ui.habits, subtitle: ui.habitsSub, path: "/habit-tracker", icon: Target },
         { title: ui.duas, subtitle: ui.duasSub, path: "/duas", icon: Heart },

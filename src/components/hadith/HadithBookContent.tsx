@@ -8,11 +8,26 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getCollectionByName, HadithBook, HadithCollection, EnhancedHadith } from "@/data/hadith-collections";
 import { getHadithBookData, getHadithCollectionMetadata } from "@/lib/hadith";
-import { getGradeBadgeClass } from "@/lib/hadith-utils";
+import { getGradeBadgeClass, dedupeHadithGrade } from "@/lib/hadith-utils";
 import { useHadithBookmarks } from "@/hooks/useHadithBookmarks";
 import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
-import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
+import {
+  useContentLanguage,
+  translateHadithContent,
+  translateIslamicText,
+  type ContentLang,
+} from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
+import {
+  AaReaderControlsButton,
+  BookProseParagraph,
+  ReaderStatusBanner,
+} from "@/components/BookReaderControls";
+import {
+  useBookReaderPrefs,
+  getArabicLineHeight,
+  formatIslamicProse,
+} from "@/lib/reader-typography";
 
 const SHOW_ALL_PAGE_SIZE = 300;
 
@@ -27,55 +42,90 @@ interface HadithCardProps {
   toggleBookmark: (item: { collection: string; bookNumber: string; hadithNumber: string; arabic: string; englishTranslation?: string; bookName?: string }) => void;
 }
 
-const HadithCard = memo(function HadithCard({ hadith, index, collection, book, bookmarked, navigate, toast, toggleBookmark }: HadithCardProps) {
-  const { contentLang, isRtl } = useContentLanguage();
-  const [translatedText, setTranslatedText] = useState(hadith.englishTranslation || '');
+const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmarked, navigate, toast, toggleBookmark }: HadithCardProps) {
+  const { contentLang } = useContentLanguage();
+  const { prefs } = useBookReaderPrefs();
+  const [translatedText, setTranslatedText] = useState(() => formatIslamicProse(hadith.englishTranslation || '', 'en'));
   const [translatedNarrator, setTranslatedNarrator] = useState(hadith.narrator || '');
+  const [actualLang, setActualLang] = useState<ContentLang>('en');
+  const [fromCache, setFromCache] = useState(false);
+  const [offlineFallback, setOfflineFallback] = useState(false);
+  const [source, setSource] = useState<'scholar-edition' | 'chunked-api' | 'original'>('original');
+  const [retryTick, setRetryTick] = useState(0);
 
-  useEffect(() => {
+  const runTranslation = useCallback(async (mountedCheck: () => boolean) => {
+    const cleanEn = formatIslamicProse(hadith.englishTranslation || '', 'en');
     if (contentLang === 'en') {
-      setTranslatedText(hadith.englishTranslation || '');
-      setTranslatedNarrator(hadith.narrator || '');
+      if (mountedCheck()) {
+        setTranslatedText(cleanEn);
+        setTranslatedNarrator(hadith.narrator || '');
+        setActualLang('en');
+        setFromCache(false);
+        setOfflineFallback(false);
+        setSource('original');
+      }
       return;
     }
 
-    let isMounted = true;
-    Promise.all([
-      hadith.englishTranslation ? translateIslamicText(hadith.englishTranslation, contentLang) : Promise.resolve(''),
+    const [res, tNarr] = await Promise.all([
+      cleanEn
+        ? translateHadithContent({
+            collection,
+            hadithNumber: hadith.hadithNumber || hadith.id,
+            englishText: cleanEn,
+            targetLang: contentLang,
+          })
+        : Promise.resolve({
+            text: '',
+            actualLang: 'en' as ContentLang,
+            fromCache: false,
+            offlineFallback: false,
+            source: 'original' as const,
+          }),
       hadith.narrator ? translateIslamicText(hadith.narrator, contentLang) : Promise.resolve(''),
-    ]).then(([tText, tNarr]) => {
-      if (isMounted) {
-        setTranslatedText(tText);
-        setTranslatedNarrator(tNarr);
-      }
-    });
+    ]);
 
+    if (mountedCheck()) {
+      setTranslatedText(res.text);
+      setTranslatedNarrator(res.offlineFallback ? (hadith.narrator || '') : tNarr);
+      setActualLang(res.actualLang);
+      setFromCache(res.fromCache);
+      setOfflineFallback(res.offlineFallback);
+      setSource(res.source);
+    }
+  }, [hadith.englishTranslation, hadith.narrator, hadith.hadithNumber, hadith.id, collection, contentLang]);
+
+  useEffect(() => {
+    let isMounted = true;
+    runTranslation(() => isMounted);
     return () => {
       isMounted = false;
     };
-  }, [hadith.englishTranslation, hadith.narrator, contentLang]);
+  }, [runTranslation, retryTick]);
+
+  const cleanGrade = dedupeHadithGrade(hadith.grade);
 
   return (
     <Card
-      className="group cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.01] border-border/50 hover:border-primary/30"
+      className="group cursor-pointer transition-colors border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40"
       onClick={() => navigate(`/hadith/collections/${collection}/${book}/${hadith.hadithNumber}`)}
     >
-      <CardContent className="p-6 space-y-4">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-3">
-              <Badge variant="outline" className="text-xs">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <Badge variant="outline" className="text-xs shrink-0">
                 #{hadith.hadithNumber}
               </Badge>
-              {hadith.grade && (
-                <Badge variant="outline" className={`text-xs ${getGradeBadgeClass(hadith.grade)}`}>
-                  {hadith.grade}
+              {cleanGrade && (
+                <Badge variant="outline" className={`text-xs ${getGradeBadgeClass(cleanGrade)} max-w-full whitespace-normal text-left leading-snug`}>
+                  {cleanGrade}
                 </Badge>
               )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 ml-auto rounded-lg hover:bg-primary/10"
+                className="h-7 w-7 ml-auto rounded-lg hover:bg-primary/10 shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleBookmark({
@@ -92,48 +142,68 @@ const HadithCard = memo(function HadithCard({ hadith, index, collection, book, b
               </Button>
             </div>
 
-            {/* Arabic Text */}
-            <div className="glass-card p-4 rounded-xl mb-3">
-              <p className="text-xl md:text-2xl font-arabic text-right leading-loose text-foreground" dir="rtl">
+            {/* Arabic Text — wide single-border container for crisp readability */}
+            <div className="bg-[var(--surface-2)] px-3.5 py-3 rounded-xl border border-[var(--border)] mb-3">
+              <p
+                className="font-arabic text-right text-[var(--text-primary)] break-words"
+                dir="rtl"
+                style={{
+                  fontSize: `${prefs.arabicFontSize}px`,
+                  lineHeight: getArabicLineHeight(prefs.lineSpacing),
+                }}
+              >
                 {hadith.arabic}
               </p>
             </div>
 
             <ManuscriptDivider />
 
-            {/* Translation */}
+            <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
+              <ReaderStatusBanner
+                targetLang={contentLang}
+                actualLang={actualLang}
+                fromCache={fromCache}
+                source={source}
+                offlineFallback={offlineFallback}
+                isStreaming={false}
+                onRetry={() => setRetryTick((n) => n + 1)}
+              />
+            </div>
+
+            {/* Translation Body */}
             {(translatedText || hadith.englishTranslation) && (
-              <p
-                dir={isRtl ? "rtl" : "ltr"}
-                className={`text-sm text-muted-foreground italic leading-relaxed whitespace-pre-wrap ${
-                  contentLang === 'ur' ? "font-urdu text-right leading-[2.35] text-base" : isRtl ? "font-arabic text-right leading-[2.1]" : ""
-                }`}
-              >
-                {translatedText || hadith.englishTranslation}
-              </p>
+              <BookProseParagraph
+                text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
+                actualLang={actualLang}
+                fontSize={prefs.bodyFontSize}
+                lineSpacing={prefs.lineSpacing}
+                className="text-[var(--text-primary)]"
+              />
             )}
 
             {/* Narrator */}
             {(translatedNarrator || hadith.narrator) && (
               <p
-                dir={isRtl ? "rtl" : "ltr"}
-                className={`text-sm font-semibold text-primary mt-3 ${
-                  contentLang === 'ur' ? "font-urdu text-right leading-[2.35]" : isRtl ? "font-arabic text-right" : ""
+                dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+                className={`text-sm font-semibold text-[var(--accent-text)] mt-2 ${
+                  actualLang === 'ur' ? 'font-urdu text-right leading-[2.0]' : 'text-left'
                 }`}
               >
-                {contentLang === 'ur' ? 'راوی:' : contentLang === 'gu' ? 'વર્ણનકર્તા:' : contentLang === 'hi' ? 'वर्णનकर्ता:' : 'Narrated by:'} {translatedNarrator || hadith.narrator}
+                {actualLang === 'ur' ? 'راوی:' : actualLang === 'gu' ? 'વર્ણનકર્તા:' : actualLang === 'hi' ? 'वर्णनकर्ता:' : 'Narrated by:'}{' '}
+                {translatedNarrator || hadith.narrator}
               </p>
             )}
 
             {/* Copy */}
-            <div className="flex items-center gap-2 mt-3">
+            <div className="flex items-center gap-2 mt-2.5">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-xs rounded-lg hover:bg-primary/10"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const text = `${hadith.arabic}\n\n${hadith.englishTranslation || ""}\n\n— ${collection} (${hadith.hadithNumber})`;
+                  const body = translatedText || hadith.englishTranslation || "";
+                  const text = `${hadith.arabic}\n\n${body}\n\n— ${collection} (${hadith.hadithNumber})`;
                   navigator.clipboard.writeText(text).then(() => {
                     toast({ title: "Copied to clipboard" });
                   });
@@ -143,10 +213,9 @@ const HadithCard = memo(function HadithCard({ hadith, index, collection, book, b
                 Copy
               </Button>
             </div>
-
           </div>
 
-          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors mt-1" />
+          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors mt-1 shrink-0" />
         </div>
       </CardContent>
     </Card>
@@ -391,7 +460,7 @@ export function HadithBookContent() {
 
   if (!collectionData) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-transparent relative z-10 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-foreground mb-2">
             Collection Not Found
@@ -412,7 +481,7 @@ export function HadithBookContent() {
 
   if (!bookInfo && !loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-transparent relative z-10 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-foreground mb-2">
             Book Not Found
@@ -432,12 +501,12 @@ export function HadithBookContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background safe-top">
+    <div className="min-h-screen bg-transparent relative z-10 safe-top">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Header with Row 1 (Back + Title + Badge) and Row 2 (Full-Width Language Bar) */}
+        {/* Header with Row 1 (Back + Title + Aa + Badge) and Row 2 (Full-Width Language Bar) */}
         <div className="space-y-3 mb-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -447,7 +516,7 @@ export function HadithBookContent() {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <h1 className={`text-xl sm:text-2xl font-bold text-foreground truncate ${contentLang === 'ur' ? 'font-urdu leading-[2.35]' : ''}`}>
+                <h1 dir="auto" className={`text-lg sm:text-2xl font-bold text-foreground truncate ${contentLang === 'ur' ? 'font-urdu leading-[2.0]' : ''}`}>
                   {translatedBookName || (bookInfo?.name ?? `Book ${book}`)}
                 </h1>
                 {bookInfo?.arabicName && (
@@ -457,11 +526,14 @@ export function HadithBookContent() {
                 )}
               </div>
             </div>
-            <Badge variant="secondary" className="text-xs shrink-0">
-              {loading && hadithData.length === 0
-                ? (contentLang === 'ur' ? 'لوڈ ہو رہا ہے...' : contentLang === 'gu' ? 'લોડ થઈ રહ્યું છે...' : contentLang === 'hi' ? 'लोड हो रहा है...' : 'Loading...')
-                : `${hadithData.length > 0 ? hadithData.length : (bookInfo?.hadithCount || 0)} ${contentLang === 'ur' ? 'احادیث' : contentLang === 'gu' ? 'હદીસ' : contentLang === 'hi' ? 'हदीस' : 'Hadith'}`}
-            </Badge>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <AaReaderControlsButton />
+              <Badge variant="secondary" className="text-xs shrink-0">
+                {loading && hadithData.length === 0
+                  ? (contentLang === 'ur' ? 'لوڈ...' : contentLang === 'gu' ? 'લોડ...' : contentLang === 'hi' ? 'लोड...' : 'Loading...')
+                  : `${hadithData.length > 0 ? hadithData.length : (bookInfo?.hadithCount || 0)}`}
+              </Badge>
+            </div>
           </div>
           <ContentLanguageBar fullWidth />
         </div>

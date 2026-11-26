@@ -36,6 +36,8 @@ const FALLBACK_METADATA: QisasMetadata = {
   category: "prophets",
 };
 
+export const TOTAL_PROPHETS_COUNT = 24;
+
 // Rich baseline stories ensuring all 5 eras render even if network or JSON fails
 const FALLBACK_PROPHETS: ProphetStory[] = [
   {
@@ -298,6 +300,35 @@ export async function loadProphetsByEra(
 export async function loadQisasMetadata(): Promise<QisasMetadata> {
   const book = await loadQisasBook();
   return book.metadata;
+}
+
+/** Synchronous cache lookup so QisasReader skips blank Loading... flashes when story is already in memory or fallback */
+export function getCachedProphetStorySync(prophetId: string): ProphetStory | null {
+  if (prophetCache.has(prophetId)) return prophetCache.get(prophetId)!;
+  if (qisasBookCache) {
+    const found = qisasBookCache.prophets.find((p) => p.id === prophetId);
+    if (found) {
+      prophetCache.set(prophetId, found);
+      return found;
+    }
+  }
+  return FALLBACK_PROPHETS.find((p) => p.id === prophetId) ?? null;
+}
+
+/** Synchronous cached list lookup for instant Prev/Next pagination */
+export function getCachedProphetListSync(): ProphetSummary[] {
+  const source = qisasBookCache ? qisasBookCache.prophets : FALLBACK_PROPHETS;
+  return source.map((p) => ({
+    id: p.id,
+    number: p.number,
+    name: p.name,
+    arabicName: p.arabicName,
+    title: p.title,
+    arabicTitle: p.arabicTitle,
+    era: p.era,
+    quranMentions: p.quranMentions ?? [],
+    tags: p.tags ?? [],
+  }));
 }
 
 /** Clear all Qisas caches */

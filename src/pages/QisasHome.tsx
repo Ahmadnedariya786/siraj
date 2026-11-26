@@ -164,7 +164,7 @@ export default function QisasHome() {
   if (loading) {
     return (
       <PageTransition>
-        <div className="min-h-screen bg-background pb-24">
+        <div className="min-h-screen bg-transparent relative z-10 pb-24">
           <div className="max-w-6xl mx-auto px-4 py-6">
             <div className="h-8 w-32 bg-muted rounded-lg animate-pulse mb-8" />
             <div className="h-48 bg-muted/50 rounded-[28px] animate-pulse mb-6" />
@@ -250,7 +250,7 @@ export default function QisasHome() {
             <div className="absolute inset-0 bg-gradient-to-br from-[var(--surface)] to-[var(--surface-2)]" />
             <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--accent)]/10 rounded-full blur-[20px] -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-[var(--accent-2)]/10 rounded-full blur-[20px] translate-y-1/2 -translate-x-1/2" />
-            <div className="absolute inset-0 bg-[var(--surface)]/10 backdrop-blur-[1px]" />
+            <div className="absolute inset-0 bg-[var(--surface)]/10" />
 
             <div className="relative z-10 p-8">
               <div className="flex items-center gap-2 mb-4">

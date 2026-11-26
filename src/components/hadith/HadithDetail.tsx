@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, BookOpen, Share2, Copy, Check, ChevronLeft, ChevronRight, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,26 @@ import { useToast } from "@/hooks/use-toast";
 import { getHadithBookData } from "@/lib/hadith";
 import type { EnhancedHadith } from "@/data/hadith-collections";
 import { getCollectionByName } from "@/data/hadith-collections";
-import { getGradeBadgeClass } from "@/lib/hadith-utils";
+import { getGradeBadgeClass, dedupeHadithGrade } from "@/lib/hadith-utils";
 import { useHadithBookmarks } from "@/hooks/useHadithBookmarks";
 import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
-import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
+import {
+  useContentLanguage,
+  translateHadithContent,
+  translateIslamicText,
+  type ContentLang,
+} from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
+import {
+  AaReaderControlsButton,
+  BookProseParagraph,
+  ReaderStatusBanner,
+} from "@/components/BookReaderControls";
+import {
+  useBookReaderPrefs,
+  getArabicLineHeight,
+  formatIslamicProse,
+} from "@/lib/reader-typography";
 
 export function HadithDetail() {
   const { collection, book, hadithNumber } = useParams<{ collection: string; book: string; hadithNumber: string }>();
@@ -25,33 +40,68 @@ export function HadithDetail() {
   const [copied, setCopied] = useState(false);
   const { isBookmarked, toggleBookmark } = useHadithBookmarks();
 
-  const { contentLang, isRtl } = useContentLanguage();
-  const [translatedText, setTranslatedText] = useState(hadith?.englishTranslation || '');
+  const { contentLang } = useContentLanguage();
+  const { prefs } = useBookReaderPrefs();
+  const [translatedText, setTranslatedText] = useState(() =>
+    formatIslamicProse(hadith?.englishTranslation || '', 'en')
+  );
   const [translatedNarrator, setTranslatedNarrator] = useState(hadith?.narrator || '');
+  const [actualLang, setActualLang] = useState<ContentLang>('en');
+  const [fromCache, setFromCache] = useState(false);
+  const [offlineFallback, setOfflineFallback] = useState(false);
+  const [source, setSource] = useState<'scholar-edition' | 'chunked-api' | 'original'>('original');
+  const [retryTick, setRetryTick] = useState(0);
 
-  useEffect(() => {
+  const runTranslation = useCallback(async (mountedCheck: () => boolean) => {
     if (!hadith) return;
+    const cleanEn = formatIslamicProse(hadith.englishTranslation || '', 'en');
     if (contentLang === 'en') {
-      setTranslatedText(hadith.englishTranslation || '');
-      setTranslatedNarrator(hadith.narrator || '');
+      if (mountedCheck()) {
+        setTranslatedText(cleanEn);
+        setTranslatedNarrator(hadith.narrator || '');
+        setActualLang('en');
+        setFromCache(false);
+        setOfflineFallback(false);
+        setSource('original');
+      }
       return;
     }
 
-    let isMounted = true;
-    Promise.all([
-      hadith.englishTranslation ? translateIslamicText(hadith.englishTranslation, contentLang) : Promise.resolve(''),
+    const [res, tNarr] = await Promise.all([
+      cleanEn
+        ? translateHadithContent({
+            collection: hadith.collection || collection || 'generic',
+            hadithNumber: hadith.hadithNumber || hadith.id,
+            englishText: cleanEn,
+            targetLang: contentLang,
+          })
+        : Promise.resolve({
+            text: '',
+            actualLang: 'en' as ContentLang,
+            fromCache: false,
+            offlineFallback: false,
+            source: 'original' as const,
+          }),
       hadith.narrator ? translateIslamicText(hadith.narrator, contentLang) : Promise.resolve(''),
-    ]).then(([tText, tNarr]) => {
-      if (isMounted) {
-        setTranslatedText(tText);
-        setTranslatedNarrator(tNarr);
-      }
-    });
+    ]);
 
+    if (mountedCheck()) {
+      setTranslatedText(res.text);
+      setTranslatedNarrator(res.offlineFallback ? (hadith.narrator || '') : tNarr);
+      setActualLang(res.actualLang);
+      setFromCache(res.fromCache);
+      setOfflineFallback(res.offlineFallback);
+      setSource(res.source);
+    }
+  }, [hadith, collection, contentLang]);
+
+  useEffect(() => {
+    let isMounted = true;
+    runTranslation(() => isMounted);
     return () => {
       isMounted = false;
     };
-  }, [hadith, contentLang]);
+  }, [runTranslation, retryTick]);
 
   useEffect(() => {
     async function loadHadith() {
@@ -116,7 +166,7 @@ export function HadithDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-transparent relative z-10">
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
           <div className="h-8 w-32 bg-muted rounded-lg animate-pulse" />
           <div className="h-48 bg-muted/50 rounded-xl animate-pulse" />
@@ -128,7 +178,7 @@ export function HadithDetail() {
 
   if (!hadith) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-transparent relative z-10 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
           <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
           <h2 className="text-xl font-semibold mb-2">Hadith Not Found</h2>
@@ -141,21 +191,23 @@ export function HadithDetail() {
 
   const tags = Array.isArray(hadith.tags) ? hadith.tags : [];
   const bookmarked = isBookmarked(collection!, hadith.hadithNumber);
+  const cleanGrade = dedupeHadithGrade(hadith.grade);
 
   return (
-    <div className="min-h-screen bg-background safe-top">
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(`/hadith/collections/${collection}/${book}`)} className="rounded-xl">
+    <div className="min-h-screen bg-transparent relative z-10 safe-top">
+      <div className="max-w-3xl mx-auto px-4 py-5 space-y-5">
+        <div className="flex items-center gap-2.5">
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/hadith/collections/${collection}/${book}`)} className="rounded-xl shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="flex-1">
-            <h1 className="text-lg font-bold text-foreground">Hadith Detail</h1>
-            <p className="text-sm text-muted-foreground">
-              {getCollectionByName(hadith.collection ?? collection)?.title ?? hadith.collection ?? collection} — {hadith.bookName ?? `Book ${book}`} (#{hadith.hadithNumber})
+          <div className="flex-1 min-w-0">
+            <h1 dir="auto" className="text-base sm:text-lg font-bold text-foreground truncate">Hadith #{hadith.hadithNumber}</h1>
+            <p dir="auto" className="text-xs text-muted-foreground truncate">
+              {getCollectionByName(hadith.collection ?? collection)?.title ?? hadith.collection ?? collection} — {hadith.bookName ?? `Book ${book}`}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            <AaReaderControlsButton />
             <Button
               variant="ghost"
               size="icon"
@@ -168,14 +220,14 @@ export function HadithDetail() {
                 englishTranslation: hadith.englishTranslation,
                 bookName: hadith.bookName,
               })}
-              className="rounded-xl"
+              className="rounded-xl h-8 w-8"
             >
               <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-primary text-primary" : "text-muted-foreground"}`} />
             </Button>
-            <Button variant="ghost" size="icon" title="Copy hadith text" onClick={handleCopy} className="rounded-xl">
+            <Button variant="ghost" size="icon" title="Copy hadith text" onClick={handleCopy} className="rounded-xl h-8 w-8">
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </Button>
-            <Button variant="ghost" size="icon" title="Share hadith" onClick={handleShare} className="rounded-xl">
+            <Button variant="ghost" size="icon" title="Share hadith" onClick={handleShare} className="rounded-xl h-8 w-8">
               <Share2 className="w-4 h-4" />
             </Button>
           </div>
@@ -205,13 +257,13 @@ export function HadithDetail() {
           </Button>
         </div>
 
-        <Card className="border-border/50">
-          <CardContent className="p-6 space-y-6">
-            <div className="flex items-center gap-2">
+        <Card className="border-[var(--border)] bg-[var(--surface)]">
+          <CardContent className="p-4 sm:p-6 space-y-5">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline">#{hadith.hadithNumber}</Badge>
-              {hadith.grade && (
-                <Badge variant="outline" className={getGradeBadgeClass(hadith.grade)}>
-                  {hadith.grade}
+              {cleanGrade && (
+                <Badge variant="outline" className={`${getGradeBadgeClass(cleanGrade)} max-w-full whitespace-normal text-left leading-snug`}>
+                  {cleanGrade}
                 </Badge>
               )}
               {bookmarked && (
@@ -221,41 +273,62 @@ export function HadithDetail() {
               )}
             </div>
 
-            <div className="glass-card p-6 rounded-xl">
-              <p className="text-2xl md:text-3xl font-arabic text-right leading-loose text-foreground" dir="rtl">
+            <div className="bg-[var(--surface-2)] px-4 py-3.5 rounded-xl border border-[var(--border)]">
+              <p
+                className="font-arabic text-right text-[var(--text-primary)] break-words"
+                dir="rtl"
+                style={{
+                  fontSize: `${prefs.arabicFontSize}px`,
+                  lineHeight: getArabicLineHeight(prefs.lineSpacing),
+                }}
+              >
                 {hadith.arabic}
               </p>
             </div>
 
             <ManuscriptDivider />
 
-            {hadith.englishTranslation && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                    {contentLang === 'en' ? 'Translation' : (contentLang === 'ur' ? 'ترجمہ' : (contentLang === 'gu' ? 'અનુવાદ' : 'अनुवाद'))}
-                  </h3>
-                  <ContentLanguageBar compact />
-                </div>
-                <p
-                  className={`text-base text-foreground leading-relaxed whitespace-pre-wrap ${isRtl ? 'font-arabic text-right text-lg' : ''}`}
-                  dir={isRtl ? 'rtl' : 'ltr'}
-                >
-                  {translatedText || hadith.englishTranslation}
-                </p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                  {actualLang === 'ur' ? 'ترجمہ' : actualLang === 'gu' ? 'અનુવાદ' : actualLang === 'hi' ? 'अनुवाद' : 'Translation'}
+                </h3>
+                <ContentLanguageBar compact />
               </div>
-            )}
+
+              <ReaderStatusBanner
+                targetLang={contentLang}
+                actualLang={actualLang}
+                fromCache={fromCache}
+                source={source}
+                offlineFallback={offlineFallback}
+                isStreaming={false}
+                onRetry={() => setRetryTick((n) => n + 1)}
+              />
+
+              {(translatedText || hadith.englishTranslation) && (
+                <BookProseParagraph
+                  text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
+                  actualLang={actualLang}
+                  fontSize={prefs.bodyFontSize}
+                  lineSpacing={prefs.lineSpacing}
+                  className="text-[var(--text-primary)]"
+                />
+              )}
+            </div>
 
             {hadith.narrator && (
               <p
-                className={`text-sm font-semibold text-primary ${isRtl ? 'font-arabic text-right' : ''}`}
-                dir={isRtl ? 'rtl' : 'ltr'}
+                className={`text-sm font-semibold text-[var(--accent-text)] ${
+                  actualLang === 'ur' ? 'font-urdu text-right leading-[2.0]' : 'text-left'
+                }`}
+                dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
               >
-                {contentLang === 'en'
+                {actualLang === 'en'
                   ? `Narrated by: ${hadith.narrator}`
-                  : (contentLang === 'ur'
+                  : (actualLang === 'ur'
                     ? `راوی: ${translatedNarrator || hadith.narrator}`
-                    : (contentLang === 'gu'
+                    : (actualLang === 'gu'
                       ? `રાવી: ${translatedNarrator || hadith.narrator}`
                       : `रावी: ${translatedNarrator || hadith.narrator}`))}
               </p>

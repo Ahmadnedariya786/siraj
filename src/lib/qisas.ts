@@ -8,6 +8,9 @@ export {
   loadProphetsByEra,
   loadQisasMetadata,
   clearQisasCache,
+  getCachedProphetStorySync,
+  getCachedProphetListSync,
+  TOTAL_PROPHETS_COUNT,
 } from "../data/qisas/index";
 
 export type {
