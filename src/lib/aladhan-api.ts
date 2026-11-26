@@ -293,9 +293,25 @@ export class AladhanAPI {
     school?: number // 0 for Shafi, 1 for Hanafi
   ): Promise<AladhanMonthlyData> {
     const resolvedSchool = school !== undefined ? school : this.getResolvedSchool();
+    const storedExisting = this.getStoredMonthlyData();
+    if (
+      storedExisting &&
+      storedExisting.month === month &&
+      storedExisting.year === year &&
+      storedExisting.school === resolvedSchool &&
+      storedExisting.method === method &&
+      Math.abs(storedExisting.latitude - latitude) < 0.1 &&
+      Math.abs(storedExisting.longitude - longitude) < 0.1 &&
+      Array.isArray(storedExisting.data) &&
+      storedExisting.data.length > 0
+    ) {
+      return storedExisting;
+    }
+
     const url = `${API_BASE}/calendar/${year}/${month}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${resolvedSchool}`;
 
     const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     try {
       const response = await fetch(url, { signal: controller.signal });
@@ -345,6 +361,8 @@ export class AladhanAPI {
         return stored;
       }
       return this.generateLocalMonthlyCalendar(latitude, longitude, year, month, method, resolvedSchool);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

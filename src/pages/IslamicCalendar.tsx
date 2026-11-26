@@ -9,7 +9,14 @@ import { calendarApiResponseSchema, safeParseApiResponse } from "@/lib/api-schem
 import { useIslamicCalendar } from "@/hooks/useIslamicCalendar";
 import { useNavigate } from "react-router-dom";
 import { goBackOrFallback } from "@/lib/navigation";
-import { islamicCalendarService } from "@/lib/islamic-calendar-service";
+import { RoyalDatePickerModal } from "@/components/RoyalDatePickerModal";
+import {
+  CANONICAL_HIJRI_MONTHS,
+  convertGregorianToHijri,
+  convertHijriToGregorian,
+  getStoredHijriOffset,
+  normalizeHijriMonth,
+} from "@/lib/hijri-date";
 
 const importantDates = [
   { name: "Ramadan", Icon: Moon, description: "Month of Fasting" },
@@ -39,109 +46,10 @@ interface CalendarDay {
   holidays: string[];
 }
 
-export const normalizeHijriMonth = (val: string): string =>
-  (val || '')
-    .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
-    .replace(/al-ola/gi, 'al-ūlā')
-    .replace(/al-ōlā/gi, 'al-ūlā')
-    .replace(/ō/g, 'ū');
+export { normalizeHijriMonth };
+export const HIJRI_MONTHS_LIST = CANONICAL_HIJRI_MONTHS;
 
-export const HIJRI_MONTHS_LIST = [
-  { number: 1, en: "Muharram", ar: "محرم" },
-  { number: 2, en: "Safar", ar: "صفر" },
-  { number: 3, en: "Rabi al-Awwal", ar: "ربيع الأول" },
-  { number: 4, en: "Rabi al-Thani", ar: "ربيع الثاني" },
-  { number: 5, en: "Jumada al-Ula", ar: "جمادى الأولى" },
-  { number: 6, en: "Jumada al-Thani", ar: "جمادى الثانية" },
-  { number: 7, en: "Rajab", ar: "رجب" },
-  { number: 8, en: "Shaban", ar: "شعبان" },
-  { number: 9, en: "Ramadan", ar: "رمضان" },
-  { number: 10, en: "Shawwal", ar: "شوال" },
-  { number: 11, en: "Dhul-Qadah", ar: "ذو القعدة" },
-  { number: 12, en: "Dhul-Hijjah", ar: "ذو الحجة" },
-];
-
-export function convertGregorianToHijri(dateStr: string, offset: number) {
-  try {
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return null;
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const day = parseInt(parts[2], 10);
-    const d = new Date(year, month, day);
-    if (isNaN(d.getTime())) return null;
-
-    const eff = new Date(d);
-    if (offset !== 0) eff.setDate(eff.getDate() + offset);
-
-    const calc = islamicCalendarService.calculateIslamicDate(eff);
-    const hijriDay = parseInt(calc.hijri.day, 10);
-    const hijriMonthNum = calc.hijri.month.number;
-    const hijriYear = parseInt(calc.hijri.year, 10);
-    const mInfo = HIJRI_MONTHS_LIST[hijriMonthNum - 1] || HIJRI_MONTHS_LIST[0];
-
-    return {
-      gregorianDate: d,
-      formattedGregorian: d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-      weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
-      hijriDay,
-      hijriMonthEn: mInfo.en,
-      hijriMonthAr: mInfo.ar,
-      hijriYear,
-      isAyyamAlBeed: hijriDay >= 13 && hijriDay <= 15,
-      isSunnahFastingDay: d.getDay() === 1 || d.getDay() === 4,
-      isRamadan: hijriMonthNum === 9,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function convertHijriToGregorian(hYear: number, hMonth: number, hDay: number, offset: number) {
-  try {
-    const isLeap = (yr: number) => [2, 5, 7, 10, 13, 16, 18, 21, 24, 26, 29].includes(yr % 30);
-    let days = 0;
-    for (let y = 1; y < hYear; y++) {
-      days += isLeap(y) ? 355 : 354;
-    }
-    for (let m = 1; m < hMonth; m++) {
-      days += (m % 2 === 1) ? 30 : 29;
-    }
-    days += hDay - 1;
-    const epoch = 1948439.5;
-    const jdn = Math.round(epoch + days);
-    const l = jdn + 68569;
-    const n = Math.floor((4 * l) / 146097);
-    const l2 = l - Math.floor((146097 * n + 3) / 4);
-    const i = Math.floor((4000 * (l2 + 1)) / 1461001);
-    const l3 = l2 - Math.floor((1461 * i) / 4) + 31;
-    const j = Math.floor((80 * l3) / 2447);
-    const gDay = l3 - Math.floor((2447 * j) / 80);
-    const l4 = Math.floor(j / 11);
-    const gMonth = j + 2 - 12 * l4;
-    const gYear = 100 * (n - 49) + i + l4;
-    const d = new Date(gYear, gMonth - 1, gDay);
-    if (offset !== 0) {
-      d.setDate(d.getDate() - offset);
-    }
-    const mInfo = HIJRI_MONTHS_LIST[hMonth - 1] || HIJRI_MONTHS_LIST[0];
-
-    return {
-      gregorianDate: d,
-      formattedGregorian: d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-      weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
-      hijriDay: hDay,
-      hijriMonthEn: mInfo.en,
-      hijriMonthAr: mInfo.ar,
-      hijriYear: hYear,
-      isAyyamAlBeed: hDay >= 13 && hDay <= 15,
-      isSunnahFastingDay: d.getDay() === 1 || d.getDay() === 4,
-      isRamadan: hMonth === 9,
-    };
-  } catch {
-    return null;
-  }
-}
+export { convertGregorianToHijri, convertHijriToGregorian };
 
 export default function IslamicCalendar() {
   const navigate = useNavigate();
@@ -157,6 +65,7 @@ export default function IslamicCalendar() {
 
   // Date Converter state
   const [showConverter, setShowConverter] = useState(false);
+  const [showConverterDatePicker, setShowConverterDatePicker] = useState(false);
   const [converterMode, setConverterMode] = useState<'gToH' | 'hToG'>('gToH');
   const [gregDateInput, setGregDateInput] = useState(() => {
     const d = new Date();
@@ -173,9 +82,7 @@ export default function IslamicCalendar() {
     return islamicInfo?.hijriYear || 1448;
   });
   const [copiedConverter, setCopiedConverter] = useState(false);
-  const [hijriOffset, setHijriOffset] = useState<number>(() => {
-    return parseInt(localStorage.getItem('hijri-date-offset') || '0', 10);
-  });
+  const [hijriOffset, setHijriOffset] = useState<number>(() => getStoredHijriOffset());
 
   useEffect(() => {
     fetchMonthCalendar(currentMonth, currentYear);
@@ -257,120 +164,55 @@ export default function IslamicCalendar() {
 
   const calendarDays = useMemo<CalendarDay[]>(() => {
     const key = `${currentYear}-${currentMonth}`;
-    const offset = parseInt(localStorage.getItem('hijri-date-offset') || '0', 10);
+    const offset = hijriOffset;
     const today = new Date();
     const days: CalendarDay[] = [];
 
-    // If we have Aladhan API data for this month, use it
     const monthApiData = apiMonthData[key];
-    if (monthApiData && monthApiData.length > 0) {
-      const firstDayData = monthApiData[0];
-      const firstDayDate = new Date(
-        firstDayData.gregorian.year,
-        firstDayData.gregorian.month.number - 1,
-        firstDayData.gregorian.day
-      );
-      const firstWeekdayIndex = firstDayDate.getDay();
+    const numDays = new Date(currentYear, currentMonth, 0).getDate();
+    const firstDayDate = new Date(currentYear, currentMonth - 1, 1);
+    const firstWeekdayIndex = firstDayDate.getDay();
 
-      for (let i = 0; i < firstWeekdayIndex; i++) {
-        days.push({
-          hijriDay: 0,
-          hijriMonth: { number: 0, en: "", ar: "" },
-          hijriYear: 0,
-          gregorianDate: '',
-          gregorianDay: 0,
-          gregorianMonthName: '',
-          gregorianYear: 0,
-          weekday: '',
-          isCurrentMonth: false,
-          isToday: false,
-          holidays: [],
-        });
-      }
-
-      monthApiData.forEach((dayData: any) => {
-        const gregorianDate = new Date(
-          dayData.gregorian.year,
-          dayData.gregorian.month.number - 1,
-          dayData.gregorian.day
-        );
-        const gDay = parseInt(dayData.gregorian.day, 10);
-        const gMonth = dayData.gregorian.month.en;
-        const gYear = parseInt(dayData.gregorian.year, 10);
-        const weekday = dayData.gregorian.weekday?.en || '';
-        const monthEn = normalizeHijriMonth(dayData.hijri.month.en);
-
-        days.push({
-          hijriDay: parseInt(dayData.hijri.day, 10),
-          hijriMonth: {
-            number: dayData.hijri.month.number,
-            en: monthEn,
-            ar: dayData.hijri.month.ar
-          },
-          hijriYear: parseInt(dayData.hijri.year, 10),
-          gregorianDate: `${gDay} ${gMonth} ${gYear}`,
-          gregorianDay: gDay,
-          gregorianMonthName: gMonth,
-          gregorianYear: gYear,
-          weekday: weekday,
-          isCurrentMonth: true,
-          isToday: gregorianDate.toDateString() === today.toDateString(),
-          holidays: dayData.hijri.holidays || [],
-        });
+    for (let i = 0; i < firstWeekdayIndex; i++) {
+      days.push({
+        hijriDay: 0,
+        hijriMonth: { number: 0, en: "", ar: "" },
+        hijriYear: 0,
+        gregorianDate: '',
+        gregorianDay: 0,
+        gregorianMonthName: '',
+        gregorianYear: 0,
+        weekday: '',
+        isCurrentMonth: false,
+        isToday: false,
+        holidays: [],
       });
-    } else {
-      // Synchronous offline computation: instant load with 0 skeleton flash!
-      const numDays = new Date(currentYear, currentMonth, 0).getDate();
-      const firstDayDate = new Date(currentYear, currentMonth - 1, 1);
-      const firstWeekdayIndex = firstDayDate.getDay();
+    }
 
-      for (let i = 0; i < firstWeekdayIndex; i++) {
-        days.push({
-          hijriDay: 0,
-          hijriMonth: { number: 0, en: "", ar: "" },
-          hijriYear: 0,
-          gregorianDate: '',
-          gregorianDay: 0,
-          gregorianMonthName: '',
-          gregorianYear: 0,
-          weekday: '',
-          isCurrentMonth: false,
-          isToday: false,
-          holidays: [],
-        });
-      }
+    for (let day = 1; day <= numDays; day++) {
+      const gDate = new Date(currentYear, currentMonth - 1, day, 12, 0, 0);
+      const unified = convertGregorianToHijri(gDate, offset);
+      const apiDay = monthApiData?.find((item: any) => parseInt(item?.gregorian?.day, 10) === day);
+      const gMonth = gDate.toLocaleDateString('en-US', { month: 'long' });
+      const weekday = gDate.toLocaleDateString('en-US', { weekday: 'long' });
 
-      for (let day = 1; day <= numDays; day++) {
-        const gDate = new Date(currentYear, currentMonth - 1, day);
-        const effectiveDate = new Date(gDate);
-        if (offset !== 0) {
-          effectiveDate.setDate(effectiveDate.getDate() + offset);
-        }
-        const hijriInfo = islamicCalendarService.calculateIslamicDate(effectiveDate);
-        const gDay = day;
-        const gMonth = gDate.toLocaleDateString('en-US', { month: 'long' });
-        const gYear = currentYear;
-        const weekday = gDate.toLocaleDateString('en-US', { weekday: 'long' });
-        const monthEn = normalizeHijriMonth(hijriInfo.hijri.month.en);
-
-        days.push({
-          hijriDay: parseInt(hijriInfo.hijri.day, 10),
-          hijriMonth: {
-            number: hijriInfo.hijri.month.number,
-            en: monthEn,
-            ar: hijriInfo.hijri.month.ar
-          },
-          hijriYear: parseInt(hijriInfo.hijri.year, 10),
-          gregorianDate: `${gDay} ${gMonth} ${gYear}`,
-          gregorianDay: gDay,
-          gregorianMonthName: gMonth,
-          gregorianYear: gYear,
-          weekday: weekday,
-          isCurrentMonth: true,
-          isToday: gDate.toDateString() === today.toDateString(),
-          holidays: [],
-        });
-      }
+      days.push({
+        hijriDay: unified?.hijriDay ?? 1,
+        hijriMonth: {
+          number: unified?.hijriMonthNumber ?? 1,
+          en: unified?.hijriMonthEn ?? CANONICAL_HIJRI_MONTHS[0].en,
+          ar: unified?.hijriMonthAr ?? CANONICAL_HIJRI_MONTHS[0].ar,
+        },
+        hijriYear: unified?.hijriYear ?? 1448,
+        gregorianDate: `${day} ${gMonth} ${currentYear}`,
+        gregorianDay: day,
+        gregorianMonthName: gMonth,
+        gregorianYear: currentYear,
+        weekday,
+        isCurrentMonth: true,
+        isToday: gDate.toDateString() === today.toDateString(),
+        holidays: apiDay?.hijri?.holidays || [],
+      });
     }
 
     // Pad trailing empty days so each row has 7 columns
@@ -395,7 +237,7 @@ export default function IslamicCalendar() {
     }
 
     return days;
-  }, [currentMonth, currentYear, apiMonthData]);
+  }, [currentMonth, currentYear, apiMonthData, hijriOffset]);
 
   const monthData = useMemo(() => {
     const key = `${currentYear}-${currentMonth}`;
@@ -715,11 +557,22 @@ export default function IslamicCalendar() {
                         Reset to Today
                       </button>
                     </div>
-                    <input
-                      type="date"
-                      value={gregDateInput}
-                      onChange={(e) => setGregDateInput(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl text-sm font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+                    <button
+                      type="button"
+                      onClick={() => setShowConverterDatePicker(true)}
+                      className="w-full h-10 px-3 rounded-xl text-sm font-bold bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors cursor-pointer flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">
+                        {gToHResult ? gToHResult.formattedGregorian : gregDateInput}
+                      </span>
+                      <Calendar className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                    </button>
+                    <RoyalDatePickerModal
+                      mode="calendar"
+                      isOpen={showConverterDatePicker}
+                      onClose={() => setShowConverterDatePicker(false)}
+                      selectedDate={gregDateInput}
+                      onSelectDate={(iso) => setGregDateInput(iso)}
                     />
                   </div>
 
@@ -754,9 +607,8 @@ export default function IslamicCalendar() {
                         </Button>
                       </div>
 
-                      <div className="text-xs text-[var(--text-secondary)] pt-2 border-t border-[var(--border)] flex items-center justify-between flex-wrap gap-1">
+                      <div className="text-xs text-[var(--text-secondary)] pt-2 border-t border-[var(--border)]">
                         <span>Gregorian: {gToHResult.formattedGregorian}</span>
-                        <span>{gToHResult.weekday}</span>
                       </div>
 
                       {/* Islamic Badges */}
@@ -857,7 +709,6 @@ export default function IslamicCalendar() {
                       {/* Sync Offset info */}
                       <div className="text-[11px] text-[var(--text-secondary)] pt-2 border-t border-[var(--border)] flex items-center justify-between">
                         <span>Synced with moon-sighting offset: {hijriOffset > 0 ? `+${hijriOffset}d` : `${hijriOffset}d`}</span>
-                        <span className="font-semibold text-[var(--accent-text)]">{hToGResult.weekday}</span>
                       </div>
                     </div>
                   )}
@@ -1396,15 +1247,11 @@ export default function IslamicCalendar() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-              {[
-                "Muharram", "Safar", "Rabi' al-awwal", "Rabi' al-thani",
-                "Jumada al-awwal", "Jumada al-thani", "Rajab", "Sha'ban",
-                "Ramadan", "Shawwal", "Dhul Qi'dah", "Dhul Hijjah"
-              ].map((month, index) => {
-                const isActive = islamicInfo?.currentDate.hijri.month.number === index + 1;
+              {CANONICAL_HIJRI_MONTHS.map((month) => {
+                const isActive = islamicInfo?.currentDate.hijri.month.number === month.number;
                 return (
                   <div
-                    key={index}
+                    key={month.number}
                     className="flex items-center justify-center py-2 px-3 rounded-xl text-xs font-semibold border transition-all"
                     style={{
                       background: isActive ? 'var(--accent)' : 'var(--surface-2)',
@@ -1412,7 +1259,7 @@ export default function IslamicCalendar() {
                       borderColor: isActive ? 'var(--accent)' : 'var(--border)',
                     }}
                   >
-                    {index + 1}. {month}
+                    {month.number}. {month.en}
                   </div>
                 );
               })}

@@ -55,6 +55,7 @@ public final class NativeAdhanScheduler {
     private static final String KEY_TRACE_LOG = "trace_log";
     private static final String KEY_LAST_TEST_TRIGGER = "last_test_trigger_ms";
     private static final String KEY_LAST_TEST_PRAYER = "last_test_prayer";
+    private static final String KEY_LAST_SCHEDULE_METHOD = "last_schedule_method";
     private static final int MAX_TRACE_ENTRIES = 25;
 
     private static final Object SCHEDULE_LOCK = new Object();
@@ -122,7 +123,17 @@ public final class NativeAdhanScheduler {
     public static int getScheduledCount(Context context) {
         if (context == null) return 0;
         synchronized (SCHEDULE_LOCK) {
-            return getStoredIds(context).size();
+            SharedPreferences prefs = getPrefs(context);
+            Set<String> ids = getStoredIds(context);
+            long now = System.currentTimeMillis();
+            int futureCount = 0;
+            for (String idStr : ids) {
+                long t = prefs.getLong(KEY_PREFIX_TIME + idStr, -1L);
+                if (t > now) {
+                    futureCount++;
+                }
+            }
+            return futureCount;
         }
     }
 
@@ -258,6 +269,7 @@ public final class NativeAdhanScheduler {
             PendingIntent showPendingIntent = PendingIntent.getActivity(context, showRequestCode, showIntent, showFlags);
 
             String methodUsed = "setAlarmClock";
+            String methodKey = "setAlarmClock";
             try {
                 AlarmClockInfo alarmClock = new AlarmClockInfo(alarm.triggerAtMillis, showPendingIntent);
                 alarmManager.setAlarmClock(alarmClock, pendingIntent);
@@ -266,6 +278,7 @@ public final class NativeAdhanScheduler {
                 try {
                     if (canUseExactAlarms(context, alarmManager)) {
                         methodUsed = "setExactAndAllowWhileIdle";
+                        methodKey = "exactIdle";
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarm.triggerAtMillis, pendingIntent);
                         } else {
@@ -273,6 +286,7 @@ public final class NativeAdhanScheduler {
                         }
                     } else {
                         methodUsed = "setAndAllowWhileIdle";
+                        methodKey = "inexactIdle";
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarm.triggerAtMillis, pendingIntent);
                         } else {
@@ -281,6 +295,7 @@ public final class NativeAdhanScheduler {
                     }
                 } catch (SecurityException exactAlarmError) {
                     methodUsed = "setAndAllowWhileIdle(fallback)";
+                    methodKey = "inexactIdle";
                     Log.w(TAG, "Exact alarm rejected, falling back to inexact alarm", exactAlarmError);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarm.triggerAtMillis, pendingIntent);
@@ -289,6 +304,8 @@ public final class NativeAdhanScheduler {
                     }
                 }
             }
+
+            getPrefs(context).edit().putString(KEY_LAST_SCHEDULE_METHOD, methodKey).apply();
 
             if (persist) {
                 persistAlarm(context, alarm);
@@ -369,6 +386,7 @@ public final class NativeAdhanScheduler {
             }
 
             clearPersistedAlarms(context);
+            getPrefs(context).edit().putString(KEY_LAST_SCHEDULE_METHOD, "none").apply();
             Log.d(TAG, "Cleared all native adhan alarms");
         }
     }
@@ -488,6 +506,38 @@ public final class NativeAdhanScheduler {
                 batteryUnrestricted = pm.isIgnoringBatteryOptimizations(context.getPackageName());
             }
 
+            String nextScheduledPrayer = "NONE";
+            long nextScheduledEpochMs = 0L;
+            synchronized (SCHEDULE_LOCK) {
+                SharedPreferences prefs = getPrefs(context);
+                long now = System.currentTimeMillis();
+                Set<String> ids = getStoredIds(context);
+                String bestName = null;
+                long bestTime = Long.MAX_VALUE;
+                for (String idStr : ids) {
+                    long t = prefs.getLong(KEY_PREFIX_TIME + idStr, -1L);
+                    if (t > now && t < bestTime) {
+                        bestTime = t;
+                        bestName = prefs.getString(KEY_PREFIX_PRAYER + idStr, "Prayer");
+                    }
+                }
+                if (bestName != null && bestTime < Long.MAX_VALUE) {
+                    nextScheduledEpochMs = bestTime;
+                    String timeFmt = new SimpleDateFormat("hh:mm a", Locale.US).format(new Date(bestTime));
+                    String todayKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(now));
+                    String alarmDayKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(bestTime));
+                    String dayPrefix = todayKey.equals(alarmDayKey)
+                            ? ""
+                            : (new SimpleDateFormat("EEE ", Locale.US).format(new Date(bestTime)));
+                    nextScheduledPrayer = bestName + " • " + dayPrefix + timeFmt;
+                }
+            }
+
+            String alarmMethod = getPrefs(context).getString(KEY_LAST_SCHEDULE_METHOD, "none");
+            if (getScheduledCount(context) == 0 && "NONE".equals(osNextAlarmClock)) {
+                alarmMethod = "none";
+            }
+
             List<String> traces = getTraceLog(context, 12);
             JSONArray traceArray = new JSONArray();
             for (String entry : traces) {
@@ -496,6 +546,9 @@ public final class NativeAdhanScheduler {
 
             out.put("osNextAlarmClock", osNextAlarmClock);
             out.put("osNextAlarmEpochMs", osNextEpochMs);
+            out.put("alarmMethod", alarmMethod);
+            out.put("nextScheduledPrayer", nextScheduledPrayer);
+            out.put("nextScheduledEpochMs", nextScheduledEpochMs);
             out.put("canScheduleExactAlarms", canExact);
             out.put("notificationsEnabled", notifEnabled);
             out.put("channelImportance", channelImportance);

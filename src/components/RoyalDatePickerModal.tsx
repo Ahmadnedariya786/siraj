@@ -5,11 +5,11 @@ import { Calendar, ChevronLeft, ChevronRight, X, Check } from 'lucide-react';
 import {
   getDetailedHijriDate,
   getDateWiseQazaList,
-  toggleDatePrayerQaza,
   saveDateRecordQaza,
   type QazaPrayerName,
   type DateWiseQazaRecord,
 } from '@/lib/qaza-tracker';
+import { convertGregorianToHijri, getStoredHijriOffset } from '@/lib/hijri-date';
 
 const PRAYERS: { name: QazaPrayerName; label: string; arabicLabel: string }[] = [
   { name: 'fajr', label: 'Fajr', arabicLabel: 'الفجر' },
@@ -32,6 +32,7 @@ interface RoyalDatePickerModalProps {
   onClose: () => void;
   selectedDate: string; // YYYY-MM-DD
   onSelectDate: (date: string) => void;
+  mode?: 'qaza' | 'calendar';
 }
 
 export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
@@ -39,7 +40,9 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
   onClose,
   selectedDate,
   onSelectDate,
+  mode = 'qaza',
 }) => {
+  const isCalendarMode = mode === 'calendar';
   useBodyScrollLock(isOpen);
 
   const [activeDate, setActiveDate] = useState<string>(selectedDate);
@@ -109,17 +112,51 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }, []);
 
+  const tomorrowIso = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const plus7DaysIso = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
   // Detailed Hijri Date for the currently highlighted active date
   const detailedDate = useMemo(() => {
+    if (isCalendarMode) {
+      const converted = convertGregorianToHijri(activeDate, getStoredHijriOffset());
+      if (converted) {
+        return {
+          gregorianDay: converted.weekday,
+          gregorian: converted.gregorianDate.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+          hijriEn: converted.formattedHijri,
+          hijriArUr: `${converted.hijriDay} ${converted.hijriMonthAr} ${converted.hijriYear}`,
+        };
+      }
+    }
     return getDetailedHijriDate(activeDate);
-  }, [activeDate]);
+  }, [activeDate, isCalendarMode]);
 
   // Calendar matrix calculation
   const calendarDays = useMemo(() => {
     const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay();
     const totalDays = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const offset = isCalendarMode ? getStoredHijriOffset() : 0;
 
-    const days: { day: number | null; dateIso: string | null }[] = [];
+    const days: {
+      day: number | null;
+      dateIso: string | null;
+      hijriDay?: number;
+      isAyyamAlBeed?: boolean;
+      isSunnahFast?: boolean;
+    }[] = [];
 
     // Empty cells before day 1
     for (let i = 0; i < firstDayIndex; i++) {
@@ -129,11 +166,22 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
     // Days in current month
     for (let d = 1; d <= totalDays; d++) {
       const dateIso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      days.push({ day: d, dateIso });
+      if (isCalendarMode) {
+        const hijri = convertGregorianToHijri(dateIso, offset);
+        days.push({
+          day: d,
+          dateIso,
+          hijriDay: hijri?.hijriDay,
+          isAyyamAlBeed: hijri?.isAyyamAlBeed,
+          isSunnahFast: hijri?.isSunnahFastingDay,
+        });
+      } else {
+        days.push({ day: d, dateIso });
+      }
     }
 
     return days;
-  }, [viewYear, viewMonth]);
+  }, [viewYear, viewMonth, isCalendarMode]);
 
   // Check if a date has pending Qaza
   const hasPendingQaza = useCallback(
@@ -154,7 +202,7 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
     }
   };
 
-  const isNextMonthDisabled = viewYear > currentYear || (viewYear === currentYear && viewMonth >= currentMonth);
+  const isNextMonthDisabled = !isCalendarMode && (viewYear > currentYear || (viewYear === currentYear && viewMonth >= currentMonth));
 
   const handleNextMonth = () => {
     if (isNextMonthDisabled) return;
@@ -193,7 +241,7 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
   }, [activeDate, dateRecords]);
 
   const handleSelectPreset = (dateIso: string) => {
-    if (activeDate !== dateIso) {
+    if (!isCalendarMode && activeDate !== dateIso) {
       saveDateRecordQaza(activeDate, draftStatuses);
     }
     setActiveDate(dateIso);
@@ -205,16 +253,12 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
   };
 
   const handleDayClick = (dateIso: string) => {
-    if (dateIso > todayIso) return;
-    if (activeDate !== dateIso) {
+    if (!isCalendarMode && dateIso > todayIso) return;
+    if (!isCalendarMode && activeDate !== dateIso) {
       saveDateRecordQaza(activeDate, draftStatuses);
     }
     setActiveDate(dateIso);
   };
-
-  const currentRecord = useMemo(() => {
-    return dateRecords.find((r) => r.date === activeDate);
-  }, [dateRecords, activeDate]);
 
   const handleTogglePrayer = (prayerName: QazaPrayerName) => {
     setDraftStatuses((prev) => {
@@ -229,8 +273,10 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
   };
 
   const handleSaveAndDone = () => {
-    saveDateRecordQaza(activeDate, draftStatuses);
-    refreshRecords();
+    if (!isCalendarMode) {
+      saveDateRecordQaza(activeDate, draftStatuses);
+      refreshRecords();
+    }
     onSelectDate(activeDate);
     onClose();
   };
@@ -363,27 +409,27 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => handleSelectPreset(yesterdayIso)}
+            onClick={() => handleSelectPreset(isCalendarMode ? tomorrowIso : yesterdayIso)}
             className={`rounded-lg border transition-all cursor-pointer text-center ${
-              activeDate === yesterdayIso
+              activeDate === (isCalendarMode ? tomorrowIso : yesterdayIso)
                 ? 'bg-[var(--accent)] text-[var(--on-accent)] border-[var(--accent)] shadow-sm'
                 : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--text-primary)]'
             }`}
             style={{ fontSize: '0.66rem', fontWeight: 700, padding: '5px 2px', whiteSpace: 'nowrap' }}
           >
-            Yesterday
+            {isCalendarMode ? 'Tomorrow' : 'Yesterday'}
           </button>
           <button
             type="button"
-            onClick={() => handleSelectPreset(twoDaysAgoIso)}
+            onClick={() => handleSelectPreset(isCalendarMode ? plus7DaysIso : twoDaysAgoIso)}
             className={`rounded-lg border transition-all cursor-pointer text-center ${
-              activeDate === twoDaysAgoIso
+              activeDate === (isCalendarMode ? plus7DaysIso : twoDaysAgoIso)
                 ? 'bg-[var(--accent)] text-[var(--on-accent)] border-[var(--accent)] shadow-sm'
                 : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--text-primary)]'
             }`}
             style={{ fontSize: '0.66rem', fontWeight: 700, padding: '5px 2px', whiteSpace: 'nowrap' }}
           >
-            -2 Days
+            {isCalendarMode ? '+7 Days' : '-2 Days'}
           </button>
           <button
             type="button"
@@ -445,13 +491,13 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
           <div className="grid grid-cols-7 gap-1">
             {calendarDays.map((item, idx) => {
               if (!item.day || !item.dateIso) {
-                return <div key={`empty-${idx}`} style={{ height: '32px' }} className="rounded-lg" />;
+                return <div key={`empty-${idx}`} style={{ height: isCalendarMode ? '38px' : '32px' }} className="rounded-lg" />;
               }
 
-              const isFuture = item.dateIso > todayIso;
+              const isFuture = !isCalendarMode && item.dateIso > todayIso;
               const isSelected = item.dateIso === activeDate;
               const isToday = item.dateIso === todayIso;
-              const hasPending = hasPendingQaza(item.dateIso);
+              const hasPending = !isCalendarMode && hasPendingQaza(item.dateIso);
 
               return (
                 <button
@@ -467,7 +513,7 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
                       : 'hover:bg-[var(--surface-2)]'
                   }`}
                   style={{
-                    height: '32px',
+                    height: isCalendarMode ? '38px' : '32px',
                     fontSize: '0.76rem',
                     ...(isSelected
                       ? {
@@ -483,6 +529,31 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
                   }}
                 >
                   <span className="font-bold leading-none">{item.day}</span>
+                  {isCalendarMode && item.hijriDay !== undefined && (
+                    <span
+                      className="leading-none mt-0.5 flex items-center gap-0.5"
+                      style={{
+                        fontSize: '0.56rem',
+                        fontWeight: 700,
+                        color: isSelected ? 'var(--on-accent)' : 'var(--accent-text)',
+                        opacity: isSelected ? 0.92 : 0.85,
+                      }}
+                    >
+                      <span>{item.hijriDay}</span>
+                      {(item.isAyyamAlBeed || item.isSunnahFast) && (
+                        <span
+                          className="w-1 h-1 rounded-full inline-block"
+                          style={{
+                            background: isSelected
+                              ? 'var(--on-accent)'
+                              : item.isAyyamAlBeed
+                              ? 'var(--accent)'
+                              : 'var(--accent-2)',
+                          }}
+                        />
+                      )}
+                    </span>
+                  )}
                   {hasPending && (
                     <span
                       className="w-1.5 h-1.5 rounded-full qaza-dot-blink inline-block mt-0.5"
@@ -497,77 +568,93 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
           </div>
         </div>
 
-        {/* Row 5: All 6 Prayers (Fajr to Witr) Visible Without Scrolling! */}
-        <div
-          className="w-full rounded-xl border border-[var(--border)] p-2 space-y-1.5"
-          style={{ background: 'var(--surface-2)' }}
-        >
+        {/* Row 5: Qaza Checklist (qaza mode) OR Ayyam al-Beed Legend (calendar mode) */}
+        {isCalendarMode ? (
           <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px',
-              marginBottom: '8px',
-              width: '100%',
-              minWidth: 0,
-            }}
+            className="w-full rounded-xl border border-[var(--border)] px-3 py-2 flex items-center justify-between gap-2 text-[10px] font-semibold"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}
           >
-            <span
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 800,
-                whiteSpace: 'nowrap',
-                color: 'var(--text-primary)',
-              }}
-            >
-              Missed Prayers • {detailedDate.gregorian}
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--accent)' }} />
+              Ayyam al-Beed (13–15)
             </span>
-            <span
-              style={{
-                fontSize: '0.65rem',
-                color: 'var(--text-secondary)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Tap prayer to cycle: None → ● Pending → ✓ Done
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--accent-2)' }} />
+              Mon/Thu Fast
             </span>
           </div>
+        ) : (
+          <div
+            className="w-full rounded-xl border border-[var(--border)] p-2 space-y-1.5"
+            style={{ background: 'var(--surface-2)' }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                marginBottom: '8px',
+                width: '100%',
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                Missed Prayers • {detailedDate.gregorian}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.65rem',
+                  color: 'var(--text-secondary)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Tap prayer to cycle: None → ● Pending → ✓ Done
+              </span>
+            </div>
 
-          <div className="grid grid-cols-3 gap-1.5">
-            {PRAYERS.map((p) => {
-              const status = draftStatuses[p.name] || 'none';
-              const isPending = status === 'pending';
-              const isCompleted = status === 'completed';
+            <div className="grid grid-cols-3 gap-1.5">
+              {PRAYERS.map((p) => {
+                const status = draftStatuses[p.name] || 'none';
+                const isPending = status === 'pending';
+                const isCompleted = status === 'completed';
 
-              return (
-                <button
-                  key={p.name}
-                  type="button"
-                  onClick={() => handleTogglePrayer(p.name)}
-                  className={`rounded-lg border flex flex-col items-center justify-center text-center transition-all cursor-pointer active:scale-95 ${
-                    isPending
-                      ? 'qaza-pending-blink bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)]'
-                      : isCompleted
-                      ? 'bg-[var(--success)]/10 border-[var(--success)] text-[var(--success)]'
-                      : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  }`}
-                  style={{ padding: '6px 4px' }}
-                >
-                  <span
-                    className="text-[11px]"
-                    style={{ fontFamily: 'var(--font-urdu), serif', lineHeight: 1.2 }}
+                return (
+                  <button
+                    key={p.name}
+                    type="button"
+                    onClick={() => handleTogglePrayer(p.name)}
+                    className={`rounded-lg border flex flex-col items-center justify-center text-center transition-all cursor-pointer active:scale-95 ${
+                      isPending
+                        ? 'qaza-pending-blink bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)]'
+                        : isCompleted
+                        ? 'bg-[var(--success)]/10 border-[var(--success)] text-[var(--success)]'
+                        : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                    style={{ padding: '6px 4px' }}
                   >
-                    {p.arabicLabel}
-                  </span>
-                  <span className="text-[10px] font-bold capitalize mt-0.5">{p.label}</span>
-                  <span className="text-[8px] font-mono mt-0.5 font-bold">
-                    {isPending ? '● PENDING' : isCompleted ? '✓ DONE' : '—'}
-                  </span>
-                </button>
-              );
-            })}
+                    <span
+                      className="text-[11px]"
+                      style={{ fontFamily: 'var(--font-urdu), serif', lineHeight: 1.2 }}
+                    >
+                      {p.arabicLabel}
+                    </span>
+                    <span className="text-[10px] font-bold capitalize mt-0.5">{p.label}</span>
+                    <span className="text-[8px] font-mono mt-0.5 font-bold">
+                      {isPending ? '● PENDING' : isCompleted ? '✓ DONE' : '—'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Row 6: Bottom Action Button */}
         <button
@@ -586,7 +673,7 @@ export const RoyalDatePickerModal: React.FC<RoyalDatePickerModalProps> = ({
           }}
         >
           <Check className="w-4 h-4 shrink-0" />
-          <span>Done & Save Qaza</span>
+          <span>{isCalendarMode ? 'Select Date' : 'Done & Save Qaza'}</span>
         </button>
       </div>
     </div>

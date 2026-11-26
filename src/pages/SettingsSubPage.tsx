@@ -586,7 +586,7 @@ const SettingsSubPage: React.FC = () => {
     };
   });
 
-  const handleFardAlertToggle = (prayerName: 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha', enabled: boolean) => {
+  const handleFardAlertToggle = async (prayerName: 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha', enabled: boolean) => {
     setFardAlerts((prev) => ({ ...prev, [prayerName]: enabled }));
     const keyMap: Record<string, 'fajrEnabled' | 'dhuhrEnabled' | 'asrEnabled' | 'maghribEnabled' | 'ishaEnabled'> = {
       Fajr: 'fajrEnabled',
@@ -598,8 +598,13 @@ const SettingsSubPage: React.FC = () => {
     const cfg = adhanService.getAdhanConfig();
     cfg[keyMap[prayerName]] = enabled;
     adhanService.saveAdhanConfig(cfg);
-    localNotifications.schedulePrayerNotificationsFromAPI().catch(() => {});
     toast({ title: `${prayerName} notification ${enabled ? 'enabled' : 'disabled'}` });
+    try {
+      await localNotifications.schedulePrayerNotificationsFromAPI();
+      await refreshOsNotificationStatus();
+    } catch {
+      // Non-blocking refresh fallback
+    }
   };
 
 function getNextUpcomingPrayerInfo(): { name: string; time: string } {
@@ -660,21 +665,41 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
   const [isTestingDrawer, setIsTestingDrawer] = useState(false);
   const [alarmCountdown, setAlarmCountdown] = useState<number | null>(null);
 
-  const refreshOsNotificationStatus = useCallback(async () => {
+  const [isResyncingAlarms, setIsResyncingAlarms] = useState(false);
+
+  const refreshOsNotificationStatus = useCallback(async (allowAutoHeal: boolean = false) => {
     let notifAllowed: boolean | null = null;
     let exactAllowed: boolean | null = null;
-    let count = 0;
+    let nativeCount = 0;
+    let kDiag: AlarmKernelDiagnostics | null = null;
 
     if (Capacitor.isNativePlatform()) {
-      const [kDiag, oem] = await Promise.all([
+      const [diagRes, oem] = await Promise.all([
         nativeAdhan.getAlarmKernelDiagnostics().catch(() => null),
         BatteryOptimization.getOemGuidance().catch(() => null),
       ]);
+      kDiag = diagRes;
+
+      if (allowAutoHeal && localNotifications.arePrayerNotificationsEnabled()) {
+        const cfg = adhanService.getAdhanConfig();
+        const anyFardOn =
+          (cfg.fajrEnabled ?? true) ||
+          (cfg.dhuhrEnabled ?? true) ||
+          (cfg.asrEnabled ?? true) ||
+          (cfg.maghribEnabled ?? true) ||
+          (cfg.ishaEnabled ?? true);
+
+        if (anyFardOn && (!kDiag || kDiag.scheduledCount === 0)) {
+          await localNotifications.schedulePrayerNotificationsFromAPI().catch(() => {});
+          kDiag = await nativeAdhan.getAlarmKernelDiagnostics().catch(() => kDiag);
+        }
+      }
+
       if (kDiag) {
         setKernelDiag(kDiag);
         notifAllowed = kDiag.notificationsEnabled;
         exactAllowed = kDiag.canScheduleExactAlarms;
-        count = kDiag.scheduledCount;
+        nativeCount = kDiag.scheduledCount;
       }
       if (oem) {
         setOemGuidance(oem);
@@ -697,11 +722,11 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
           console.debug('[OSNotif] bridge canScheduleExactAlarms failed:', err);
         }
       }
-      if (count === 0 && typeof bridge.getNativeScheduledAlarmCount === 'function') {
+      if (nativeCount === 0 && typeof bridge.getNativeScheduledAlarmCount === 'function') {
         try {
-          const nativeCount = Number(bridge.getNativeScheduledAlarmCount());
-          if (!isNaN(nativeCount) && nativeCount >= 0) {
-            count = nativeCount;
+          const nc = Number(bridge.getNativeScheduledAlarmCount());
+          if (!isNaN(nc) && nc >= 0) {
+            nativeCount = nc;
           }
         } catch (err) {
           console.debug('[OSNotif] bridge getNativeScheduledAlarmCount failed:', err);
@@ -718,10 +743,22 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
       }
     }
 
-    if (count === 0 && typeof LocalNotifications !== 'undefined') {
+    let reminderCount = 0;
+    if (typeof LocalNotifications !== 'undefined') {
       try {
         const pending = await LocalNotifications.getPending();
-        count = pending.notifications.length;
+        const items = pending.notifications || [];
+        if (Capacitor.isNativePlatform()) {
+          reminderCount = items.filter(
+            (n) =>
+              n.extra?.type !== 'prayer_reminder' &&
+              n.channelId !== 'siraj_prayers_v3' &&
+              n.id !== 4999 &&
+              n.id !== 9901
+          ).length;
+        } else {
+          reminderCount = items.length;
+        }
       } catch (err) {
         console.debug('[OSNotif] LocalNotifications getPending failed:', err);
       }
@@ -730,15 +767,30 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
     setOsNotificationStatus({
       notifications: notifAllowed !== null ? notifAllowed : true,
       exactAlarm: exactAllowed !== null ? exactAllowed : true,
-      pendingCount: count,
+      pendingCount: nativeCount + reminderCount,
     });
   }, []);
 
+  const handleResyncPrayerAlarms = async () => {
+    setIsResyncingAlarms(true);
+    try {
+      localStorage.removeItem('last-prayer-notification-signature');
+      await localNotifications.schedulePrayerNotificationsFromAPI();
+      await refreshOsNotificationStatus(false);
+      toast({ title: '✓ Prayer alarms resynced with OS kernel' });
+    } catch {
+      toast({ title: 'Could not resync alarms', variant: 'destructive' });
+    } finally {
+      setIsResyncingAlarms(false);
+    }
+  };
+
   useEffect(() => {
     if (sectionId === 'notifications') {
-      refreshOsNotificationStatus();
-      window.addEventListener('focus', refreshOsNotificationStatus);
-      return () => window.removeEventListener('focus', refreshOsNotificationStatus);
+      refreshOsNotificationStatus(true);
+      const onFocus = () => refreshOsNotificationStatus(true);
+      window.addEventListener('focus', onFocus);
+      return () => window.removeEventListener('focus', onFocus);
     }
   }, [sectionId, refreshOsNotificationStatus]);
 
@@ -1635,7 +1687,7 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                 </div>
                 <button
                   type="button"
-                  onClick={refreshOsNotificationStatus}
+                  onClick={() => refreshOsNotificationStatus(true)}
                   title="Refresh status"
                   className="p-1.5 rounded-lg border text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all shrink-0"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
@@ -1649,24 +1701,69 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                 className="p-2.5 rounded-xl border space-y-2"
                 style={{ background: 'var(--surface-2)', borderColor: 'var(--border)' }}
               >
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
-                    OS Kernel Next:
-                  </span>
-                  <span
-                    className={`text-xs font-mono font-bold ${
-                      kernelDiag && kernelDiag.osNextAlarmClock !== 'NONE'
-                        ? 'text-emerald-400'
-                        : Capacitor.isNativePlatform()
-                        ? 'text-rose-400'
-                        : 'text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    {Capacitor.isNativePlatform()
-                      ? kernelDiag?.osNextAlarmClock || 'NONE'
-                      : 'Web Mode'}
-                  </span>
-                </div>
+                {(() => {
+                  const anyFardEnabled =
+                    Object.values(fardAlerts).some(Boolean) &&
+                    localNotifications.arePrayerNotificationsEnabled();
+                  const isNative = Capacitor.isNativePlatform();
+                  const osNext = kernelDiag?.osNextAlarmClock || 'NONE';
+                  const fallbackNext = kernelDiag?.nextScheduledPrayer || 'NONE';
+                  const nativeArmedCount = kernelDiag?.scheduledCount ?? 0;
+                  const method = kernelDiag?.alarmMethod || 'none';
+                  const isFallbackArmed =
+                    isNative &&
+                    osNext === 'NONE' &&
+                    nativeArmedCount > 0 &&
+                    fallbackNext !== 'NONE' &&
+                    (method === 'exactIdle' || method === 'inexactIdle');
+
+                  let labelText = 'Web Mode';
+                  let toneClass = 'text-[var(--text-secondary)]';
+                  let showResyncCta = false;
+
+                  if (isNative) {
+                    if (!anyFardEnabled) {
+                      labelText =
+                        osNotificationStatus.pendingCount > 0
+                          ? 'Fard alerts off • Reminder active'
+                          : 'Fard alerts off';
+                      toneClass = 'text-sky-400';
+                    } else if (osNext !== 'NONE') {
+                      labelText = osNext;
+                      toneClass = 'text-emerald-400';
+                    } else if (isFallbackArmed) {
+                      labelText = `Standard exact alarm active • Next: ${fallbackNext}`;
+                      toneClass = 'text-sky-400';
+                    } else {
+                      labelText = 'No prayer alarms armed — tap Resync';
+                      toneClass = 'text-rose-400';
+                      showResyncCta = true;
+                    }
+                  }
+
+                  return (
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                        OS Kernel Next:
+                      </span>
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        <span className={`text-xs font-mono font-bold ${toneClass}`}>
+                          {labelText}
+                        </span>
+                        {showResyncCta && (
+                          <button
+                            type="button"
+                            disabled={isResyncingAlarms}
+                            onClick={handleResyncPrayerAlarms}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/40 active:scale-95 transition-all"
+                          >
+                            {isResyncingAlarms ? 'Resyncing...' : 'Resync Now'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="flex items-center justify-between gap-2 flex-wrap pt-1.5 border-t border-[var(--border)]">
                   <span className="text-[11px] font-semibold text-[var(--text-secondary)]">

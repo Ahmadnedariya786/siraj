@@ -33,6 +33,7 @@ import java.io.OutputStream;
 @CapacitorPlugin(name = "NoorMediaBridge")
 public class NoorMediaBridgePlugin extends Plugin {
     private static final String TAG = "NoorMediaBridge";
+    private static final String MEDIA_FOLDER = "Siraj";
 
     private File resolveCacheFile(String cacheFileName) {
         if (cacheFileName == null || cacheFileName.trim().isEmpty()) {
@@ -115,8 +116,8 @@ public class NoorMediaBridgePlugin extends Plugin {
                         : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
 
                 String relativePath = isVideo
-                        ? Environment.DIRECTORY_MOVIES + "/NoorConnect"
-                        : Environment.DIRECTORY_PICTURES + "/NoorConnect";
+                        ? Environment.DIRECTORY_MOVIES + "/" + MEDIA_FOLDER
+                        : Environment.DIRECTORY_PICTURES + "/" + MEDIA_FOLDER;
 
                 ContentValues values = new ContentValues();
                 values.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);
@@ -151,12 +152,12 @@ public class NoorMediaBridgePlugin extends Plugin {
                 JSObject res = new JSObject();
                 res.put("saved", true);
                 res.put("uri", targetUri.toString());
-                res.put("folder", isVideo ? "Movies/NoorConnect" : "Pictures/NoorConnect");
+                res.put("folder", (isVideo ? "Movies/" : "Pictures/") + MEDIA_FOLDER);
                 call.resolve(res);
             } else {
                 // Android 9 and below: Legacy external storage public directory
                 String topDir = isVideo ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES;
-                File targetDir = new File(Environment.getExternalStoragePublicDirectory(topDir), "NoorConnect");
+                File targetDir = new File(Environment.getExternalStoragePublicDirectory(topDir), MEDIA_FOLDER);
                 if (!targetDir.exists()) {
                     targetDir.mkdirs();
                 }
@@ -177,7 +178,7 @@ public class NoorMediaBridgePlugin extends Plugin {
                 JSObject res = new JSObject();
                 res.put("saved", true);
                 res.put("uri", Uri.fromFile(destFile).toString());
-                res.put("folder", isVideo ? "Movies/NoorConnect" : "Pictures/NoorConnect");
+                res.put("folder", (isVideo ? "Movies/" : "Pictures/") + MEDIA_FOLDER);
                 call.resolve(res);
             }
         } catch (Exception e) {

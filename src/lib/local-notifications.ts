@@ -250,7 +250,9 @@ export class LocalNotificationManager {
 
       if (!this.isInitialized) {
         const initialized = await this.initialize();
-        if (!initialized) return;
+        // On native Android, AlarmManager.setAlarmClock() must still arm alarms even if
+        // POST_NOTIFICATIONS is granted later during onboarding.
+        if (!initialized && !Capacitor.isNativePlatform()) return;
       }
 
       try {
@@ -516,7 +518,9 @@ export class LocalNotificationManager {
 
       if (!this.isInitialized) {
         const initialized = await this.initialize();
-        if (!initialized) return;
+        // On native Android, AlarmManager.setAlarmClock() must still arm alarms even if
+        // POST_NOTIFICATIONS is granted later during onboarding.
+        if (!initialized && !Capacitor.isNativePlatform()) return;
       }
 
       try {
@@ -1041,4 +1045,15 @@ if (typeof window !== 'undefined' && !window.__noorConnectAdhanPrefsListenerAtta
   window.addEventListener('prayer-minute-offsets-changed', handleReschedule);
   window.addEventListener('prayer-offsets-changed', handleReschedule);
   window.addEventListener('maghrib-ihtiyat-changed', handleReschedule);
+  window.addEventListener('focus', () => {
+    if (Capacitor.isNativePlatform()) {
+      nativeAdhan.getStatus().then((st) => {
+        if (st.count === 0 && localNotifications.arePrayerNotificationsEnabled()) {
+          handleReschedule();
+        }
+      }).catch((err) => {
+        console.debug('Focus alarm status check skipped:', err);
+      });
+    }
+  });
 }

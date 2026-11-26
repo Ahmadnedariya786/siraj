@@ -5,6 +5,7 @@
  */
 
 import { gToHApiResponseSchema, safeParseApiResponse } from '@/lib/api-schemas';
+import { CANONICAL_HIJRI_MONTHS, HIJRI_WEEKDAYS, convertGregorianToHijri, normalizeHijriMonth } from '@/lib/hijri-date';
 
 export interface IslamicDate {
   hijri: {
@@ -93,11 +94,10 @@ class IslamicCalendarService {
       if (parseResult.success && parseResult.data.code === 200) {
         const islamicDate = parseResult.data.data as IslamicDate;
         if (islamicDate?.hijri?.month?.en) {
-          islamicDate.hijri.month.en = islamicDate.hijri.month.en
-            .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
-            .replace(/al-ola/gi, 'al-ūlā')
-            .replace(/al-ōlā/gi, 'al-ūlā')
-            .replace(/ō/g, 'ū');
+          islamicDate.hijri.month.en = normalizeHijriMonth(
+            islamicDate.hijri.month.en,
+            islamicDate.hijri.month.number
+          );
         }
         
         // Cache the result
@@ -209,78 +209,23 @@ class IslamicCalendarService {
    * (30-year cycle with 11 leap years). Accurate to within 1-2 days of the
    * moon-sighting calendar — suitable as an offline fallback.
    */
-  calculateIslamicDate(date: Date): IslamicDate {
-    const hijriMonths = [
-      { en: 'Muharram', ar: 'محرم' },
-      { en: 'Safar', ar: 'صفر' },
-      { en: 'Rabi al-Awwal', ar: 'ربيع الأول' },
-      { en: 'Rabi al-Thani', ar: 'ربيع الثاني' },
-      { en: 'Jumada al-Awwal', ar: 'جمادى الأولى' },
-      { en: 'Jumada al-Thani', ar: 'جمادى الثانية' },
-      { en: 'Rajab', ar: 'رجب' },
-      { en: 'Shaban', ar: 'شعبان' },
-      { en: 'Ramadan', ar: 'رمضان' },
-      { en: 'Shawwal', ar: 'شوال' },
-      { en: 'Dhul-Qadah', ar: 'ذو القعدة' },
-      { en: 'Dhul-Hijjah', ar: 'ذو الحجة' }
-    ];
-
-    const hijriWeekdays = [
-      { en: 'Al-Ahad', ar: 'الأحد' },
-      { en: 'Al-Ithnayn', ar: 'الإثنين' },
-      { en: 'Al-Thulatha', ar: 'الثلاثاء' },
-      { en: 'Al-Arbaa', ar: 'الأربعاء' },
-      { en: 'Al-Khamis', ar: 'الخميس' },
-      { en: 'Al-Jumuah', ar: 'الجمعة' },
-      { en: 'As-Sabt', ar: 'السبت' }
-    ];
-
-    // Tabular Islamic calendar
-    // Epoch: Friday, July 16, 622 CE (Julian) = JDN 1948439.5
-    const hijriEpoch = 1948439.5;
-    const julianDay = this.getJulianDay(date);
-    const daysSinceEpoch = Math.floor(julianDay - hijriEpoch);
-
-    // Each 30-year cycle contains 10631 days (19 common years × 354 + 11 leap years × 355)
-    const cycleLength = 10631;
-    const yearLength = (y: number) => this.isHijriLeapYear(y) ? 355 : 354;
-
-    // Find the Hijri year by walking forward from epoch
-    let year = 1;
-    let accumulatedDays = 0;
-    while (accumulatedDays + yearLength(year) <= daysSinceEpoch) {
-      accumulatedDays += yearLength(year);
-      year++;
-    }
-
-    const dayOfYear = daysSinceEpoch - accumulatedDays;
-
-    // Find the month within the year
-    let month = 1;
-    let monthStart = 1;
-    for (let m = 1; m <= 12; m++) {
-      const ml = this.getTabularMonthLength(m, year);
-      if (dayOfYear < monthStart + ml - 1) {
-        month = m;
-        break;
-      }
-      monthStart += ml;
-    }
-
-    const hijriDay = dayOfYear - monthStart + 2;
-    const hijriMonth = month;
-    const hijriYear = year;
+  calculateIslamicDate(date: Date, offset: number = 0): IslamicDate {
+    const unified = convertGregorianToHijri(date, offset);
+    const hijriDay = unified?.hijriDay ?? 1;
+    const hijriMonth = unified?.hijriMonthNumber ?? 1;
+    const hijriYear = unified?.hijriYear ?? 1448;
+    const monthInfo = CANONICAL_HIJRI_MONTHS[hijriMonth - 1] || CANONICAL_HIJRI_MONTHS[0];
 
     return {
       hijri: {
         date: `${hijriDay}-${hijriMonth}-${hijriYear}`,
         format: `DD-MM-YYYY`,
         day: hijriDay.toString(),
-        weekday: hijriWeekdays[date.getDay()],
+        weekday: HIJRI_WEEKDAYS[date.getDay()],
         month: {
           number: hijriMonth,
-          en: hijriMonths[hijriMonth - 1].en,
-          ar: hijriMonths[hijriMonth - 1].ar
+          en: monthInfo.en,
+          ar: monthInfo.ar
         },
         year: hijriYear.toString(),
         designation: {

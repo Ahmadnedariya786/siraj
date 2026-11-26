@@ -1701,6 +1701,7 @@ export async function generateAiDiagnosticReport(existingScan?: DeepHealthScanRe
       if (kernel) {
         md += `\n---\n\n## 5. OS KERNEL ALARM INSPECTOR & NATIVE TRACE LOG\n\n`;
         md += `- **OS Kernel Next (` + '`getNextAlarmClock()`' + `):** \`${kernel.osNextAlarmClock}\`\n`;
+        md += `- **Alarm Method:** \`${kernel.alarmMethod || 'unknown'}\` • **Next Persisted Prayer:** \`${kernel.nextScheduledPrayer || 'NONE'}\`\n`;
         md += `- **Device:** ${kernel.deviceManufacturer} ${kernel.deviceModel} (API ${kernel.androidApi})\n`;
         md += `- **OS Notifications:** ${kernel.notificationsEnabled ? 'Allowed' : 'Blocked'} (Channel \`siraj_prayers_v3\` importance=${kernel.channelImportance})\n`;
         md += `- **Exact Alarms:** ${kernel.canScheduleExactAlarms ? 'Granted' : 'Missing'}\n`;

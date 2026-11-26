@@ -50,6 +50,7 @@ import { QURAN_RECITERS, getReciterById } from '@/lib/quran-reciters';
 import { useTilawah } from '@/contexts/TilawahContext';
 import { memoryPageCache } from '@/lib/interactive-mushaf';
 import { resolveSceneJourney, stripLeadingBismillah } from '@/lib/ayah-meaning-scene-engine';
+import { GALLERY_MOVIES_FOLDER, GALLERY_PICTURES_FOLDER } from '@/lib/brand';
 
 export interface QuranClipStudioModalProps {
   isOpen: boolean;
@@ -790,11 +791,11 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
           const cleanMime = cleanMimeType(result.mimeType);
           if (Capacitor.isNativePlatform()) {
             const cacheFile = await writeBlobToNativeCache(result.blob, filename);
-            await NoorMediaBridge.saveToGallery({
+            const res = await NoorMediaBridge.saveToGallery({
               cacheFileName: cacheFile,
               mimeType: cleanMime,
             });
-            toast.success('✨ Saved to Gallery / Movies!');
+            toast.success(`✨ Saved to Gallery (${res.folder || GALLERY_MOVIES_FOLDER})!`);
           }
         } catch (saveErr) {
           console.warn('[QuranClipStudio] Auto-save to gallery failed:', saveErr);
@@ -851,11 +852,11 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
           const filename = `siraj-ayah-s${surahNumber}-a${fromAyah}.png`;
           if (Capacitor.isNativePlatform()) {
             const cacheFile = await writeBlobToNativeCache(result.blob, filename);
-            await NoorMediaBridge.saveToGallery({
+            const res = await NoorMediaBridge.saveToGallery({
               cacheFileName: cacheFile,
               mimeType: 'image/png',
             });
-            toast.success('✨ Saved Ayah Card to Gallery / Pictures!');
+            toast.success(`✨ Saved Ayah Card to Gallery (${res.folder || GALLERY_PICTURES_FOLDER})!`);
           }
         } catch (saveErr) {
           console.warn('[QuranClipStudio] Auto-save image to gallery failed:', saveErr);
@@ -1002,14 +1003,14 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
 
     if (Capacitor.isNativePlatform()) {
       try {
-        toast.info('Saving to Gallery (Movies/Siraj)...');
+        toast.info(`Saving to Gallery (${GALLERY_MOVIES_FOLDER})...`);
         await writeBlobToNativeCache(videoResult.blob, filename);
         const res = await NoorMediaBridge.saveToGallery({
           cacheFileName: filename,
           mimeType: sanitizedMime,
           displayName: filename,
         });
-        toast.success(`✅ Saved to Gallery (${res.folder})!`);
+        toast.success(`✅ Saved to Gallery (${res.folder || GALLERY_MOVIES_FOLDER})!`);
         return;
       } catch (saveErr: unknown) {
         console.warn('[QuranClipStudio] Native gallery save failed:', saveErr);
@@ -1065,14 +1066,14 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
 
     if (Capacitor.isNativePlatform()) {
       try {
-        toast.info('Saving to Gallery (Pictures/Siraj)...');
+        toast.info(`Saving to Gallery (${GALLERY_PICTURES_FOLDER})...`);
         await writeBlobToNativeCache(currentBlob, filename);
         const res = await NoorMediaBridge.saveToGallery({
           cacheFileName: filename,
           mimeType: 'image/png',
           displayName: filename,
         });
-        toast.success(`✅ Saved to Gallery (${res.folder})!`);
+        toast.success(`✅ Saved to Gallery (${res.folder || GALLERY_PICTURES_FOLDER})!`);
         return;
       } catch (saveErr: unknown) {
         console.warn('[QuranClipStudio] Native gallery image save failed:', saveErr);

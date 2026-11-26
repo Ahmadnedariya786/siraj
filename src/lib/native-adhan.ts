@@ -15,6 +15,9 @@ export interface NativeAdhanAlarm {
 export interface AlarmKernelDiagnostics {
   osNextAlarmClock: string;
   osNextAlarmEpochMs: number;
+  alarmMethod?: 'setAlarmClock' | 'exactIdle' | 'inexactIdle' | 'none';
+  nextScheduledPrayer?: string;
+  nextScheduledEpochMs?: number;
   canScheduleExactAlarms: boolean;
   notificationsEnabled: boolean;
   channelImportance: number;

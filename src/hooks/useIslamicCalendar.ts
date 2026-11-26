@@ -16,6 +16,13 @@ import { AladhanAPI, AladhanDayData } from '@/lib/aladhan-api';
 import { useLocationState } from '@/lib/location-state';
 import { globalTimerManager } from '@/lib/timer-manager';
 import { islamicCalendarService } from '@/lib/islamic-calendar-service';
+import {
+  CANONICAL_HIJRI_MONTHS,
+  HIJRI_WEEKDAYS,
+  convertGregorianToHijri,
+  getStoredHijriOffset,
+  normalizeHijriMonth,
+} from '@/lib/hijri-date';
 
 export interface UseIslamicCalendarReturn {
   islamicInfo: {
@@ -70,111 +77,57 @@ export function useIslamicCalendar(): UseIslamicCalendarReturn {
 
       const now = new Date();
       const today = now;
+      const offset = getStoredHijriOffset();
+      const unified = convertGregorianToHijri(today, offset);
 
-      // Get today's data from the Aladhan monthly calendar cache
-      let todayData: AladhanDayData | null = null;
-
+      let holidays: string[] = [];
       if (location.latitude && location.longitude) {
-        todayData = AladhanAPI.getPrayerTimesForDate(today, location.latitude, location.longitude);
+        const effectiveDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset, 12, 0, 0);
+        let offsetData: AladhanDayData | null = AladhanAPI.getPrayerTimesForDate(
+          effectiveDate,
+          location.latitude,
+          location.longitude
+        );
 
-        // If cache miss, fetch fresh data
-        if (!todayData) {
+        if (!offsetData) {
           try {
             await AladhanAPI.fetchMonthlyCalendar(
               location.latitude,
               location.longitude,
-              today.getFullYear(),
-              today.getMonth() + 1,
+              effectiveDate.getFullYear(),
+              effectiveDate.getMonth() + 1,
               1
             );
-            todayData = AladhanAPI.getPrayerTimesForDate(today, location.latitude, location.longitude);
+            offsetData = AladhanAPI.getPrayerTimesForDate(
+              effectiveDate,
+              location.latitude,
+              location.longitude
+            );
           } catch (fetchErr) {
             console.warn('[useIslamicCalendar] Failed to fetch monthly data:', fetchErr);
           }
         }
+
+        if (offsetData?.date?.hijri?.holidays) {
+          holidays = offsetData.date.hijri.holidays;
+        }
       }
 
-      // Use today's Hijri date directly from the Aladhan API
-      // The API already returns the correct Hijri date for each Gregorian date.
-      // No Maghrib-based advancement — that was double-counting.
-      if (todayData) {
-        let h = todayData.date.hijri;
-        const offset = parseInt(localStorage.getItem('hijri-date-offset') || '0', 10);
-        
-        if (offset !== 0) {
-           const offsetDate = new Date(today);
-           offsetDate.setDate(offsetDate.getDate() + offset);
-           const offsetData = AladhanAPI.getPrayerTimesForDate(offsetDate, location.latitude, location.longitude);
-           if (offsetData) {
-             h = offsetData.date.hijri;
-            } else {
-              // Fallback approximate calculation
-              const newHijri = JSON.parse(JSON.stringify(h));
-              let newDay = parseInt(newHijri.day) + offset;
-              let newMonth = newHijri.month.number;
-              let newYear = newHijri.year;
-
-              const getHijriMonthLength = (month: number) => {
-                if (month % 2 === 1) return 30; // Odd months: 30 days
-                if (month === 12) {
-                  // Leap year check: year mod 30 gives cycle position, leap years are specific ones
-                  // Simplified: month 12 can be 30 days in some years
-                  return 29;
-                }
-                return 29; // Even months: 29 days
-              };
-
-              if (newDay <= 0) {
-                newMonth -= 1;
-                if (newMonth < 1) {
-                  newMonth = 12;
-                  newYear -= 1;
-                }
-                newDay = getHijriMonthLength(newMonth) + newDay;
-              } else {
-                const monthLength = getHijriMonthLength(newMonth);
-                if (newDay > monthLength) {
-                  newDay = newDay - monthLength;
-                  newMonth += 1;
-                  if (newMonth > 12) {
-                    newMonth = 1;
-                    newYear += 1;
-                  }
-                }
-              }
-
-              newHijri.day = newDay.toString().padStart(2, '0');
-              newHijri.month.number = newMonth;
-              newHijri.year = newYear;
-              h = newHijri;
-            }
-        }
-
-        const sanitizedMonthEn = (h.month.en || '')
-          .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
-          .replace(/al-ola/gi, 'al-ūlā')
-          .replace(/al-ōlā/gi, 'al-ūlā')
-          .replace(/ō/g, 'ū');
-        setHijriDay(h.day);
-        setHijriMonthNum(h.month.number);
-        setHijriMonthEn(sanitizedMonthEn);
-        setHijriMonthAr(h.month.ar);
-        setHijriYear(h.year);
-        setHijriWeekday(h.weekday);
-        setHijriHolidays(h.holidays || []);
+      if (unified) {
+        const monthInfo = CANONICAL_HIJRI_MONTHS[unified.hijriMonthNumber - 1] || CANONICAL_HIJRI_MONTHS[0];
+        setHijriDay(String(unified.hijriDay));
+        setHijriMonthNum(unified.hijriMonthNumber);
+        setHijriMonthEn(normalizeHijriMonth(monthInfo.en, unified.hijriMonthNumber));
+        setHijriMonthAr(monthInfo.ar);
+        setHijriYear(String(unified.hijriYear));
+        setHijriWeekday(HIJRI_WEEKDAYS[today.getDay()]);
+        setHijriHolidays(holidays);
       } else {
-        // Fallback: use the gToH API directly
-        const { islamicCalendarService } = await import('@/lib/islamic-calendar-service');
         const info = await islamicCalendarService.getIslamicCalendarInfo(now);
         const h = info.currentDate.hijri;
-        const sanitizedMonthEn = (h.month.en || '')
-          .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
-          .replace(/al-ola/gi, 'al-ūlā')
-          .replace(/al-ōlā/gi, 'al-ūlā')
-          .replace(/ō/g, 'ū');
         setHijriDay(h.day);
         setHijriMonthNum(h.month.number);
-        setHijriMonthEn(sanitizedMonthEn);
+        setHijriMonthEn(normalizeHijriMonth(h.month.en, h.month.number));
         setHijriMonthAr(h.month.ar || '');
         setHijriYear(h.year);
         setHijriWeekday(h.weekday);
