@@ -121,6 +121,9 @@ export default function SeerahReader() {
         return;
       }
 
+      setTranslatedTitle(formatIslamicProse(chap.title, "en"));
+      setTranslatedContent(cleanParagraphs.join("\n\n"));
+      setActualLang("en");
       setIsTranslating(true);
       setOfflineFallback(false);
       setDoneChunks(0);
@@ -487,8 +490,13 @@ export default function SeerahReader() {
           )}
         </div>
 
-        {/* Continuous Book Reading Body (68ch measure cap on wide viewports) */}
-        <article className="reader-prose-measure px-4 pt-5 pb-6">
+        {/* Continuous Book Reading Body (68ch measure cap on wide viewports, strict direction align, instant swap) */}
+        <article
+          key={`${chapter.id}-${contentLang}`}
+          dir={actualLang === "ur" ? "rtl" : "ltr"}
+          style={{ textAlign: actualLang === "ur" ? "right" : "left" }}
+          className="reader-prose-measure px-4 pt-5 pb-6"
+        >
           <ReaderStatusBanner
             targetLang={contentLang}
             actualLang={actualLang}

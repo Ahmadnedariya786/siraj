@@ -9,8 +9,16 @@ import { getCollectionByName, HadithCollection, HadithBook } from "@/data/hadith
 import { getHadithCollectionMetadata } from "@/lib/hadith";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
-import { AaReaderControlsButton } from "@/components/BookReaderControls";
-import { formatCollectionHadithCount, formatCompilerDeath } from "@/lib/hadith-utils";
+import {
+  AaReaderControlsButton,
+  MixedBidiTitle,
+} from "@/components/BookReaderControls";
+import {
+  formatCollectionHadithCount,
+  formatCompilerLifespan,
+  sanitizeHadithBookNumber,
+  sanitizeHadithBookTitle,
+} from "@/lib/hadith-utils";
 
 export function HadithBookView() {
   const { collection } = useParams<{ collection: string }>();
@@ -90,18 +98,22 @@ export function HadithBookView() {
 
   interface BookCardProps {
   book: HadithBook;
+  bookIndex: number;
   collection: string;
   navigate: ReturnType<typeof useNavigate>;
 }
 
-const BookCard = memo(function BookCard({ book, collection, navigate }: BookCardProps) {
+const BookCard = memo(function BookCard({ book, bookIndex, collection, navigate }: BookCardProps) {
   const { contentLang, isRtl } = useContentLanguage();
-  const rawDisplayName = !book.name || !book.name.trim() || book.name.trim().toLowerCase() === "chapter"
-    ? `Chapter ${book.number} • General Traditions`
-    : book.name;
-  const displayArabicName = !book.arabicName || !book.arabicName.trim() || book.arabicName.trim() === "باب"
-    ? `الباب ${book.number}`
-    : book.arabicName;
+  const cleanBookNumber = sanitizeHadithBookNumber(book.number, bookIndex);
+  const rawDisplayName = sanitizeHadithBookTitle(book.number, book.name, bookIndex);
+  const rawArabicName = (book.arabicName || "").trim();
+  const displayArabicName =
+    rawArabicName && rawArabicName !== "باب" && !/\(\s*more\s*\)/i.test(rawArabicName)
+      ? rawArabicName
+      : /^\d+$/.test(cleanBookNumber)
+      ? `الباب ${cleanBookNumber}`
+      : "";
 
   const [translatedName, setTranslatedName] = useState(rawDisplayName);
   const [translatedDesc, setTranslatedDesc] = useState(book.description || "");
@@ -112,6 +124,8 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
       setTranslatedDesc(book.description || "");
       return;
     }
+    setTranslatedName(rawDisplayName);
+    setTranslatedDesc(book.description || "");
     let isMounted = true;
     Promise.all([
       translateIslamicText(rawDisplayName, contentLang),
@@ -127,29 +141,35 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
 
   return (
     <Card
-      className="group cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] border-border/50 hover:border-primary/30"
-      onClick={() => navigate(`/hadith/collections/${collection}/${book.number}`)}
+      className="group cursor-pointer border-border/50 hover:border-primary/30"
+      onClick={() => navigate(`/hadith/collections/${collection}/${cleanBookNumber}`)}
     >
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 group-hover:from-primary/30 group-hover:to-primary/20 transition-colors">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 shrink-0">
               <BookOpen className="w-4 h-4 text-primary" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <h3
-                className={`font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-text)] transition-colors line-clamp-2 ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
+                className={`font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-text)] line-clamp-2 ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
                 dir="auto"
                 style={{ unicodeBidi: 'plaintext' }}
               >
-                {translatedName}
+                <MixedBidiTitle latin={translatedName} />
               </h3>
-              <p className="text-sm text-[var(--text-secondary)] font-arabic" dir="rtl">
-                {displayArabicName}
-              </p>
+              {displayArabicName && (
+                <p
+                  className="text-sm text-[var(--text-secondary)] font-arabic text-right"
+                  dir="rtl"
+                  style={{ unicodeBidi: 'isolate' }}
+                >
+                  <bdi dir="rtl">{displayArabicName}</bdi>
+                </p>
+              )}
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-[var(--accent-text)] transition-colors shrink-0" />
+          <ChevronRight className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-[var(--accent-text)] shrink-0" />
         </div>
 
         {book.hadithCount && (
@@ -255,9 +275,11 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
                   {contentLang === 'ur' ? 'مؤلف' : contentLang === 'gu' ? 'સંકલનકર્તા' : contentLang === 'hi' ? 'संकलनकर्ता' : 'Compiler'}
                 </h3>
                 <p className="text-sm text-[var(--text-secondary)]">{collectionData.author}</p>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  {[formatCompilerDeath(collectionData.death), collectionData.compilerPeriod].filter(Boolean).join(' · ')}
-                </p>
+                {formatCompilerLifespan(collectionData.compilerPeriod, collectionData.death) && (
+                  <p className="text-xs font-mono text-[var(--text-secondary)]">
+                    {formatCompilerLifespan(collectionData.compilerPeriod, collectionData.death)}
+                  </p>
+                )}
               </div>
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)] mb-2">
@@ -301,10 +323,11 @@ const BookCard = memo(function BookCard({ book, collection, navigate }: BookCard
 
         {/* Chapters/Sections Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredBooks.map((book) => (
+          {filteredBooks.map((book, idx) => (
             <BookCard
-              key={book.number}
+              key={`${book.number}-${idx}`}
               book={book}
+              bookIndex={idx}
               collection={collection!}
               navigate={navigate}
             />

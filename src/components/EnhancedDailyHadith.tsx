@@ -17,7 +17,7 @@ import { getGradeBadgeClass } from "@/lib/hadith-utils";
 import { useHadithBookmarks } from "@/hooks/useHadithBookmarks";
 import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
 import { useLanguage } from "@/contexts/LanguageContext-new";
-import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
+import { useContentLanguage, translateIslamicText, type ContentLang } from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
   BookProseParagraph,
@@ -214,7 +214,6 @@ export function EnhancedDailyHadith() {
   const { t, ui } = useLanguage();
   const [hadith, setHadith] = useState<Hadith>(() => resolveImmediateDailyHadith());
   const [loading, setLoading] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const { toast } = useToast();
   const { isBookmarked, toggleBookmark } = useHadithBookmarks();
@@ -227,20 +226,30 @@ export function EnhancedDailyHadith() {
   const [translatedNarrator, setTranslatedNarrator] = useState('');
   const [translatedReflection, setTranslatedReflection] = useState('');
   const [translatedCategory, setTranslatedCategory] = useState('');
+  const [actualLang, setActualLang] = useState<ContentLang>('en');
 
   useEffect(() => {
     if (!hadith) return;
+    const cleanEn = formatIslamicProse(hadith.englishTranslation, 'en');
     if (contentLang === 'en') {
-      setTranslatedText(hadith.englishTranslation);
+      setTranslatedText(cleanEn);
       setTranslatedNarrator(activeNarrator || '');
       setTranslatedReflection(hadith.reflection || '');
       setTranslatedCategory(hadith.category || '');
+      setActualLang('en');
       return;
     }
 
+    // Instant reset to avoid cross-language ghosting during translation
+    setTranslatedText(cleanEn);
+    setTranslatedNarrator(activeNarrator || '');
+    setTranslatedReflection(hadith.reflection || '');
+    setTranslatedCategory(hadith.category || '');
+    setActualLang('en');
+
     let isMounted = true;
     Promise.all([
-      translateIslamicText(hadith.englishTranslation, contentLang),
+      translateIslamicText(cleanEn, contentLang),
       activeNarrator ? translateIslamicText(activeNarrator, contentLang) : Promise.resolve(''),
       hadith.reflection ? translateIslamicText(hadith.reflection, contentLang) : Promise.resolve(''),
       hadith.category ? translateIslamicText(hadith.category, contentLang) : Promise.resolve(''),
@@ -250,6 +259,7 @@ export function EnhancedDailyHadith() {
         setTranslatedNarrator(tNarr);
         setTranslatedReflection(tRefl);
         setTranslatedCategory(tCat);
+        setActualLang(contentLang);
       }
     });
 
@@ -353,7 +363,6 @@ export function EnhancedDailyHadith() {
   }, [loadHadith]);
 
   const refreshHadith = async () => {
-    setIsAnimating(true);
     setIsExpanded(false);
     try {
       const randomSeed = Math.floor(Math.random() * 100000) + 1;
@@ -370,7 +379,6 @@ export function EnhancedDailyHadith() {
       const randomIndex = Math.floor(Math.random() * hadithCollection.length);
       setHadith(hadithCollection[randomIndex]);
     }
-    setTimeout(() => setIsAnimating(false), 300);
   };
 
   const shareHadith = async () => {
@@ -579,12 +587,12 @@ export function EnhancedDailyHadith() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-[34px] w-[34px] rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-text)] hover:bg-[var(--surface)] transition-all duration-200 active:scale-95"
+              className="h-[34px] w-[34px] rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-text)] hover:bg-[var(--surface)]"
               onClick={refreshHadith}
               title="Another Hadith"
               aria-label="Show another hadith"
             >
-              <RefreshCw className={`w-4 h-4 transition-transform duration-500 ${isAnimating ? 'animate-spin text-[var(--accent)]' : ''}`} />
+              <RefreshCw className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"
@@ -599,39 +607,42 @@ export function EnhancedDailyHadith() {
           </div>
         </div>
 
-        {/* Ornamental Recessed Arabic Verse Box (12px padding on surface-2, right-aligned, line-height 2.0) */}
-        <div className={`transition-all duration-300 ${isAnimating ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-          <div
-            className="relative rounded-2xl border border-[var(--border)] overflow-hidden"
-            style={{
-              padding: '12px',
-              background: 'var(--surface-2)',
-              boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.4)',
-            }}
-          >
-            {/* Corner Ornamental Accents */}
-            <span className="absolute top-2 left-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
-            <span className="absolute top-2 right-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
-            <span className="absolute bottom-2 left-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
-            <span className="absolute bottom-2 right-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
-
-            <p
-              className={`font-amiri reader-arabic-block text-[var(--text-primary)] drop-shadow-sm select-text break-words px-2 transition-all duration-300 ${
-                !isExpanded && isArabicLong ? "line-clamp-3 sm:line-clamp-4" : ""
-              }`}
-              dir="rtl"
+        {/* Ornamental Recessed Arabic Verse Box (guarded against empty, 12px padding on surface-2, right-aligned) */}
+        {hadith.arabic && hadith.arabic.trim() && (
+          <div>
+            <div
+              className="relative rounded-2xl border border-[var(--border)] overflow-hidden"
               style={{
-                fontFamily: "'Amiri', 'Traditional Arabic', 'Scheherazade New', serif",
-                lineHeight: getArabicLineHeight(prefs.lineHeightMode),
-                fontSize: `${prefs.arabicSize}px`,
-                textAlign: 'right',
-                unicodeBidi: 'plaintext',
+                padding: '12px',
+                background: 'var(--surface-2)',
+                boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.4)',
               }}
             >
-              {hadith.arabic}
-            </p>
+              {/* Corner Ornamental Accents */}
+              <span className="absolute top-2 left-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
+              <span className="absolute top-2 right-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
+              <span className="absolute bottom-2 left-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
+              <span className="absolute bottom-2 right-2 text-[10px] text-[var(--accent)]/40 select-none font-serif">✦</span>
+
+              <p
+                className={`font-amiri reader-arabic-block text-[var(--text-primary)] drop-shadow-sm select-text break-words px-2 ${
+                  !isExpanded && isArabicLong ? "line-clamp-3 sm:line-clamp-4" : ""
+                }`}
+                dir="rtl"
+                data-reader-arabic="true"
+                style={{
+                  fontFamily: "'Amiri', 'Traditional Arabic', 'Scheherazade New', serif",
+                  lineHeight: getArabicLineHeight(prefs.lineHeightMode),
+                  fontSize: `${prefs.arabicSize}px`,
+                  textAlign: 'right',
+                  unicodeBidi: 'plaintext',
+                }}
+              >
+                {hadith.arabic}
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Ornamental Manuscript Divider */}
         <ManuscriptDivider />
@@ -644,12 +655,17 @@ export function EnhancedDailyHadith() {
           <ContentLanguageBar compact />
         </div>
 
-        {/* Translation Section (Unified Typography Engine + 68ch measure + font-readiness gate) */}
-        <div className={`space-y-2 reader-prose-measure transition-opacity duration-150 ${isAnimating ? 'opacity-0' : 'opacity-100'}`}>
+        {/* Translation Section (Unified Typography Engine + 68ch measure + instant swap) */}
+        <div
+          key={`${hadith.source}-${contentLang}`}
+          className="space-y-2 reader-prose-measure"
+          dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+          style={{ textAlign: actualLang === 'ur' ? 'right' : 'left' }}
+        >
           <div className={!isExpanded && isEnglishLong ? "line-clamp-4" : ""}>
             <BookProseParagraph
               text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
-              actualLang={contentLang}
+              actualLang={actualLang}
               fontSize={prefs.bodySize}
               lineSpacing={prefs.lineHeightMode}
               className="text-[var(--text-primary)] select-text"

@@ -79,3 +79,141 @@ export function formatCompilerDeath(death?: string): string {
   if (/^died:/i.test(raw)) return raw;
   return `Died: ${raw}`;
 }
+
+/**
+ * Formats single concise compiler lifespan string (e.g. "194-256 AH").
+ * Falls back to formatted death year only when lifespan range is unavailable.
+ */
+export function formatCompilerLifespan(compilerPeriod?: string, death?: string): string {
+  const period = (compilerPeriod || '').trim();
+  if (period) return period;
+  return formatCompilerDeath(death);
+}
+
+/**
+ * Sanitizes broken parser book numbers such as "(more)" or non-numeric labels.
+ */
+export function sanitizeHadithBookNumber(bookNumber?: string, index = 0): string {
+  const raw = (bookNumber || '').trim();
+  if (!raw || /^\(?more\)?$/i.test(raw)) {
+    return String(index + 1);
+  }
+  if (/^merits$/i.test(raw)) {
+    return '1';
+  }
+  return raw;
+}
+
+/**
+ * Maps broken parser book titles such as "(more)" or fragmented "Merits / of Dhikr"
+ * into readable canonical titles or "Book N" without ever rendering literal "(more)".
+ */
+export function sanitizeHadithBookTitle(
+  bookNumber?: string,
+  bookName?: string,
+  index = 0
+): string {
+  const cleanNum = sanitizeHadithBookNumber(bookNumber, index);
+  const rawNum = (bookNumber || '').trim();
+  const rawName = (bookName || '').trim();
+
+  if (
+    /^merits$/i.test(rawNum) &&
+    /^of\s+dhikr$/i.test(rawName)
+  ) {
+    return 'Merits of Dhikr';
+  }
+
+  if (
+    !rawName ||
+    /^\(?more\)?$/i.test(rawName) ||
+    /^chapter$/i.test(rawName)
+  ) {
+    return /^\d+$/.test(cleanNum) ? `Book ${cleanNum}` : `Book ${index + 1}`;
+  }
+
+  // Strip stray "(more)" tokens embedded in titles cleanly
+  const cleaned = rawName.replace(/\(\s*more\s*\)/gi, '').trim();
+  if (!cleaned) {
+    return /^\d+$/.test(cleanNum) ? `Book ${cleanNum}` : `Book ${index + 1}`;
+  }
+  return cleaned;
+}
+
+export interface ParsedHadithTextResult {
+  paragraphs: string[];
+  footnotes: string[];
+  cleanGrade: string;
+}
+
+/**
+ * Recovers misclassified wall-of-text grades (such as Hisnul Muslim entries where prose was
+ * dumped into `grade`), extracts trailing numbered footnote citations into a compact footnote
+ * list, and splits long numbered walls of text into breathable paragraphs.
+ */
+export function parseHadithBodyAndFootnotes(input: {
+  englishTranslation?: string;
+  translatedOverride?: string;
+  grade?: string;
+  references?: string;
+}): ParsedHadithTextResult {
+  const rawGrade = (input.grade || '').trim();
+  const hasExplicitTranslation = Boolean((input.translatedOverride || input.englishTranslation || '').trim());
+  const gradeIsMisplacedBody = !hasExplicitTranslation && rawGrade.length > 120;
+
+  const cleanGrade = gradeIsMisplacedBody ? '' : dedupeHadithGrade(rawGrade);
+  let body = (
+    input.translatedOverride ||
+    input.englishTranslation ||
+    (gradeIsMisplacedBody ? rawGrade : '')
+  ).trim();
+
+  const footnotes: string[] = [];
+
+  if (body) {
+    // Detect trailing numbered citation block: e.g. " 1 : Al-Baqarah 2:152 2 : Al-Ahzab 33:41 ..."
+    const footnoteBlockMatch = body.match(/\s+(1\s+:\s+[^\n]+(?:\s+2\s+:\s+.+))$/s);
+    if (footnoteBlockMatch && typeof footnoteBlockMatch.index === 'number') {
+      const refTail = footnoteBlockMatch[1].trim();
+      body = body.slice(0, footnoteBlockMatch.index).trim();
+      const splitRefs = refTail
+        .split(/(?=(?:^|\s)\d{1,2}\s+:\s+)/g)
+        .map((r) => r.trim())
+        .filter(Boolean);
+      footnotes.push(...splitRefs);
+    }
+
+    // Split wall-of-text body at numbered inline reference markers (" 1 And He said:", " 2 ...", etc.)
+    const hasNumberedBreaks = /\s+\d{1,2}\s+(?:\.\s*)?(?:And |The |Abdullah |Uqbah |Allah |[A-Z"“])/.test(body);
+    if (hasNumberedBreaks && body.length > 260 && !body.includes('\n\n')) {
+      body = body.replace(
+        /(["”'.?!])\s+(\d{1,2})\s+(?:\.\s*)?(?=[A-Z"“])/g,
+        '$1 [$2]\n\n'
+      );
+      body = body.replace(/\s+(\d{1,2})\s*$/g, ' [$1]');
+    }
+  }
+
+  if (input.references && input.references.trim()) {
+    const existingRefs = input.references
+      .split(/\n+|(?=(?:^|\s)\d{1,2}\s+:\s+)/g)
+      .map((r) => r.trim())
+      .filter(Boolean);
+    for (const ref of existingRefs) {
+      if (!footnotes.includes(ref)) {
+        footnotes.push(ref);
+      }
+    }
+  }
+
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  return {
+    paragraphs,
+    footnotes,
+    cleanGrade,
+  };
+}

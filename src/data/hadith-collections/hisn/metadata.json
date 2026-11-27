@@ -11,18 +11,18 @@
   "totalBooks": 2,
   "books": [
     {
-      "number": "(more)",
-      "name": "(more)",
-      "arabicName": "",
-      "hadithCount": 1,
-      "description": "A section containing authenticated traditions on this unique subject, compiled by the author."
-    },
-    {
-      "number": "Merits",
-      "name": "of Dhikr",
-      "arabicName": "",
+      "number": "1",
+      "name": "Merits of Dhikr",
+      "arabicName": "فضل الذكر",
       "hadithCount": 1,
       "description": "Encouragement towards continuous remembrance of Allah (Dhikr) and the immense rewards it carries."
+    },
+    {
+      "number": "2",
+      "name": "Book 2 — Remembrances & Etiquette of Dhikr",
+      "arabicName": "أذكار وآداب الذكر",
+      "hadithCount": 1,
+      "description": "Authenticated prophetic supplications and traditions on the excellence of remembering Allah."
     }
   ]
 }

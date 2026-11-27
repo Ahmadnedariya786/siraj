@@ -340,7 +340,9 @@ const Hadith = () => {
                   </div>
 
                   {/* Hadith Arabic text */}
-                  <ReaderArabicBlock text={hadith.hadith} arabicSize={prefs.arabicSize} />
+                  {hadith.hadith && hadith.hadith.trim() && hadith.hadith !== "No hadith text available" && (
+                    <ReaderArabicBlock text={hadith.hadith} arabicSize={prefs.arabicSize} />
+                  )}
 
                   {/* Narrator (راوی) */}
                   {narratorLabel && (
@@ -359,7 +361,12 @@ const Hadith = () => {
 
                   {/* Translation in Selected Language */}
                   {(translatedText || hadith.translation) && (
-                    <div className="reader-prose-measure">
+                    <div
+                      key={`${hadith.number}-${contentLang}`}
+                      className="reader-prose-measure"
+                      dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+                      style={{ textAlign: actualLang === 'ur' ? 'right' : 'left' }}
+                    >
                       <ManuscriptDivider />
                       <ReaderStatusBanner
                         targetLang={contentLang}
@@ -370,7 +377,7 @@ const Hadith = () => {
                         isStreaming={isTranslating}
                         onRetry={() => setRetryTick((n) => n + 1)}
                       />
-                      <div className={isTranslating ? 'opacity-60 transition-opacity' : ''}>
+                      <div>
                         <BookProseParagraph
                           text={translatedText || formatIslamicProse(hadith.translation || '', 'en')}
                           actualLang={actualLang}

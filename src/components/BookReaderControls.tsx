@@ -415,6 +415,7 @@ export function BookProseParagraph({
     <p
       dir={dir}
       data-reader-prose="true"
+      data-align={textAlign}
       className={`reader-prose-block ${textAlignClass} ${isUrdu ? 'font-urdu' : ''} break-words ${className}`}
       style={{
         fontSize: `${resolvedSize}px`,
@@ -463,6 +464,7 @@ export function ReaderHeading({
     <Tag
       dir={dir}
       data-reader-heading={level}
+      data-align={textAlign}
       className={`reader-heading font-bold text-[var(--text-primary)] ${textAlignClass} ${
         isUrdu ? 'font-urdu' : ''
       } ${clampTwoLines ? 'line-clamp-2' : ''} break-words ${className}`}
@@ -493,13 +495,16 @@ export function ReaderArabicBlock({
   onClick,
 }: ReaderArabicBlockProps) {
   const { prefs } = useBookReaderPrefs();
+  if (!text || !text.trim()) {
+    return null;
+  }
   const resolvedSize = arabicSize ?? prefs.arabicSize;
 
   return (
     <div
       onClick={onClick}
       className={`my-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] border-r-[3px] border-r-[var(--accent)] ${
-        onClick ? 'cursor-pointer hover:border-[var(--accent)] transition-colors' : ''
+        onClick ? 'cursor-pointer hover:border-[var(--accent)]' : ''
       } ${className}`}
       style={{ padding: '12px' }}
     >
@@ -517,6 +522,72 @@ export function ReaderArabicBlock({
         {text}
       </p>
     </div>
+  );
+}
+
+/**
+ * BiDi-isolated renderer for mixed Latin + Arabic titles so RTL tokens never flip
+ * or reorder surrounding English phrases (e.g. "Merits of Dhikr / فضل الذكر").
+ */
+export function MixedBidiTitle({
+  latin,
+  arabic,
+  separator = ' ',
+  className = '',
+}: {
+  latin?: string;
+  arabic?: string;
+  separator?: string;
+  className?: string;
+}) {
+  const cleanLatin = (latin || '').trim();
+  const cleanArabic = (arabic || '').trim();
+  if (!cleanLatin && !cleanArabic) return null;
+
+  return (
+    <span className={className}>
+      {cleanLatin && (
+        <bdi dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+          {cleanLatin}
+        </bdi>
+      )}
+      {cleanLatin && cleanArabic && <span aria-hidden="true">{separator}</span>}
+      {cleanArabic && (
+        <bdi
+          dir="rtl"
+          className="font-arabic"
+          style={{ unicodeBidi: 'isolate', direction: 'rtl' }}
+        >
+          {cleanArabic}
+        </bdi>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Compact monospace footnote citations rendered cleanly under multi-paragraph
+ * hadiths (such as Hisnul Muslim numbered Quran & Hadith references).
+ */
+export function HadithFootnotesBlock({ footnotes }: { footnotes: string[] }) {
+  if (!footnotes || footnotes.length === 0) return null;
+  return (
+    <aside
+      data-testid="hadith-footnotes"
+      aria-label="Hadith References"
+      dir="ltr"
+      style={{ unicodeBidi: 'isolate' }}
+      className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--accent-soft)] px-3 py-2.5 space-y-1 text-[11px] font-mono leading-relaxed text-[var(--text-secondary)] text-left"
+    >
+      <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-text)]">
+        References
+      </p>
+      {footnotes.map((note, idx) => (
+        <p key={idx} className="break-words">
+          {note}
+        </p>
+      ))}
+    </aside>
   );
 }
 

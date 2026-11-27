@@ -149,7 +149,7 @@ export function syncReaderCssVariables(prefs: BookReaderPrefs): void {
   rootStyle.setProperty('--reader-arabic-size', `${prefs.arabicSize}px`);
   rootStyle.setProperty('--reader-ltr-line-height', String(getReaderLineHeight('en', prefs.lineHeightMode)));
   rootStyle.setProperty('--reader-rtl-line-height', String(getReaderLineHeight('ur', prefs.lineHeightMode)));
-  rootStyle.setProperty('--reader-arabic-line-height', '2');
+  rootStyle.setProperty('--reader-arabic-line-height', String(getArabicLineHeight(prefs.lineHeightMode)));
   rootStyle.setProperty('--reader-paragraph-spacing', `${prefs.paragraphSpacing}em`);
   rootStyle.setProperty('--reader-measure-cap', `${prefs.measureCapCh}ch`);
 }
@@ -308,10 +308,12 @@ export function getReaderLineHeight(
 }
 
 /**
- * Arabic blocks strictly render at line-height 2.0, right-aligned (never justify).
+ * Arabic blocks strictly right-align (never justify) and follow active lineHeightMode
+ * (Compact 1.85 / Standard 2.0 / Relaxed 2.25).
  */
-export function getArabicLineHeight(_mode?: ReaderLineHeightMode): number {
-  void _mode;
+export function getArabicLineHeight(mode: ReaderLineHeightMode = 'standard'): number {
+  if (mode === 'compact') return 1.85;
+  if (mode === 'relaxed') return 2.25;
   return 2.0;
 }
 

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookIcon, Users, Calendar } from "lucide-react";
+import { BookIcon, Users } from "lucide-react";
 import { HadithCollection } from "@/data/hadith-collections";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
-import { formatCollectionHadithCount, formatCompilerDeath } from "@/lib/hadith-utils";
+import { formatCollectionHadithCount, formatCompilerLifespan } from "@/lib/hadith-utils";
 
 interface CollectionCardProps {
   collection: HadithCollection;
@@ -28,11 +28,11 @@ export function CollectionCard({ collection, onClick }: CollectionCardProps) {
   }, [collection.description, contentLang]);
 
   const countsText = formatCollectionHadithCount(collection.totalHadith, collection.totalNarrations);
-  const diedText = formatCompilerDeath(collection.death);
+  const lifespanText = formatCompilerLifespan(collection.compilerPeriod, collection.death);
 
   return (
     <Card
-      className="group cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.01] border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40"
+      className="group cursor-pointer border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40"
       onClick={onClick}
     >
       <CardContent className="p-4 sm:p-5 space-y-3.5">
@@ -69,32 +69,26 @@ export function CollectionCard({ collection, onClick }: CollectionCardProps) {
           {desc}
         </p>
 
-        {/* Canonical Counts & Death Metadata (Full legible copy without clipping) */}
+        {/* Canonical Counts & Books Metadata */}
         <div className="space-y-2 pt-1">
           <div className="flex items-start gap-2 text-xs text-[var(--text-primary)]">
             <Users className="w-3.5 h-3.5 text-[var(--accent)] shrink-0 mt-0.5" />
             <span className="font-semibold leading-snug break-words">{countsText}</span>
           </div>
-          <div className="flex items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
-            <span className="inline-flex items-center gap-1.5">
-              <BookIcon className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
-              <span className="font-semibold text-[var(--text-primary)]">{collection.totalBooks}</span> Books
-            </span>
-            {diedText && (
-              <span className="inline-flex items-center gap-1.5 shrink-0">
-                <Calendar className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
-                <span className="font-semibold text-[var(--text-primary)]">{diedText}</span>
-              </span>
-            )}
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+            <BookIcon className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
+            <span className="font-semibold text-[var(--text-primary)]">{collection.totalBooks}</span> Books
           </div>
         </div>
 
-        {/* Author Info */}
+        {/* Author & Single Lifespan */}
         <div className="pt-2.5 border-t border-[var(--border)]">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{collection.author}</p>
-              <p className="text-[11px] text-[var(--text-secondary)] truncate">{collection.compilerPeriod}</p>
+              {lifespanText && (
+                <p className="text-[11px] font-mono text-[var(--text-secondary)] truncate">{lifespanText}</p>
+              )}
             </div>
             <div className="text-right shrink-0">
               <p className="text-xs text-[var(--accent-text)] font-medium">Explore</p>

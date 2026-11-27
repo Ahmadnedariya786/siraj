@@ -2901,10 +2901,20 @@
   word-break: break-word;
 }
 
+.reader-prose-block[data-align="left"],
+.reader-heading[data-align="left"] {
+  text-align: left !important;
+}
+
+.reader-prose-block[data-align="right"],
+.reader-heading[data-align="right"] {
+  text-align: right !important;
+}
+
 .reader-arabic-block {
   font-family: var(--font-arabic) !important;
   text-align: right !important;
-  line-height: 2 !important;
+  line-height: var(--reader-arabic-line-height, 2);
   unicode-bidi: plaintext;
 }
 

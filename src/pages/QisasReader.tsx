@@ -203,6 +203,8 @@ export default function QisasReader() {
         return;
       }
 
+      setTranslatedStory(cleanParas.join("\n\n"));
+      setActualLang("en");
       setIsTranslating(true);
       setOfflineFallback(false);
       setDoneChunks(0);
@@ -674,8 +676,13 @@ export default function QisasReader() {
           )}
         </div>
 
-        {/* Continuous Story Reading Body (68ch measure cap on wide viewports) */}
-        <article className="reader-prose-measure px-4 pt-5 pb-6">
+        {/* Continuous Story Reading Body (68ch measure cap on wide viewports, strict direction align, instant swap) */}
+        <article
+          key={`${prophet.id}-${contentLang}`}
+          dir={actualLang === "ur" ? "rtl" : "ltr"}
+          style={{ textAlign: actualLang === "ur" ? "right" : "left" }}
+          className="reader-prose-measure px-4 pt-5 pb-6"
+        >
           <ReaderStatusBanner
             targetLang={contentLang}
             actualLang={actualLang}

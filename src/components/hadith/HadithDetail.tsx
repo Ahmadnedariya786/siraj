@@ -10,9 +10,10 @@ import type { EnhancedHadith } from "@/data/hadith-collections";
 import { getCollectionByName } from "@/data/hadith-collections";
 import {
   getGradeBadgeClass,
-  dedupeHadithGrade,
   formatCollectionHadithCount,
-  formatCompilerDeath,
+  formatCompilerLifespan,
+  parseHadithBodyAndFootnotes,
+  sanitizeHadithBookTitle,
 } from "@/lib/hadith-utils";
 import { useHadithBookmarks } from "@/hooks/useHadithBookmarks";
 import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
@@ -28,6 +29,8 @@ import {
   BookProseParagraph,
   ChapterOpenerOrnament,
   CopyHadithMenuButton,
+  HadithFootnotesBlock,
+  MixedBidiTitle,
   ReaderArabicBlock,
   ReaderContinueChip,
   ReaderHeading,
@@ -72,7 +75,12 @@ export function HadithDetail() {
 
   const runTranslation = useCallback(async (mountedCheck: () => boolean) => {
     if (!hadith) return;
-    const cleanEn = formatIslamicProse(hadith.englishTranslation || '', 'en');
+    const parsedEn = parseHadithBodyAndFootnotes({
+      englishTranslation: hadith.englishTranslation,
+      grade: hadith.grade,
+      references: hadith.references,
+    });
+    const cleanEn = formatIslamicProse(parsedEn.paragraphs.join('\n\n'), 'en');
     if (contentLang === 'en') {
       if (mountedCheck()) {
         setTranslatedText(cleanEn);
@@ -83,6 +91,13 @@ export function HadithDetail() {
         setSource('original');
       }
       return;
+    }
+
+    // Instant reset to avoid cross-hadith / cross-language ghosting
+    if (mountedCheck()) {
+      setTranslatedText(cleanEn);
+      setTranslatedNarrator(hadith.narrator || '');
+      setActualLang('en');
     }
 
     const [res, tNarr] = await Promise.all([
@@ -271,8 +286,24 @@ export function HadithDetail() {
 
   const tags = Array.isArray(hadith.tags) ? hadith.tags : [];
   const bookmarked = isBookmarked(collection!, hadith.hadithNumber);
-  const cleanGrade = dedupeHadithGrade(hadith.grade);
+  const baseParsed = parseHadithBodyAndFootnotes({
+    englishTranslation: hadith.englishTranslation,
+    grade: hadith.grade,
+    references: hadith.references,
+  });
+  const cleanGrade = baseParsed.cleanGrade;
   const collectionMeta = getCollectionByName(hadith.collection ?? collection ?? '');
+  const cleanBookTitle = sanitizeHadithBookTitle(hadith.bookNumber ?? book, hadith.bookName, 0);
+  const hasArabic = Boolean(hadith.arabic && hadith.arabic.trim());
+  const activeTranslationBody =
+    translatedText || formatIslamicProse(baseParsed.paragraphs.join('\n\n'), 'en');
+  const displayParagraphs = activeTranslationBody
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const lifespanText = collectionMeta
+    ? formatCompilerLifespan(collectionMeta.compilerPeriod, collectionMeta.death)
+    : '';
 
   return (
     <div
@@ -304,7 +335,9 @@ export function HadithDetail() {
                 style={{ unicodeBidi: 'plaintext' }}
                 className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-snug mt-0.5"
               >
-                {collectionMeta?.title ?? hadith.collection ?? collection} — {hadith.bookName ?? `Book ${book}`}
+                <MixedBidiTitle
+                  latin={`${collectionMeta?.title ?? hadith.collection ?? collection} — ${cleanBookTitle}`}
+                />
               </p>
             </div>
           </div>
@@ -370,7 +403,7 @@ export function HadithDetail() {
           <ReaderContinueChip onContinue={handleContinueScroll} />
         )}
 
-        <Card className="border-[var(--border)] bg-[var(--surface)]">
+        <Card key={`${collection}-${book}-${hadith.hadithNumber}-${contentLang}`} className="border-[var(--border)] bg-[var(--surface)]">
           <CardContent className="p-4 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline">#{hadith.hadithNumber}</Badge>
@@ -386,11 +419,18 @@ export function HadithDetail() {
               )}
             </div>
 
-            <ReaderArabicBlock text={hadith.arabic} arabicSize={prefs.arabicSize} />
+            {hasArabic && (
+              <>
+                <ReaderArabicBlock text={hadith.arabic} arabicSize={prefs.arabicSize} />
+                <ManuscriptDivider />
+              </>
+            )}
 
-            <ManuscriptDivider />
-
-            <div className="space-y-3 reader-prose-measure">
+            <div
+              className="space-y-3 reader-prose-measure"
+              dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+              style={{ textAlign: actualLang === 'ur' ? 'right' : 'left' }}
+            >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <ReaderHeading
                   level="h3"
@@ -411,15 +451,18 @@ export function HadithDetail() {
                 onRetry={() => setRetryTick((n) => n + 1)}
               />
 
-              {(translatedText || hadith.englishTranslation) && (
+              {displayParagraphs.map((para, pIdx) => (
                 <BookProseParagraph
-                  text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
+                  key={pIdx}
+                  text={para}
                   actualLang={actualLang}
                   fontSize={prefs.bodySize}
                   lineSpacing={prefs.lineHeightMode}
                   className="text-[var(--text-primary)]"
                 />
-              )}
+              ))}
+
+              <HadithFootnotesBlock footnotes={baseParsed.footnotes} />
             </div>
 
             {hadith.narrator && (
@@ -455,14 +498,14 @@ export function HadithDetail() {
                   {formatCollectionHadithCount(collectionMeta.totalHadith, collectionMeta.totalNarrations)}
                 </div>
               )}
-              {collectionMeta?.death && (
+              {lifespanText && (
                 <div>
                   <span className="font-medium text-[var(--text-primary)]">Compiler:</span>{' '}
-                  {formatCompilerDeath(collectionMeta.death)}
+                  {lifespanText}
                 </div>
               )}
               {hadith.chapterName && <div><span className="font-medium text-[var(--text-primary)]">Chapter:</span> {hadith.chapterName}</div>}
-              {hadith.bookName && <div><span className="font-medium text-[var(--text-primary)]">Book:</span> {hadith.bookName}</div>}
+              {cleanBookTitle && <div><span className="font-medium text-[var(--text-primary)]">Book:</span> <MixedBidiTitle latin={cleanBookTitle} /></div>}
               <div><span className="font-medium text-[var(--text-primary)]">Hadith Number:</span> {hadith.hadithNumber}</div>
             </div>
           </CardContent>

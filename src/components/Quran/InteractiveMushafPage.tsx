@@ -32,6 +32,7 @@ import {
 import { Volume2, BookOpen, X, Sparkles, Loader2, Film } from 'lucide-react';
 import { MushafSurahPages, type MushafReadingMode } from './MushafSurahPages';
 import { getSajdahForAyah, useSajdahTracker } from '@/lib/sajdah-tracker';
+import { useBookReaderPrefs, getArabicLineHeight } from '@/lib/reader-typography';
 
 export type InteractiveMushafSurface = 'jewel' | 'parchment' | 'paper' | 'night' | 'classic';
 
@@ -322,6 +323,7 @@ function InteractiveMushafPageComponent({
   onPageLoaded,
 }: InteractiveMushafPageProps) {
   const { madhab: activeMadhab } = useSajdahTracker();
+  const { prefs: readerPrefs } = useBookReaderPrefs();
   const [pageData, setPageData] = useState<InteractivePageData | null>(() => getCachedMushafPageSync(pageNumber));
   const [loading, setLoading] = useState<boolean>(() => !getCachedMushafPageSync(pageNumber));
   const [activeFormat, setActiveFormat] = useState<MushafLineFormat>(() => lineFormat || getMushafLineFormat());
@@ -1648,8 +1650,15 @@ function InteractiveMushafPageComponent({
 
               {/* Vocalized Arabic Word */}
               <div
-                className="text-center font-arabic text-2xl font-bold text-[var(--text-primary)] my-1"
+                className="reader-arabic-block font-arabic font-bold text-[var(--text-primary)] my-1 text-right"
                 dir="rtl"
+                data-reader-arabic="true"
+                style={{
+                  fontSize: `${readerPrefs.arabicSize}px`,
+                  lineHeight: getArabicLineHeight(readerPrefs.lineHeightMode),
+                  textAlign: 'right',
+                  unicodeBidi: 'plaintext',
+                }}
               >
                 {selectedWord.word.text_uthmani}
               </div>

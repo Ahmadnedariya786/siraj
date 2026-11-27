@@ -58,6 +58,7 @@ const PUBLIC_BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const HADITH_DATA_BASE = `${PUBLIC_BASE}/data/hadith-collections`;
 
 import { loadGzippedJson, isGzipSupported } from "@/lib/gzip-loader";
+import { sanitizeHadithBookNumber, sanitizeHadithBookTitle } from "@/lib/hadith-utils";
 
 /**
  * Fetch JSON with transparent gzip support.
@@ -282,13 +283,31 @@ function titleFromSlug(slug: string): string {
 }
 
 function normalizeBook(raw: Partial<HadithBook>, index: number): HadithBook {
+  const number = sanitizeHadithBookNumber(raw.number, index);
+  const name = sanitizeHadithBookTitle(raw.number, raw.name, index);
+  const rawArabic = (raw.arabicName || "").trim();
+  const safeArabic =
+    !rawArabic || rawArabic === "باب" || /\(\s*more\s*\)/i.test(rawArabic)
+      ? (/^\d+$/.test(number) ? `الباب ${number}` : "")
+      : rawArabic;
+
   return {
-    number: String(raw.number ?? index + 1),
-    name: raw.name ?? `Book ${index + 1}`,
-    arabicName: raw.arabicName ?? "",
+    number,
+    name,
+    arabicName: safeArabic,
     hadithCount: Number(raw.hadithCount ?? 0),
     chapters: raw.chapters,
     description: raw.description,
+  };
+}
+
+function normalizeHadithEntry(raw: EnhancedHadith, index: number): EnhancedHadith {
+  const cleanNum = sanitizeHadithBookNumber(raw.bookNumber, index);
+  const cleanName = sanitizeHadithBookTitle(raw.bookNumber, raw.bookName, index);
+  return {
+    ...raw,
+    bookNumber: cleanNum,
+    bookName: cleanName,
   };
 }
 
@@ -407,7 +426,9 @@ export async function loadCollectionHadiths(
       `${HADITH_DATA_BASE}/${slug}/book-1.json`
     ));
 
-  const arr = Array.isArray(data) ? data : [];
+  const arr = Array.isArray(data)
+    ? data.map((item, idx) => normalizeHadithEntry(item, idx))
+    : [];
   hadithCache.set(cacheKey, arr);
   return arr;
 }

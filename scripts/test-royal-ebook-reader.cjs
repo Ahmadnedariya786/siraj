@@ -282,8 +282,8 @@ async function runTests() {
 
   const customReq = (id) => (capMocks[id] ? capMocks[id] : require(id));
 
-  // ── SUITE 1: Typography Store & Computed Style Assertions across 3 Readers ──
-  console.log('\n[1/5] Typography Store Computed-Style Assertions across Seerah, Prophets & Hadith...');
+  // ── SUITE 1: Typography Store & Computed Style Assertions across Readers ──
+  console.log('\n[1/6] Typography Store Computed-Style Assertions across Seerah, Prophets, Hadith & Daily Hadith...');
   const typoMod = await bundleModule('src/lib/reader-typography.ts', customReq);
   const controlsMod = await bundleModule('src/components/BookReaderControls.tsx', customReq);
 
@@ -301,6 +301,9 @@ async function runTests() {
   assert.strictEqual(typoMod.getReaderLineHeight('ur', 'standard'), 2.5);
   assert.strictEqual(typoMod.getReaderLineHeight('ur', 'relaxed'), 2.8);
   assert.strictEqual(typoMod.getArabicLineHeight(), 2.0);
+  assert.strictEqual(typoMod.getArabicLineHeight('compact'), 1.85);
+  assert.strictEqual(typoMod.getArabicLineHeight('standard'), 2.0);
+  assert.strictEqual(typoMod.getArabicLineHeight('relaxed'), 2.25);
 
   // Save custom store size = 17px, arabicSize = 26px, lineHeightMode = 'relaxed'
   typoMod.saveBookReaderPrefs({ bodySize: 17, arabicSize: 26, lineHeightMode: 'relaxed' });
@@ -359,7 +362,7 @@ async function runTests() {
   assert.ok(gatedMarkup.includes('aria-busy="true"'), 'Font gate must block fallback naskh flash with skeleton');
   fontLoadedFlag = true;
 
-  // Test Arabic block computed styles
+  // Test Arabic block computed styles (26px + relaxed 2.25 LH + padding:12px + text-align:right)
   const renderedArabic = ReactDOMServer.renderToStaticMarkup(
     React.createElement(controlsMod.ReaderArabicBlock, {
       text: 'إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ',
@@ -367,8 +370,9 @@ async function runTests() {
   );
   assert.ok(renderedArabic.includes('padding:12px'), 'Arabic block padding must be 12px');
   assert.ok(renderedArabic.includes('font-size:26px'), 'Arabic font-size must come from store (26px)');
-  assert.ok(renderedArabic.includes('line-height:2'), 'Arabic line-height must be 2.0');
+  assert.ok(renderedArabic.includes('line-height:2.25'), 'Relaxed Arabic line-height must be 2.25');
   assert.ok(renderedArabic.includes('text-align:right'), 'Arabic block must be right-aligned (never justify)');
+  assert.ok(!renderedArabic.includes('text-align:justify'), 'Arabic block must never justify');
 
   // Test HadithDetail, SeerahReader, QisasReader store wiring in source & rendered headings
   const headingH1 = ReactDOMServer.renderToStaticMarkup(
@@ -420,7 +424,7 @@ async function runTests() {
   console.log('  PASS: Computed styles (15px/17px/18px body, 22px/26px Arabic, 1.6-1.9 / 2.2-2.8 LH, 0.9em, 68ch, Nastaliq gate)');
 
   // ── SUITE 2: BiDi Snapshots ──────────────────────────────────────────────
-  console.log('\n[2/5] BiDi Snapshots...');
+  console.log('\n[2/6] BiDi Snapshots...');
   const bidiSample = typoMod.formatIslamicProse(
     'Allah (سُبْحَٰنَهُۥ وَتَعَٰلَىٰ) Tells the Angels of His New Creation:',
     'en'
@@ -442,7 +446,7 @@ async function runTests() {
   console.log('  PASS: BiDi snapshots verified (dir="auto", unicode-bidi: plaintext, no ":New Creation")');
 
   // ── SUITE 3: Honorifics Snapshots (Adam & Lut in all 4 languages + full JSON sweep) ──
-  console.log('\n[3/5] Honorifics Snapshots (Adam & Lut in EN/UR/GU/HI + Data Audit)...');
+  console.log('\n[3/6] Honorifics Snapshots (Adam & Lut in EN/UR/GU/HI + Data Audit)...');
   const qisasData = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/data/qisas/qisas.json'), 'utf8'));
   const seerahData = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/data/seerah/sirah.json'), 'utf8'));
 
@@ -515,7 +519,7 @@ async function runTests() {
   console.log('  PASS: Adam & Lut honorifics snapshots verified across EN, UR, GU, HI (0 empty ())');
 
   // ── SUITE 4: Denominator Lock & Cache-Hit Timing (<50ms second open) ─────
-  console.log('\n[4/5] Translation Streaming Denominator Lock & Cache-Hit Timing (<50ms)...');
+  console.log('\n[4/6] Translation Streaming Denominator Lock & Cache-Hit Timing (<50ms)...');
   const translatorMod = await bundleModule('src/lib/content-translator.ts', customReq);
   const longPara = 'This is a comprehensive paragraph from Ar-Raheeq Al-Makhtum detailing Makkah and the Quraish lineage before the coming of Islam. '.repeat(10).trim();
   assert.ok(longPara.length > 850, 'Test paragraph must exceed 850 chars to test denominator lock');
@@ -568,7 +572,7 @@ async function runTests() {
   console.log(`  PASS: Denominator locked at ${lockedN}/${lockedN}; second open cache-hit = ${cacheElapsedMs.toFixed(2)}ms (<50ms)`);
 
   // ── SUITE 5: Chrome, Counts, Tags, Copy Menu, Scroll & Token Audits ──────
-  console.log('\n[5/5] Counts Copy, Tag Cache/Skeletons, Truncation & Token Checks...');
+  console.log('\n[5/6] Counts Copy, Tag Cache/Skeletons, Truncation & Token Checks...');
   const hadithCollectionsData = await bundleModule('src/data/hadith-collections/index.ts', customReq);
   const hadithUtilsMod = await bundleModule('src/lib/hadith-utils.ts', customReq);
   const bukhari = hadithCollectionsData.getCollectionByName('bukhari');
@@ -631,6 +635,108 @@ async function runTests() {
   assert.ok(indexCss.includes('background-color: var(--surface-2);') && indexCss.includes('color-mix(in srgb'), 'Era chips must provide plain CSS fallback before color-mix');
 
   console.log('  PASS: Counts copy, tag cache/skeletons, scroll persistence, copy menu, truncation & token checks');
+
+  // ── SUITE 6: Hotfix Regression — Arabic Surfaces, Alignment, Hisnul Muslim, Lifespan & No Ghosting ──
+  console.log('\n[6/6] Hotfix Suite (5-Reader Alignment, Hisnul Muslim, Empty Arabic Guard, Lifespan, Instant Swap)...');
+
+  // 6a. Store arabicSize + lineHeight propagation across DailyHadith, Word Study Popup, HadithBookContent, HadithDetail, Seerah/Qisas
+  typoMod.saveBookReaderPrefs({ bodySize: 16, arabicSize: 28, lineHeightMode: 'compact' });
+  const dailyHadithCompMod = await bundleModule('src/components/DailyHadith.tsx', customReq);
+  const dailyHtml = ReactDOMServer.renderToStaticMarkup(React.createElement(dailyHadithCompMod.DailyHadith));
+  assert.ok(dailyHtml.includes('font-size:28px'), 'DailyHadith Arabic must match store (28px)');
+  assert.ok(dailyHtml.includes('font-size:16px'), 'DailyHadith body must match store (16px)');
+  assert.ok(dailyHtml.includes('line-height:1.85'), 'Compact Arabic line-height must be 1.85');
+  assert.ok(dailyHtml.includes('text-align:left'), 'DailyHadith LTR body must be left-aligned');
+  assert.ok(dailyHtml.includes('text-align:right'), 'DailyHadith Arabic must be right-aligned');
+
+  const hadithDetail28Html = ReactDOMServer.renderToStaticMarkup(React.createElement(hadithDetailMod.HadithDetail));
+  assert.ok(hadithDetail28Html.includes('font-size:28px') && hadithDetail28Html.includes('font-size:16px'));
+
+  const wordPopupSrc = fs.readFileSync(path.join(ROOT, 'src/components/Quran/InteractiveMushafPage.tsx'), 'utf8');
+  assert.ok(wordPopupSrc.includes('useBookReaderPrefs') && wordPopupSrc.includes('readerPrefs.arabicSize'), 'Word-study popup must wire reader-typography arabicSize');
+  assert.ok(wordPopupSrc.includes('getArabicLineHeight(readerPrefs.lineHeightMode)'), 'Word-study popup must wire Arabic lineHeight');
+  assert.ok(!wordPopupSrc.includes('className="text-center font-arabic text-2xl font-bold'), 'Word-study popup Arabic must not be centered hardcoded text-2xl');
+
+  const enhancedDailySrc = fs.readFileSync(path.join(ROOT, 'src/components/EnhancedDailyHadith.tsx'), 'utf8');
+  assert.ok(enhancedDailySrc.includes('fontSize: `${prefs.arabicSize}px`') && enhancedDailySrc.includes('getArabicLineHeight(prefs.lineHeightMode)'));
+  assert.ok(!enhancedDailySrc.includes('isAnimating'), 'EnhancedDailyHadith must swap instantly without isAnimating opacity-0 fade');
+
+  // 6b. Prophet Nuh English body left-alignment audit across all 5 readers
+  const nuh = qisasData.prophets.find((p) => p.id === 'prophet-nuh');
+  assert.ok(nuh, 'Prophet Nuh must exist in qisas.json');
+  const nuhParas = qisasMod.buildCleanStoryParagraphs(nuh.story, 'en');
+  for (const para of nuhParas.slice(0, 8)) {
+    if (translatorMod.isPureArabicBlock(para)) continue;
+    const paraHtml = ReactDOMServer.renderToStaticMarkup(
+      React.createElement(controlsMod.BookProseParagraph, { text: para, actualLang: 'en' })
+    );
+    const pStyle = parseStyleAttr((paraHtml.match(/style="([^"]+)"/) || [])[1] || '');
+    assert.strictEqual(pStyle['text-align'], 'left', 'Prophet Nuh English prose MUST be left-aligned');
+    assert.notStrictEqual(pStyle['text-align'], 'center', 'Prophet Nuh English prose must NEVER be centered');
+    assert.ok(paraHtml.includes('data-align="left"'));
+  }
+
+  // Verify QisasReader & SeerahReader <article> enforce left alignment for LTR
+  const qisasSrc = fs.readFileSync(path.join(ROOT, 'src/pages/QisasReader.tsx'), 'utf8');
+  const seerahSrc = fs.readFileSync(path.join(ROOT, 'src/pages/SeerahReader.tsx'), 'utf8');
+  assert.ok(qisasSrc.includes('key={`${prophet.id}-${contentLang}`}'), 'QisasReader must key prose article to prevent ghosting');
+  assert.ok(seerahSrc.includes('key={`${chapter.id}-${contentLang}`}'), 'SeerahReader must key prose article to prevent ghosting');
+  assert.ok(!dailyHadithPageSrc.includes('opacity-60 transition-opacity'), 'Hadith.tsx must swap translations without opacity crossfade');
+
+  // 6c. Hisnul Muslim fixes: zero "(more)", wall-of-text paragraph split + mono footnotes, empty Arabic guard, BiDi isolation
+  const hisnMeta = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/data/hadith-collections/hisn/metadata.json'), 'utf8'));
+  const hisnHadiths = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/data/hadith-collections/hisn/hadiths.json'), 'utf8'));
+  assert.ok(!JSON.stringify(hisnMeta).includes('(more)'), 'hisn/metadata.json must NEVER contain (more)');
+  assert.ok(!JSON.stringify(hisnHadiths).includes('(more)'), 'hisn/hadiths.json must NEVER contain (more)');
+
+  assert.strictEqual(hadithUtilsMod.sanitizeHadithBookNumber('(more)', 0), '1');
+  assert.strictEqual(hadithUtilsMod.sanitizeHadithBookTitle('(more)', '(more)', 1), 'Book 2');
+  assert.strictEqual(hadithUtilsMod.sanitizeHadithBookTitle('Merits', 'of Dhikr', 0), 'Merits of Dhikr');
+
+  // Empty Arabic guard (zero empty rounded box)
+  const emptyArabicHtml = ReactDOMServer.renderToStaticMarkup(
+    ReactDOMServer.renderToStaticMarkup
+      ? React.createElement(controlsMod.ReaderArabicBlock, { text: '   ' })
+      : null
+  );
+  assert.strictEqual(emptyArabicHtml, '', 'Empty Arabic string must render NO box');
+
+  // Wall-of-text splitting + compact monospace footnote block
+  const legacyWallHadith = {
+    englishTranslation: '',
+    grade: 'Allah said: "Remember Me." 1 And He said: "O you who believe, remember Allah." 2 And the Prophet said: "Remember your Lord." 3 ' +
+      'Long extra narration text to trigger wall-of-text recovery cleanly across numbered entries. '.repeat(3) +
+      '1 : Al-Baqarah 2:152 2 : Al-Ahzab 33:41 3 : Sahih al-Bukhari 8/171',
+  };
+  const parsedWall = hadithUtilsMod.parseHadithBodyAndFootnotes(legacyWallHadith);
+  assert.ok(parsedWall.paragraphs.length >= 2, 'Wall-of-text hadith must split into multiple paragraphs');
+  assert.strictEqual(parsedWall.footnotes.length, 3, 'References must be extracted into footnotes');
+  const footnoteHtml = ReactDOMServer.renderToStaticMarkup(
+    React.createElement(controlsMod.HadithFootnotesBlock, { footnotes: parsedWall.footnotes })
+  );
+  assert.ok(footnoteHtml.includes('data-testid="hadith-footnotes"') && footnoteHtml.includes('font-mono') && footnoteHtml.includes('Al-Baqarah 2:152'));
+
+  // BiDi isolation for mixed titles
+  const mixedTitleHtml = ReactDOMServer.renderToStaticMarkup(
+    React.createElement(controlsMod.MixedBidiTitle, { latin: 'Merits of Dhikr', arabic: 'فضل الذكر' })
+  );
+  assert.ok(
+    mixedTitleHtml.includes('<bdi dir="ltr"') &&
+    mixedTitleHtml.includes('<bdi dir="rtl"') &&
+    mixedTitleHtml.includes('unicode-bidi:isolate'),
+    'Mixed Latin+Arabic titles must isolate runs in separate <bdi> spans'
+  );
+
+  // 6d. Compiler card single lifespan ("194-256 AH", NO duplicate "Died:" line)
+  const collectionCardMod = await bundleModule('src/components/hadith/CollectionCard.tsx', customReq);
+  const bukhariCardHtml = ReactDOMServer.renderToStaticMarkup(
+    React.createElement(collectionCardMod.CollectionCard, { collection: bukhari, onClick: () => {} })
+  );
+  assert.ok(bukhariCardHtml.includes('194-256 AH'), 'CollectionCard must show single lifespan 194-256 AH');
+  assert.ok(!bukhariCardHtml.includes('Died: 256 AH'), 'CollectionCard must NOT show duplicate Died line');
+
+  typoMod.saveBookReaderPrefs(typoMod.DEFAULT_READER_PREFS);
+  console.log('  PASS: 5-reader alignment, Hisnul Muslim fixes, empty Arabic guard, BiDi titles, single lifespan & instant swap verified');
   console.log(`\nALL ROYAL E-BOOK VERIFICATION SUITES PASSED in ${Date.now() - tStart}ms`);
 }
 

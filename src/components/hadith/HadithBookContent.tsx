@@ -8,7 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getCollectionByName, HadithBook, HadithCollection, EnhancedHadith } from "@/data/hadith-collections";
 import { getHadithBookData, getHadithCollectionMetadata } from "@/lib/hadith";
-import { getGradeBadgeClass, dedupeHadithGrade } from "@/lib/hadith-utils";
+import {
+  getGradeBadgeClass,
+  parseHadithBodyAndFootnotes,
+  sanitizeHadithBookNumber,
+  sanitizeHadithBookTitle,
+} from "@/lib/hadith-utils";
 import { useHadithBookmarks } from "@/hooks/useHadithBookmarks";
 import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
 import {
@@ -22,6 +27,8 @@ import {
   AaReaderControlsButton,
   BookProseParagraph,
   CopyHadithMenuButton,
+  HadithFootnotesBlock,
+  MixedBidiTitle,
   ReaderArabicBlock,
   ReaderContinueChip,
   ReaderStatusBanner,
@@ -48,7 +55,20 @@ interface HadithCardProps {
 const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmarked, navigate, toast, toggleBookmark }: HadithCardProps) {
   const { contentLang } = useContentLanguage();
   const { prefs } = useBookReaderPrefs();
-  const [translatedText, setTranslatedText] = useState(() => formatIslamicProse(hadith.englishTranslation || '', 'en'));
+  const baseParsed = useMemo(
+    () =>
+      parseHadithBodyAndFootnotes({
+        englishTranslation: hadith.englishTranslation,
+        grade: hadith.grade,
+        references: hadith.references,
+      }),
+    [hadith.englishTranslation, hadith.grade, hadith.references]
+  );
+  const baseEnglishText = useMemo(
+    () => formatIslamicProse(baseParsed.paragraphs.join('\n\n'), 'en'),
+    [baseParsed.paragraphs]
+  );
+  const [translatedText, setTranslatedText] = useState(baseEnglishText);
   const [translatedNarrator, setTranslatedNarrator] = useState(hadith.narrator || '');
   const [actualLang, setActualLang] = useState<ContentLang>('en');
   const [fromCache, setFromCache] = useState(false);
@@ -57,7 +77,7 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
   const [retryTick, setRetryTick] = useState(0);
 
   const runTranslation = useCallback(async (mountedCheck: () => boolean) => {
-    const cleanEn = formatIslamicProse(hadith.englishTranslation || '', 'en');
+    const cleanEn = baseEnglishText;
     if (contentLang === 'en') {
       if (mountedCheck()) {
         setTranslatedText(cleanEn);
@@ -68,6 +88,13 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
         setSource('original');
       }
       return;
+    }
+
+    // Instant reset to avoid cross-language ghosting while translation resolves
+    if (mountedCheck()) {
+      setTranslatedText(cleanEn);
+      setTranslatedNarrator(hadith.narrator || '');
+      setActualLang('en');
     }
 
     const [res, tNarr] = await Promise.all([
@@ -96,7 +123,7 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
       setOfflineFallback(res.offlineFallback);
       setSource(res.source);
     }
-  }, [hadith.englishTranslation, hadith.narrator, hadith.hadithNumber, hadith.id, collection, contentLang]);
+  }, [baseEnglishText, hadith.narrator, hadith.hadithNumber, hadith.id, collection, contentLang]);
 
   useEffect(() => {
     let isMounted = true;
@@ -106,11 +133,18 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
     };
   }, [runTranslation, retryTick]);
 
-  const cleanGrade = dedupeHadithGrade(hadith.grade);
+  const cleanGrade = baseParsed.cleanGrade;
+  const hasArabic = Boolean(hadith.arabic && hadith.arabic.trim());
+  const displayParagraphs = useMemo(() => {
+    const active = translatedText || baseEnglishText;
+    if (!active) return [];
+    return active.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  }, [translatedText, baseEnglishText]);
 
   return (
     <Card
-      className="group cursor-pointer transition-colors border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40"
+      key={`${hadith.id}-${contentLang}`}
+      className="group cursor-pointer border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40"
       onClick={() => navigate(`/hadith/collections/${collection}/${book}/${hadith.hadithNumber}`)}
     >
       <CardContent className="p-4 space-y-3">
@@ -136,7 +170,7 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
                     bookNumber: book,
                     hadithNumber: hadith.hadithNumber,
                     arabic: hadith.arabic,
-                    englishTranslation: hadith.englishTranslation,
+                    englishTranslation: baseEnglishText || hadith.englishTranslation,
                     bookName: hadith.bookName,
                   });
                 }}
@@ -145,12 +179,15 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
               </Button>
             </div>
 
-            {/* Arabic Text — 12px padding on surface-2, right-aligned, line-height 2.0 */}
-            <ReaderArabicBlock text={hadith.arabic} arabicSize={prefs.arabicSize} className="mb-3" />
+            {/* Arabic Text — guarded against empty strings, 12px padding on surface-2, right-aligned */}
+            {hasArabic && (
+              <>
+                <ReaderArabicBlock text={hadith.arabic} arabicSize={prefs.arabicSize} className="mb-3" />
+                <ManuscriptDivider />
+              </>
+            )}
 
-            <ManuscriptDivider />
-
-            <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
+            <div className={hasArabic ? "mt-2.5" : ""} onClick={(e) => e.stopPropagation()}>
               <ReaderStatusBanner
                 targetLang={contentLang}
                 actualLang={actualLang}
@@ -162,16 +199,24 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
               />
             </div>
 
-            {/* Translation Body */}
-            {(translatedText || hadith.englishTranslation) && (
-              <div className="reader-prose-measure">
-                <BookProseParagraph
-                  text={translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en')}
-                  actualLang={actualLang}
-                  fontSize={prefs.bodySize}
-                  lineSpacing={prefs.lineHeightMode}
-                  className="text-[var(--text-primary)]"
-                />
+            {/* Translation Body & Footnotes */}
+            {displayParagraphs.length > 0 && (
+              <div
+                className="reader-prose-measure"
+                dir={actualLang === 'ur' ? 'rtl' : 'ltr'}
+                style={{ textAlign: actualLang === 'ur' ? 'right' : 'left' }}
+              >
+                {displayParagraphs.map((para, pIdx) => (
+                  <BookProseParagraph
+                    key={pIdx}
+                    text={para}
+                    actualLang={actualLang}
+                    fontSize={prefs.bodySize}
+                    lineSpacing={prefs.lineHeightMode}
+                    className="text-[var(--text-primary)]"
+                  />
+                ))}
+                <HadithFootnotesBlock footnotes={baseParsed.footnotes} />
               </div>
             )}
 
@@ -196,14 +241,14 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
             <div className="flex items-center gap-2 mt-2.5">
               <CopyHadithMenuButton
                 onCopyMode={(mode) => {
-                  const body = translatedText || formatIslamicProse(hadith.englishTranslation || '', 'en');
+                  const body = translatedText || baseEnglishText;
                   const ref = `${collection} (${hadith.hadithNumber})`;
                   const payload =
                     mode === 'arabic'
                       ? `${hadith.arabic}\n\n— ${ref}`
                       : mode === 'translation'
                       ? `${body}\n\n— ${ref}`
-                      : `${hadith.arabic}\n\n${body}\n\n— ${ref}`;
+                      : `${hadith.arabic ? `${hadith.arabic}\n\n` : ''}${body}\n\n— ${ref}`;
                   navigator.clipboard.writeText(payload).then(() => {
                     toast({ title: `Copied ${mode === 'both' ? 'Arabic & translation' : mode}` });
                   });
@@ -212,7 +257,7 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
             </div>
           </div>
 
-          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors mt-1 shrink-0" />
+          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary mt-1 shrink-0" />
         </div>
       </CardContent>
     </Card>
@@ -311,12 +356,16 @@ export function HadithBookContent() {
       return null;
     }
 
-    const normalizedBook = normalizeBookNumber(book);
+    const normalizedBook = normalizeBookNumber(sanitizeHadithBookNumber(book, 0));
     const fromMetadata = collectionData?.books.find(
-      (entry) => normalizeBookNumber(entry.number) === normalizedBook
+      (entry, idx) => normalizeBookNumber(sanitizeHadithBookNumber(entry.number, idx)) === normalizedBook
     );
     if (fromMetadata) {
-      return fromMetadata;
+      return {
+        ...fromMetadata,
+        number: sanitizeHadithBookNumber(fromMetadata.number, 0),
+        name: sanitizeHadithBookTitle(fromMetadata.number, fromMetadata.name, 0),
+      };
     }
 
     const firstHadith = hadithData[0];
@@ -325,8 +374,8 @@ export function HadithBookContent() {
     }
 
     return {
-      number: String(firstHadith.bookNumber ?? book),
-      name: firstHadith.bookName ?? `Book ${book}`,
+      number: sanitizeHadithBookNumber(firstHadith.bookNumber ?? book, 0),
+      name: sanitizeHadithBookTitle(firstHadith.bookNumber ?? book, firstHadith.bookName, 0),
       arabicName: "",
       hadithCount: hadithData.length,
       description: undefined,
@@ -552,11 +601,11 @@ export function HadithBookContent() {
                   style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
                   className={`font-bold text-[var(--text-primary)] line-clamp-2 leading-snug ${contentLang === 'ur' ? 'font-urdu' : ''}`}
                 >
-                  {translatedBookName || (bookInfo?.name ?? `Book ${book}`)}
+                  <MixedBidiTitle latin={translatedBookName || (bookInfo?.name ?? sanitizeHadithBookTitle(book, undefined, 0))} />
                 </h1>
                 {bookInfo?.arabicName && (
-                  <p className="text-[var(--text-secondary)] font-arabic truncate" dir="rtl">
-                    {bookInfo.arabicName}
+                  <p className="text-[var(--text-secondary)] font-arabic truncate" dir="rtl" style={{ unicodeBidi: 'isolate' }}>
+                    <bdi dir="rtl">{bookInfo.arabicName}</bdi>
                   </p>
                 )}
               </div>
