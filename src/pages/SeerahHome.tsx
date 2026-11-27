@@ -119,15 +119,6 @@ export default function SeerahHome() {
         "final-days": "આખરી દિવસો",
       };
     }
-    if (contentLang === 'hi') {
-      return {
-        all: "सभी",
-        "pre-prophethood": "नुबुव्वत से पहले",
-        makkan: "मक्की दौर",
-        madinan: "मदनी दौर",
-        "final-days": "अंतिम दिन",
-      };
-    }
     return {
       all: t("all"),
       "pre-prophethood": t("seerahPeriodPreProphethood"),
@@ -140,7 +131,6 @@ export default function SeerahHome() {
   const searchPlaceholder = useMemo(() => {
     if (contentLang === 'ur') return "سیرت مبارکہ کے ابواب تلاش کریں...";
     if (contentLang === 'gu') return "સીરતના પ્રકરણો શોધો...";
-    if (contentLang === 'hi') return "सीरत के अध्याय खोजें...";
     return t("search");
   }, [contentLang, t]);
 
@@ -275,7 +265,7 @@ export default function SeerahHome() {
                   {metadata?.totalChapters || chapters.length || 17} {t("seerahChapters")}
                 </Badge>
                 <Badge className="bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] font-semibold">
-                  EN • اردو • ગુજ • हिं
+                  EN • اردو • ગુજ
                 </Badge>
               </div>
             </div>
@@ -287,7 +277,7 @@ export default function SeerahHome() {
             const lastReadChapter = lastReadId ? chapters.find(c => c.id === lastReadId) : null;
             if (lastReadChapter && !loading) {
               const progress = getReadingProgress(lastReadId!, "seerah");
-              const continueLabel = contentLang === 'ur' ? 'مطالعہ جاری رکھیں' : contentLang === 'gu' ? 'વાંચન ચાલુ રાખો' : contentLang === 'hi' ? 'पढ़ना जारी रखें' : 'Continue Reading';
+              const continueLabel = contentLang === 'ur' ? 'مطالعہ جاری رکھیں' : contentLang === 'gu' ? 'વાંચન ચાલુ રાખો' : 'Continue Reading';
               return (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -366,14 +356,14 @@ export default function SeerahHome() {
             className="bg-[var(--surface)] rounded-[24px] p-5 border border-[var(--border)]"
           >
             <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-              {contentLang === 'ur' ? 'خلاصہ و ابواب' : contentLang === 'gu' ? 'વિહંગાવલોકન' : contentLang === 'hi' ? 'अवलोकन' : t("overview")}
+              {contentLang === 'ur' ? 'خلاصہ و ابواب' : contentLang === 'gu' ? 'વિહંગાવલોકન' : t("overview")}
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-[var(--accent-text)]">
                   {metadata?.totalChapters || chapters.length || 17}
                 </div>
-                <div className="text-sm text-[var(--text-secondary)]">{contentLang === 'ur' ? 'کل ابواب' : contentLang === 'gu' ? 'કુલ પ્રકરણો' : contentLang === 'hi' ? 'कुल अध्याय' : t("seerahChapters")}</div>
+                <div className="text-sm text-[var(--text-secondary)]">{contentLang === 'ur' ? 'کل ابواب' : contentLang === 'gu' ? 'કુલ પ્રકરણો' : t("seerahChapters")}</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-[var(--accent)]">

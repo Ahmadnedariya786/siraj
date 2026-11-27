@@ -122,7 +122,7 @@ export const extraRadioStations: ExtraRadioStation[] = [
   { id: 109041, nameAr: "ترجمة معاني القرآن باللغة الألبانية", nameEn: "Quran translation into Albanian", url: "https://backup.qurango.net/radio/translation_quran_albanian", slug: "translation_quran_albanian", category: 'translation', img: "" },
   { id: 109042, nameAr: "ترجمة معاني القرآن باللغة الألمانية", nameEn: "Quran translation into German", url: "https://backup.qurango.net/radio/translation_quran_german", slug: "translation_quran_german", category: 'translation', img: "" },
   { id: 109043, nameAr: "ترجمة معاني القرآن باللغة الأمازيغية", nameEn: "Quran translation into Amazigh", url: "https://backup.qurango.net/radio/translation_quran_tamazight", slug: "translation_quran_tamazight", category: 'translation', img: "" },
-  { id: 109044, nameAr: "ترجمة القرآن باللغة الهندية والأردية", nameEn: "Hindi & South Asian Translation", url: "https://backup.qurango.net/radio/translation_quran_urdu_sds_shur", slug: "translation_quran_urdu_sds_shur", category: 'translation', img: "" },
+  { id: 109044, nameAr: "ترجمة القرآن باللغة الأردية — السديس والشريم", nameEn: "South Asian Quran Translation", url: "https://backup.qurango.net/radio/translation_quran_urdu_sds_shur", slug: "translation_quran_urdu_sds_shur", category: 'translation', img: "" },
   { id: 109045, nameAr: "ترجمة معاني القرآن باللغة الأردية - المنشاوي", nameEn: "Quran in Urdu - Qari Muhammad Manshawi", url: "https://backup.qurango.net/radio/translation_quran_urdu_minsh", slug: "translation_quran_urdu_minsh", category: 'translation', img: "" },
   { id: 109046, nameAr: "ترجمة معاني القرآن باللغة الإنجليزية", nameEn: "English Quran Translation Radio", url: "https://backup.qurango.net/radio/translation_quran_english_basit", slug: "translation_quran_english_basit", category: 'translation', img: "" },
   { id: 109047, nameAr: "ترجمة معاني القرآن باللغة الإنجليزية - بصفر", nameEn: "Quran translation into English - Abdullah Basfar", url: "https://backup.qurango.net/radio/translation_quran_english_bsfr", slug: "translation_quran_english_bsfr", category: 'translation', img: "" },
@@ -164,7 +164,7 @@ export const extraRadioStations: ExtraRadioStation[] = [
   { id: 21130, nameAr: "تراتيل قصيرة خاشعة ومتميزة", nameEn: "Amazing Short Recitations", url: "https://backup.qurango.net/radio/tarateel", slug: "tarateel", category: 'mosque', img: "" },
 ];
 
-/** ── Station Localizations across 4 Languages ─────────────────── */
+/** ── Station Localizations across 3 Languages ─────────────────── */
 export interface LocalizedStationStrings {
   title: Record<string, string>;
   subtitle: Record<string, string>;
@@ -176,14 +176,12 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
     title: {
       en: "Urdu Quran Translation Radio",
       ur: "ترجمہ قرآنِ مجید — اردو",
-      gu: "કુર્આન શરીફ اردو/ગુજરાતી અનુવાદ",
-      hi: "क़ुरआन पाक उर्दू/हिन्दी अनुवाद",
+      gu: "કુર્આન શરીફ અનુવાદ",
     },
     subtitle: {
       en: "Qari Abdul Basit • Urdu Translation",
       ur: "قاری عبد الباسط • اردو ترجمہ",
       gu: "કારી અબ્દુલ બાસિત • અનુવાદ",
-      hi: "क़ारी अब्दुल बासित • अनुवाद",
     },
   },
   translation_quran_english_basit: {
@@ -191,27 +189,23 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "English Quran Translation Radio",
       ur: "انگریزی ترجمہ قرآنِ کریم",
       gu: "અંગ્રેજી કુર્આન અનુવાદ રેડિયો",
-      hi: "अंग्रेज़ी क़ुरआन अनुवाद रेडियो",
     },
     subtitle: {
       en: "Clear Verses & Meanings in English",
       ur: "انگریزی مفہوم و تلاوت",
       gu: "અંગ્રેજી અર્થ સાથે પવિત્ર કુર્આન",
-      hi: "अंग्रेज़ी अनुवाद सहित पवित्र क़ुरआन",
     },
   },
   translation_quran_urdu_sds_shur: {
     title: {
-      en: "Hindi & South Asian Translation",
-      ur: "ہندی و جنوبی ایشیائی ترجمہ قرآن",
-      gu: "હિન્દી કુર્આન અનુવાદ",
-      hi: "हिन्दी क़ुरआन अनुवाद",
+      en: "South Asian Quran Translation",
+      ur: "جنوبی ایشیائی ترجمہ قرآن",
+      gu: "દક્ષિણ એશિયાઈ કુર્આન અનુવાદ",
     },
     subtitle: {
       en: "Sheikh Al-Shuraim & Al-Sudais",
       ur: "سعود الشریم و عبدالرحمن السدیس",
       gu: "પવિત્ર કુર્આન સરળ અર્થ સાથે",
-      hi: "पवित्र क़ुरआन सरल अर्थ सहित",
     },
   },
   translation_quran_french: {
@@ -219,13 +213,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "French & International Translation",
       ur: "فرانسیسی و بین الاقوامی ترجمہ قرآن",
       gu: "ફ્રેન્ચ કુર્આન અનુવાદ",
-      hi: "फ़्रेंच क़ुरआन अनुवाद",
     },
     subtitle: {
       en: "Le Saint Coran traduit en français",
       ur: "فرانسیسی زبان میں کلام الٰہی",
       gu: "આંતરરાષ્ટ્રીય ફ્રેન્ચ ભાષાંતર",
-      hi: "अंतर्राष्ट्रीय फ़्रेंच अनुवाद",
     },
   },
 
@@ -235,13 +227,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Tafsir Al-Tabari Radio",
       ur: "تفسیر طبری — خلاصہ جامع البیان",
       gu: "તફસીર અલ-તબરી",
-      hi: "तफ़सीर अल-तबरी",
     },
     subtitle: {
       en: "Essence of Jami' al-Bayan",
       ur: "امام ابن جریر طبری رحمہ اللہ",
       gu: "કુર્આન શરીફનો ઊંડો અભ્યાસ",
-      hi: "क़ुरआन पाक की विस्तृत व्याख्या",
     },
   },
   mukhtasartafsir: {
@@ -249,13 +239,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Al-Mukhtasar fi Tafsir",
       ur: "المختصر فی تفسیر القرآن الکریم",
       gu: "અલ-મુખ્તસર ફી તફસીર",
-      hi: "अल-मुख़्तसर फ़ी तफ़सीर",
     },
     subtitle: {
       en: "Concise & Authentic Commentary",
       ur: "جامع اور مستند قرآنی تفاسیر",
       gu: "સરળ અને સચોટ ખુલાસો",
-      hi: "संक्षिप्त और प्रामाणिक व्याख्या",
     },
   },
   tafseer: {
@@ -263,13 +251,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Quran Tafseer Radio",
       ur: "درس و تفسیر قرآنِ مجید",
       gu: "કુર્આન તફસીર દરસ",
-      hi: "क़ुरआन तफ़सीर दर्स",
     },
     subtitle: {
       en: "Comprehensive Lessons & Reflections",
       ur: "آیاتِ بینات کا فہم و تدبر",
       gu: "બોધપાઠ અને માર્ગદર્શન",
-      hi: "क़ुरआन के गहरे संदेश और सीख",
     },
   },
   gareeb_quran: {
@@ -277,13 +263,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Tafsir Ghareeb Al-Quran",
       ur: "تفسیر غریب القرآن الکریم",
       gu: "તફસીર ગરીબ અલ-કુર્આન",
-      hi: "तफ़सीर ग़रीब अल-क़ुरआन",
     },
     subtitle: {
       en: "Meanings of Uncommon Vocabulary",
       ur: "قرآنی الفاظ و لغات کی تشریح",
       gu: "વિશિષ્ટ કુર્આની શબ્દોનો અર્થ",
-      hi: "क़ुरआनी शब्दों का अर्थ व विवेचन",
     },
   },
 
@@ -293,13 +277,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Riyad as-Salihin Hadith Radio",
       ur: "احادیث ریاض الصالحین",
       gu: "હદીસ રિયાદુસ સાલિહીન",
-      hi: "हदीस रियादुस सालिहीन",
     },
     subtitle: {
       en: "Gardens of the Righteous — Imam An-Nawawi",
       ur: "امام نووی رحمہ اللہ کے منتخب فرامین",
       gu: "ઇમામ નવવીનું ઉત્કૃષ્ટ સંકલન",
-      hi: "इमाम नववी का प्रामाणिक संकलन",
     },
   },
   saheh_bokharee: {
@@ -307,13 +289,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Sahih Al-Bukhari Radio",
       ur: "صحیح البخاری شریف",
       gu: "સહીહ અલ-બુખારી શરીફ",
-      hi: "सहीह अल-बुख़ारी शरीफ़",
     },
     subtitle: {
       en: "Most Authentic Prophetic Traditions",
       ur: "اصح الکتب بعد کتاب اللہ",
       gu: "રસૂલુલ્લાહ ﷺ ના સૌથી પ્રમાણભૂત વચનો",
-      hi: "रसूलुल्लाह ﷺ के सबसे प्रामाणिक कथन",
     },
   },
   saheh_muslim: {
@@ -321,13 +301,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Sahih Muslim Radio",
       ur: "صحیح مسلم شریف",
       gu: "સહીહ મુસ્લિમ શરીફ",
-      hi: "सहीह मुस्लिम शरीफ़",
     },
     subtitle: {
       en: "Authentic Prophetic Narrations",
       ur: "نبی کریم ﷺ کے مبارک فرامین",
       gu: "હઝરત મુહમ્મદ ﷺ ના મુબારક ફરમાનો",
-      hi: "हज़रत मुहम्मद ﷺ के मुबारक फ़रमान",
     },
   },
   alaikhtiarat_alfiqhayh_bin_baz: {
@@ -335,13 +313,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Sunnah & Daily Fiqh Radio",
       ur: "سنت نبوی ﷺ اور فقہی مسائل",
       gu: "સુન્નત અને રોજીંદા મસાઈલ",
-      hi: "सुन्नत और दैनिक फ़िक़्ह",
     },
     subtitle: {
       en: "Matters of Worship and Transactions",
       ur: "عبادات اور معاملات کے احکام",
       gu: "ઇબાદત અને વ્યવહારના નિયમો",
-      hi: "इबादत और मामलात के नियम",
     },
   },
 
@@ -351,13 +327,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Surah Al-Baqarah 24/7",
       ur: "سورة البقرة — تلاوتِ متواصل",
       gu: "સૂરહ અલ-બકરહ ૨૪/૭",
-      hi: "सूरा अल-बक़रह २४/७",
     },
     subtitle: {
       en: "Continuous Protection & Barakah",
       ur: "برکت و حفاظت • نامور قراء کی تلاوت",
       gu: "બરકત અને શૈતાની અસરોથી રક્ષણ",
-      hi: "बरकत और सुरक्षा • प्रमुख क़ारियों की आवाज़",
     },
   },
   Surah_Al_Mulk: {
@@ -365,13 +339,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Surah Al-Mulk Night Recitations",
       ur: "سورة الملك — نجات دہندہ",
       gu: "સૂરહ અલ-મુલ્ક રાત્રિ તિલાવત",
-      hi: "सूरा अल-मुल्क रात्रि पाठ",
     },
     subtitle: {
       en: "Savior from the Punishment of the Grave",
       ur: "عذابِ قبر سے حفاظت کی نبوی سنت",
       gu: "કબરના અઝાબથી બચાવનાર સૂરત",
-      hi: "क़ब्र के अज़ाब से सुरक्षा की सुन्नत",
     },
   },
   salma: {
@@ -379,13 +351,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Ayat Al-Sakina — Verses of Serenity",
       ur: "آیاتِ سکینہ و اطمینانِ قلب",
       gu: "આયાતે સકીના — દિલની શાંતિ",
-      hi: "आयते सकीना — दिल का सुकून",
     },
     subtitle: {
       en: "Deep Tranquility & Calming Verses",
       ur: "تلاوتِ خاشعہ • دلوں کا سکون اور راحت",
       gu: "હૃદયને શાંતિ આપતી પવિત્ર આયતો",
-      hi: "दिलों को शांति देने वाली आयतें",
     },
   },
 
@@ -395,13 +365,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Morning Remembrance — Adhkar Al-Sabah",
       ur: "مسنون اذکارِ صبح",
       gu: "સવારના મસ્નૂન અઝકાર",
-      hi: "सुबह के मसनून अज़कार",
     },
     subtitle: {
       en: "Prophetic Fortification for Daybreak",
       ur: "صبح کی برکت اور دن بھر کی حفاظت",
       gu: "આખા દિવસની બરકત અને સુરક્ષા",
-      hi: "दिन की बरकत और सुरक्षा",
     },
   },
   athkar_masa: {
@@ -409,13 +377,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Evening Remembrance — Adhkar Al-Masa'",
       ur: "مسنون اذکارِ شام",
       gu: "સાંજના મસ્નૂન અઝકાર",
-      hi: "शाम के मसनून अज़कार",
     },
     subtitle: {
       en: "Evening Shield & Peaceful Night Duas",
       ur: "شام کی پناہ اور رات کا تحفظ",
       gu: "રાત્રિની સુરક્ષા અને શાંતિ",
-      hi: "रात की सुरक्षा और सुकून",
     },
   },
   roqiah: {
@@ -423,13 +389,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Ruqyah Ash-Shar'iyyah 24/7",
       ur: "الرقیۃ الشرعیۃ — شفائے کامل",
       gu: "રૂક્યા શરીફ — રોગનિવારણ",
-      hi: "रुक़्या शरीफ़ — शिफ़ा व सुरक्षा",
     },
     subtitle: {
       en: "Divine Healing & Spiritual Shield",
       ur: "نظرِ بد اور ہر شر سے قرآنی دم",
       gu: "બુરી નજર અને તકલીફોથી સુરક્ષા",
-      hi: "बुरी नज़र और हर बुराई से बचाव",
     },
   },
   eid: {
@@ -437,13 +401,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Eid & Hajj Takbeerat",
       ur: "تکبیراتِ عید و حج مبارک",
       gu: "ઈદ અને હજની તકબીરાત",
-      hi: "ईद और हज की तकबीरात",
     },
     subtitle: {
       en: "Allahu Akbar — Sacred Chants",
       ur: "اللہ اکبر وللہ الحمد کے نغمات",
       gu: "અલ્લાહુ અકબરના મુબારક તરાના",
-      hi: "अल्लाहु अकबर के पावन स्वर",
     },
   },
 
@@ -453,13 +415,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "In the Shadows of the Prophet's ﷺ Seerah",
       ur: "فی ظلال السیرۃ النبویۃ ﷺ",
       gu: "પયગંબર ﷺ ની પવિત્ર સીરત",
-      hi: "रसूलुल्लाह ﷺ की पावन सीरत",
     },
     subtitle: {
       en: "400 Episodes of the Blessed Life",
       ur: "۴۰۰ اقساط پر محیط حیاتِ طیبہ",
       gu: "૪૦૦ એપિસોડમાં મુબારક જીવનચરિત્ર",
-      hi: "४०० कड़ियों में मुबारक जीवन चरित्र",
     },
   },
   alanbiya: {
@@ -467,13 +427,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Stories of the Prophets — Qasas Al-Anbiya",
       ur: "قصص الانبیاء علیہم السلام",
       gu: "અંબિયા અ.સ. ના પ્રેરણાદાયી કિસ્સા",
-      hi: "अंबिया अ.स. के प्रेरक क़िस्से",
     },
     subtitle: {
       en: "Lessons from Adam to Muhammad ﷺ",
       ur: "آدم علیہ السلام سے خاتم النبیین ﷺ تک",
       gu: "આદમ અ.સ. થી હઝરત મુહમ્મદ ﷺ સુધી",
-      hi: "आदम अ.स. से हज़रत मुहम्मद ﷺ तक",
     },
   },
   sahabah: {
@@ -481,13 +439,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Lives of the Sahabah & Tabi'een",
       ur: "حیاتِ صحابہ و تابعین کرام",
       gu: "સહાબા અને તાબિઈન (રદિ.) નું જીવન",
-      hi: "सहाबा और ताबिईन (रज़ि.) का जीवन",
     },
     subtitle: {
       en: "The Radiant Generation of Faith",
       ur: "ایمان اور استقامت کے درخشاں مینار",
       gu: "ઈમાન અને બલિદાનની અનોખી મિસાલ",
-      hi: "ईमान और त्याग के आदर्श",
     },
   },
   almukhtasar_fi_alsiyra: {
@@ -495,13 +451,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "The Abridged Seerah Nabawiyyah",
       ur: "المختصر فی السیرۃ النبویۃ",
       gu: "સંક્ષિપ્ત પયગંબર સીરત",
-      hi: "संक्षिप्त पैग़म्बर सीरत",
     },
     subtitle: {
       en: "Milestones of the Messenger of Allah ﷺ",
       ur: "رسول اللہ ﷺ کی سیرت کے روشن سنگِ میل",
       gu: "અલ્લાહના રસૂલ ﷺ ના મુખ્ય સંસ્મરણો",
-      hi: "अल्लाह के रसूल ﷺ के प्रमुख पड़ाव",
     },
   },
 
@@ -511,13 +465,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Main Quran Radio Mix 24/7",
       ur: "الإذاعۃ العامۃ — مرکزی ریڈیو مکس",
       gu: "મુખ્ય કુર્આન રેડિયો મિક્સ",
-      hi: "मुख्य क़ुरआन रेडियो मिक्स",
     },
     subtitle: {
       en: "Continuous Diverse Recitations",
       ur: "عالمِ اسلام کے نامور قراء کی تلاوت",
       gu: "વિવિધ જાણીતા કારીઓની સતત તિલાવત",
-      hi: "विश्व प्रसिद्ध क़ारियों की सतत तिलावत",
     },
   },
   tarateel: {
@@ -525,13 +477,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Amazing Short Recitations",
       ur: "تراتیل قصیرۃ خاشعۃ",
       gu: "શ્રેષ્ઠ ટૂંકી તિલાવત",
-      hi: "सर्वश्रेष्ठ संक्षिप्त तिलावत",
     },
     subtitle: {
       en: "Soul-Stirring Verses and Melodies",
       ur: "دل نشین اور منتخب قرآنی تلاوتیں",
       gu: "દિલને સ્પર્શતી મધુર આયતો",
-      hi: "मन को छूने वाली मधुर आयतें",
     },
   },
   misr: {
@@ -539,13 +489,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Cairo & Haramain Holy Quran Radio",
       ur: "إذاعۃ القرآن الکریم — قاہرہ و حرمین",
       gu: "કાહિરા અને હરમૈન રેડિયો",
-      hi: "क़ाहिरा व हरमैन रेडियो",
     },
     subtitle: {
       en: "Timeless Golden Era Broadcasts",
       ur: "سنہری دور کی لازوال اور خاشع تلاوتیں",
       gu: "ઐતિહાસિક અને પ્રખ્યાત અવાજો",
-      hi: "ऐतिहासिक व विख्यात स्वर",
     },
   },
 
@@ -555,13 +503,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "General Fatwa Radio (Dar Al-Ifta)",
       ur: "إذاعۃ الفتاویٰ العامۃ",
       gu: "જનરલ ફતવા રેડિયો",
-      hi: "जनरल फ़तवा रेडियो",
     },
     subtitle: {
       en: "Authoritative Answers to Islamic Questions",
       ur: "دار الافتاء • شرعی مسائل کے مدلل جوابات",
       gu: "શરઈ પ્રશ્નોના આધારભૂત જવાબો",
-      hi: "दीनी सवालों के प्रामाणिक उत्तर",
     },
   },
   ramadan: {
@@ -569,13 +515,11 @@ export const STATION_LOCALIZATIONS: Record<string, LocalizedStationStrings> = {
       en: "Virtues & Fiqh of Ramadan",
       ur: "احکام و فضائلِ رمضان و طاعات",
       gu: "રમઝાન અને ઇબાદતના મસાઈલ",
-      hi: "रमज़ान और इबादत के फ़ज़ाइल",
     },
     subtitle: {
       en: "Rulings on Fasting, Charity & Prayers",
       ur: "روزہ، تراویح، زکوٰۃ اور اعتکاف کے مسائل",
       gu: "રોઝા, ઝકાત અને તરાવીહના અહકામ",
-      hi: "रोज़ा, ज़कात और नमाज़ के नियम",
     },
   },
 };
@@ -585,7 +529,7 @@ export function getLocalizedStation(
   station: { id: number; name: string; nameEn?: string; url?: string; slug?: string; category?: RadioCategory },
   lang: string
 ): { title: string; subtitle: string } {
-  const effectiveLang = (['en', 'ur', 'gu', 'hi'].includes(lang) ? lang : 'en');
+  const effectiveLang = (['en', 'ur', 'gu'].includes(lang) ? lang : 'en');
 
   // Match by slug or URL segment
   const urlSlug = (station.url || '').split('/').filter(Boolean).pop()?.replace(/[-]/g, '_') || '';
@@ -624,12 +568,6 @@ export function getLocalizedStation(
       return {
         title: cleanEn || cleanAr,
         subtitle: 'ઇસ્લામિક રેડિયો • પવિત્ર તિલાવત',
-      };
-    }
-    if (effectiveLang === 'hi') {
-      return {
-        title: cleanEn || cleanAr,
-        subtitle: 'इस्लामिक रेडियो • पवित्र क़ुरआन पाठ',
       };
     }
     return {

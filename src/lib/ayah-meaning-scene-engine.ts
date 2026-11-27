@@ -1180,7 +1180,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
       translations: {
         en: string;
         ur: string;
-        hi: string;
         gu: string;
       };
     }>;
@@ -1197,7 +1196,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'Allah is the Light of the heavens and the earth.',
           ur: 'اللہ آسمانوں اور زمین کا نور ہے۔',
-          hi: 'अल्लाह आकाशों और धरती का नूर (ज्योति) है।',
           gu: 'અલ્લાહ આકાશો અને ધરતીનો નૂર (પ્રકાશ) છે.',
         },
       },
@@ -1210,7 +1208,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'The example of His light is like a niche within which is a lamp;',
           ur: 'اس کے نور کی مثال ایسی ہے جیسے ایک طاق جس میں ایک چراغ ہو،',
-          hi: 'उसके नूर की मिसाल ऐसी है जैसे एक ताक़ (दीवार का आला) हो जिसमें एक चिराग़ हो,',
           gu: 'તેના નૂરનું ઉદાહરણ એવું છે જાણે કે એક ગોખલો જેમાં એક દીવો હોય,',
         },
       },
@@ -1223,7 +1220,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'the lamp is within glass, the glass as if it were a pearly star,',
           ur: 'چراغ ایک شیشے کی قندیل میں ہے، قندیل گویا موتی جیسا چمکتا ہوا تارہ ہے،',
-          hi: 'चिराग़ एक शीशे की कंदील में हो, कंदील मानो मोती जैसा चमकता हुआ तारा हो,',
           gu: 'દીવો એક કાચની કંદીલમાં હોય, કંદીલ જાણે મોતી જેવો ચમકતો તારો હોય,',
         },
       },
@@ -1236,7 +1232,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'lit from a blessed olive tree, neither of east nor west, whose oil would almost glow even if untouched by fire.',
           ur: 'وہ زیتون کے بابرکت درخت کے تیل سے جلایا جاتا ہے جو نہ مشرقی ہے نہ مغربی، اس کا تیل آپ ہی آپ بھڑکا پڑتا ہے چاہے آگ اسے نہ بھی چھوئے،',
-          hi: 'जो ज़ैतून के एक बरकत वाले पेड़ के तेल से जलाया जाता हो, जो न पूरब का हो न पच्छिम का; उसका तेल ऐसा हो कि वह खुद ही भड़क उठे चाहे आग उसे न भी छुए,',
           gu: 'જે ઝૈતૂનના બરકતવાળા વૃક્ષથી પ્રગટાવાયો હોય, જે ન પૂર્વનું હોય ન પશ્ચિમનું; તેનું તેલ એવું હોય કે જાણે પોતે જ સળગી ઊઠશે ભલે આગ તેને અડી પણ ન હોય,',
         },
       },
@@ -1249,7 +1244,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'Light upon light. Allah guides to His light whom He wills. And Allah presents examples for the people, and Allah is Knowing of all things.',
           ur: 'نور پر نور ہے۔ اللہ اپنے نور کی طرف جسے چاہتا ہے رہنمائی فرماتا ہے، اور اللہ لوگوں کے لیے مثالیں بیان فرماتا ہے، اور اللہ ہر چیز کا خوب جاننے والا ہے۔',
-          hi: 'नूर पर नूर! अल्लाह अपने नूर का मार्ग जिसे चाहता है दिखाता है, और अल्लाह लोगों के लिए मिसालें बयान करता है, और अल्लाह हर चीज़ को खूब जानने वाला है।',
           gu: 'નૂર પર નૂર! અલ્લાહ જેને ચાહે છે પોતાના નૂર તરફ માર્ગદર્શન આપે છે, અને અલ્લાહ લોકો માટે દ્રષ્ટાંતો રજૂ કરે છે, અને અલ્લાહ દરેક વસ્તુને ખૂબ સારી રીતે જાણે છે.',
         },
       },
@@ -1266,7 +1260,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'Allah - there is no deity except Him, the Ever-Living, the Sustainer of all existence. Neither drowsiness overtakes Him nor sleep.',
           ur: 'اللہ، اس کے سوا کوئی معبود نہیں، وہ ہمیشہ زندہ رہنے والا اور سب کو سنبھالنے والا ہے۔ نہ اسے اونگھ آتی ہے نہ نیند۔',
-          hi: 'अल्लाह, जिसके सिवा कोई पूज्य नहीं, वह सदा जीवित और सबका संभालने वाला है। न उसे ऊंघ आती है और न नींद।',
           gu: 'અલ્લાહ, જેના સિવાય કોઈ ઈબાદતને લાયક નથી, તે સદા જીવંત અને સૌનો સંભાળ રાખનાર છે. તેને ન તો ઝોકું આવે છે કે ન ઊંઘ.',
         },
       },
@@ -1279,7 +1272,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'To Him belongs whatever is in the heavens and whatever is on the earth. Who is it that can intercede with Him except by His permission?',
           ur: 'اسی کا ہے جو کچھ آسمانوں میں ہے اور جو کچھ زمین میں ہے۔ کون ہے جو اس کی اجازت کے بغیر اس کے پاس سفارش کر سکے؟',
-          hi: 'उसी का है जो कुछ आकाशों में है और जो कुछ धरती में है। कौन है जो उसकी अनुमति के बिना उसके पास सिफ़ारिश कर सके?',
           gu: 'તેનું જ છે જે કંઈ આકાશોમાં છે અને જે કંઈ ધરતીમાં છે. કોણ છે જે તેની પરવાનગી વિના તેની પાસે ભલામણ કરી શકે?',
         },
       },
@@ -1292,7 +1284,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'He knows what is before them and what will be after them, and they encompass not a thing of His knowledge except for what He wills.',
           ur: 'وہ جانتا ہے جو کچھ ان کے سامنے ہے اور جو کچھ ان کے پیچھے ہے، اور وہ اس کے علم میں سے کسی چیز کا احاطہ نہیں کر سکتے مگر جتنا وہ چاہے۔',
-          hi: 'वह जानता है जो कुछ उनके आगे है और जो कुछ उनके पीछे है, और वे उसके ज्ञान में से किसी चीज़ को अपने घेरे में नहीं ले सकते सिवाय उसके जितना वह चाहे।',
           gu: 'તે જાણે છે જે કંઈ તેઓની આગળ છે અને જે કંઈ તેઓની પાછળ છે, અને તેઓ તેના જ્ઞાનમાંથી કોઈ વસ્તુનો ઘેરાવ કરી શકતા નથી સિવાય કે જે તે ઇચ્છે.',
         },
       },
@@ -1305,7 +1296,6 @@ export const CURATED_MASTERPIECE_CLAUSES: Record<
         translations: {
           en: 'His Kursi extends over the heavens and the earth, and their preservation tires Him not. And He is the Most High, the Most Great.',
           ur: 'اس کی کرسی آسمانوں اور زمین پر چھائی ہوئی ہے، اور ان دونوں کی حفاظت اس پر گراں نہیں گزرتی، اور وہ سب سے بلند اور سب سے بڑا ہے۔',
-          hi: 'उसकी कुर्सी ने आकाशों और धरती को घेर रखा है, और इन दोनों की हिफ़ाज़त उसे थकाती नहीं, और वह सबसे उच्च और सबसे महान है।',
           gu: 'તેની કુરસી આકાશો અને ધરતી પર છવાયેલી છે, અને આ બંનેનું રક્ષણ તેને થકવતું નથી, અને તે સર્વોચ્ચ અને મહાન છે.',
         },
       },
@@ -1337,7 +1327,6 @@ export function resolveAyahVisualTimeline(
     let lang = subtitleLang;
     if (lang === 'none' || lang === 'ar' || !lang) {
       if (/[\u0600-\u06FF]/.test(translationEn)) lang = 'ur';
-      else if (/[\u0900-\u097F]/.test(translationEn)) lang = 'hi';
       else if (/[\u0A80-\u0AFF]/.test(translationEn)) lang = 'gu';
       else lang = 'en';
     }

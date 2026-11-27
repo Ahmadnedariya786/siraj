@@ -73,27 +73,6 @@ const STATS_I18N = {
     resetDesc: 'બધા આંકડા સફળતાપૂર્વક સાફ થઈ ગયા છે',
     sessions: 'સત્રો',
   },
-  hi: {
-    title: 'मीडिया आँकड़े',
-    subtitle: 'सुनने और देखने की आदतें',
-    streak: 'दिन की स्ट्रीक',
-    days: 'दिन',
-    totalTime: 'कुल समय',
-    currentStreak: 'वर्तमान स्ट्रीक',
-    totalSessions: 'कुल सत्र',
-    avgSession: 'औसत सत्र',
-    topStation: 'शीर्ष स्टेशन / प्रसारण',
-    achievements: 'उपलब्धियां',
-    unlocked: 'अनलॉक',
-    mediaBreakdown: 'मीडिया विवरण',
-    noData: 'अभी कोई डेटा उपलब्ध नहीं',
-    noDataSub: 'आँकड़े देखने के लिए रेडियो सुनना या लाइव स्ट्रीम देखना शुरू करें',
-    reset: 'सभी आँकड़े रीसेट करें',
-    confirmReset: 'क्या आप वाकई सभी आँकड़े रीसेट करना चाहते हैं?',
-    resetTitle: 'आँकड़े रीसेट हुए',
-    resetDesc: 'सभी आँकड़े सफलतापूर्वक साफ़ कर दिए गए हैं',
-    sessions: 'सत्र',
-  },
 };
 
 const getAchievementIcon = (id: string) => {

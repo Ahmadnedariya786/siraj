@@ -207,10 +207,6 @@ export function detectLanguage(text: string): string {
   const bengaliPattern = /[\u0980-\u09FF]/;
   if (bengaliPattern.test(text)) return 'bn';
   
-  // Check for Devanagari (Hindi)
-  const devanagariPattern = /[\u0900-\u097F]/;
-  if (devanagariPattern.test(text)) return 'hi';
-  
   // Default to English
   return 'en';
 }

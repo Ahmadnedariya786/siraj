@@ -2364,12 +2364,10 @@ export function prerenderAyahOffscreenCanvas(params: {
 
   // Translation font stack & language helpers
   const isUrdu = subtitleLang === 'ur';
-  const isHindi = subtitleLang === 'hi';
   const isGujarati = subtitleLang === 'gu';
 
   const getTransFont = (size: number) => {
     if (isUrdu) return `400 ${size + 3}px "Noto Nastaliq Urdu", serif`;
-    if (isHindi) return `600 ${size}px "Noto Sans Devanagari", system-ui, sans-serif`;
     if (isGujarati) return `600 ${size}px "Noto Sans Gujarati", system-ui, sans-serif`;
     return `500 ${size}px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif`;
   };

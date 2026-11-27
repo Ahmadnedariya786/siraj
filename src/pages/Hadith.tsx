@@ -183,6 +183,7 @@ const Hadith = () => {
     const res = await translateHadithContent({
       collection: hadith.book.toLowerCase().replace(/\s+/g, '') || 'generic',
       hadithNumber: hadith.number,
+      references: `${hadith.book} ${hadith.number}`,
       englishText: cleanEn,
       targetLang: contentLang,
     });
@@ -208,7 +209,6 @@ const Hadith = () => {
     if (!hadith?.narrator) return null;
     if (actualLang === 'ur') return `راوی: ${hadith.narrator}`;
     if (actualLang === 'gu') return `રાવી: ${hadith.narrator}`;
-    if (actualLang === 'hi') return `रावी: ${hadith.narrator}`;
     return `Narrated by: ${hadith.narrator}`;
   }, [hadith?.narrator, actualLang]);
 

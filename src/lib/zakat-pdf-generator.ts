@@ -510,11 +510,6 @@ export const ISLAMIC_MONTH_NAMES: Record<ContentLang, readonly string[]> = {
     'જુમાદિલ અવ્વલ', 'જુમાદિલ આખિર', 'રજબ', 'શાબાન',
     'રમઝાન', 'શવ્વાલ', 'ઝુલ્કદ', 'ઝુલહિજ્જ',
   ],
-  hi: [
-    'मुहर्रम', 'सफ़र', 'रबी उल-अव्वल', 'रबी उल-आखिर',
-    'जुमादा अल-ऊला', 'जुमादा अल-आखिरा', 'रजब', 'शाबान',
-    'रमज़ान', 'शव्वाल', 'ज़ुल-क़ादा', 'ज़ुल-हिज्जा',
-  ],
 };
 
 /**
@@ -602,7 +597,7 @@ export async function getLogoEditionImage(edition: NoorLogoEditionId): Promise<H
 }
 
 /**
- * Returns a robust font string with proper font stack for Urdu, Gujarati, Hindi, and English.
+ * Returns a robust font string with proper font stack for Urdu, Gujarati, and English.
  */
 function getPdfFont(lang: ContentLang, sizePx: number, isBold = false, isMono = false): string {
   const weight = isBold ? 'bold ' : '';
@@ -614,9 +609,6 @@ function getPdfFont(lang: ContentLang, sizePx: number, isBold = false, isMono = 
   }
   if (lang === 'gu') {
     return `${weight}${sizePx}px "Noto Sans Gujarati", "Shruti", system-ui, -apple-system, sans-serif`;
-  }
-  if (lang === 'hi') {
-    return `${weight}${sizePx}px "Noto Sans Devanagari", "Mangal", system-ui, -apple-system, sans-serif`;
   }
   return `${weight}${sizePx}px system-ui, -apple-system, sans-serif`;
 }
@@ -722,31 +714,6 @@ const PDF_STRINGS: Record<ContentLang, ZakatPdfStrings> = {
     ayahTranslation: '“તેમના ધનમાંથી સદકો લો જેના દ્વારા તમે તેમને પવિત્ર અને બરકતવાળા બનાવો.” (સૂરહ અત-તૌબા 9:103)',
     securityNote1: 'પ્રમાણભૂત ઇસ્લામી શરીઅત (હૌલ અને નિસાબ) મુજબ આપના ડિવાઇસ પર ગણતરી કરેલ • નૂર કનેક્ટ',
     securityNote2: 'વ્યક્તિગત માહિતી ક્યારેય આપના ડિવાઇસ બહાર જતી નથી • 100% ખાનગી, સુરક્ષિત અને ઑફલાઇન',
-  },
-  hi: {
-    brandingSub: 'नूर कनेक्ट — इस्लामी साथी',
-    itemizedBreakdown: 'संपत्ति और देयताओं का विस्तृत विवरण',
-    amountHeader: 'राशि',
-    shariahAssessmentVerdict: 'शरई मूल्यांकन और ज़कात अल-माल सारांश',
-    statusMet: 'स्थिति: पूर्ण ✓',
-    statusBelow: 'स्थिति: कम',
-    zakatDueBadge: 'ज़कात देय',
-    belowNisabBadge: 'निसाब से कम',
-    currencyLabel: 'मुद्रा',
-    shariahStandardLabel: 'प्रमाणिक इस्लामी शरीअत (हौल और निसाब)',
-    monthlyInstallmentSuffix: '(12 समान मासिक किश्तें)',
-    silverChoiceLabel: 'चांदी',
-    goldChoiceLabel: 'सोना',
-    silverStdVal: 'चांदी 612.36 ग्राम',
-    goldStdVal: 'सोना 87.48 ग्राम',
-    silverStdSub: '52.5 तोला मानक',
-    goldStdSub: '7.5 तोला मानक',
-    ushrDuePrefix: '🌾 देय उश्र:',
-    livestockPrefix: '🐑 पशुधन:',
-    ayahArabic: 'خُذْ مِنْ أَمْوَالِهِمْ صَدَقَةً تُطَهِّرُهُمْ وَتُزَكِّيهِمْ بِهَا',
-    ayahTranslation: '“उनके धनों में से सदक़ा लीजिए जिसके द्वारा आप उन्हें पवित्र और बरकत वाला बनाएं।” (सूरह अत-तौबा 9:103)',
-    securityNote1: 'प्रामाणिक इस्लामी शरीअत (हौल और निसाब) के अनुसार आपके डिवाइस पर गणना की गई • नूर कनेक्ट',
-    securityNote2: 'व्यक्तिगत डेटा कभी भी आपके डिवाइस से बाहर नहीं जाता • 100% निजी, सुरक्षित और ऑफ़लाइन',
   },
 };
 

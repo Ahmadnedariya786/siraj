@@ -75,6 +75,7 @@ export function HadithCollections() {
     const res = await translateHadithContent({
       collection: dailyHadith.subtitle,
       hadithNumber: dailyHadith.reference.replace(/[^\d]/g, '') || 'daily',
+      references: `${dailyHadith.subtitle} ${dailyHadith.reference}`,
       englishText: dailyHadith.content,
       targetLang: contentLang,
     });
@@ -257,7 +258,7 @@ export function HadithCollections() {
                       onClick={() => setIsExpanded(!isExpanded)}
                       className="text-xs font-semibold text-primary hover:underline focus:outline-none transition-colors"
                     >
-                      {isExpanded ? (contentLang === 'ur' ? 'کم دکھائیں' : contentLang === 'gu' ? 'ઓછું બતાવો' : contentLang === 'hi' ? 'कम दिखाएं' : 'Show Less') : (contentLang === 'ur' ? 'مزید پڑھیں' : contentLang === 'gu' ? 'વધુ વાંચો' : contentLang === 'hi' ? 'अधिक पढ़ें' : 'Read More')}
+                      {isExpanded ? (contentLang === 'ur' ? 'کم دکھائیں' : contentLang === 'gu' ? 'ઓછું બતાવો' : 'Show Less') : (contentLang === 'ur' ? 'مزید پڑھیں' : contentLang === 'gu' ? 'વધુ વાંચો' : 'Read More')}
                     </button>
                   )}
                   <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-border/40">

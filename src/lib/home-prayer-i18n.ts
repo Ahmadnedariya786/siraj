@@ -53,15 +53,6 @@ export const PRAYER_NAMES_I18N: Record<LanguageCode, PrayerNameTranslations> = {
     maghrib: 'મગરીબ',
     isha: 'ઇશા',
   },
-  hi: {
-    fajr: 'फज्र',
-    sunrise: 'सूर्योदय',
-    dhuhr: 'जुह्र',
-    jummah: 'जुमा',
-    asr: 'अस्र',
-    maghrib: 'मग़रिब',
-    isha: 'इशा',
-  },
   bn: {
     fajr: 'ফজর',
     sunrise: 'সূর্যোদয়',
@@ -120,7 +111,6 @@ export function formatLocalizedCountdown(
       ar: 'حان الآن',
       ur: 'اب وقت ہے',
       gu: 'હવે સમય છે',
-      hi: 'अभी समय है',
       bn: 'এখন সময়',
       ru: 'сейчас',
       fr: 'maintenant',
@@ -138,8 +128,6 @@ export function formatLocalizedCountdown(
       return h > 0 ? `خلال ${h} س ${m} د` : `خلال ${m} د`;
     case 'gu':
       return h > 0 ? `${h}ક ${m}મિ. માં` : `${m}મિ. માં`;
-    case 'hi':
-      return h > 0 ? `${h}घंटे ${m}मिनट में` : `${m}मिनट में`;
     case 'bn':
       return h > 0 ? `${h}ঘণ্টা ${m}মিনিটে` : `${m}মিনিটে`;
     case 'ru':
@@ -163,8 +151,6 @@ export function formatLocalizedAfterPrayer(
       return `بعد ${localizedPrayer}`;
     case 'gu':
       return `${localizedPrayer} પછી`;
-    case 'hi':
-      return `${localizedPrayer} के बाद`;
     case 'bn':
       return `${localizedPrayer}-এর পরে`;
     case 'ru':
@@ -257,22 +243,6 @@ export const QURAN_PROGRESS_I18N: Record<
       progressing: '💪 ઉત્તમ કાર્ય! અડધું કુરાન પૂર્ણ થયું!',
       started: '📚 ચાલુ રાખો! તમારી ગતિ વધી રહી છે!',
       beginner: '🌱 આજે જ તમારી કુરાન યાત્રા શરૂ કરો!',
-    },
-  },
-  hi: {
-    badges: {
-      completed: 'पूर्ण',
-      advanced: 'उन्नत',
-      progressing: 'जारी',
-      started: 'शुरू',
-      beginner: 'आरंभिक',
-    },
-    messages: {
-      completed: '🎉 मुबारक! आपने पूरा क़ुरआन मुकम्मल कर लिया!',
-      advanced: '🌟 शानदार प्रगति! आप मंज़िल के बेहद क़रीब हैं!',
-      progressing: '💪 बहुत बढ़िया! आधा क़ुरआन मुकम्मل हो गया!',
-      started: '📚 जारी रखें! आपकी रफ़्तार बढ़ रही है!',
-      beginner: '🌱 आज ही अपने क़ुरआनी सफ़र का आग़ाज़ करें!',
     },
   },
   bn: {
@@ -463,33 +433,6 @@ export const TASBEEH_I18N: Record<
     next: 'આગળ',
     skip: 'છોડો',
   },
-  hi: {
-    set: 'सेट',
-    lock: 'लॉक',
-    locked: 'लॉक किया गया',
-    sunnahChainOn: '⛓ सुन्नत श्रृंखला: चालू',
-    sunnahChainMode: '⛓ सुन्नत श्रृंखला मोड',
-    setOfTarget: 'सेट {step} / ६ • लक्ष्य {target}',
-    dhikrOfChange: 'ज़िक्र {current} / {total} • बदलें',
-    tapToCount: 'गिनने के लिए टैप करें',
-    reset: 'रीसेट',
-    auto: 'ऑटो',
-    sound: 'आवाज़',
-    vibrate: 'कंपन',
-    mute: 'मूक',
-    totalDhikrRecorded: 'कुल दर्ज अज़कार',
-    lifetimeCount: 'सभी सत्रों की कुल गिनती',
-    total: 'कुल',
-    resetCounter: 'काउंटर रीसेट करें',
-    resetConfirmText: 'क्या आप वर्तमान काउंटर को शून्य करना चाहते हैं?',
-    cancel: 'रद्द करें',
-    exitZen: '✕ ज़ेन मोड से बाहर',
-    goalProgress: 'लक्ष्य प्रगति',
-    goal: 'लक्ष्य',
-    prev: 'पिछला',
-    next: 'अगला',
-    skip: 'छोड़ें',
-  },
   bn: {
     set: 'সেট',
     lock: 'লক',
@@ -581,7 +524,6 @@ export const REVELATION_TYPE_I18N: Record<
   ar: { meccan: 'مكية', medinan: 'مدنية' },
   ur: { meccan: 'مکی', medinan: 'مدنی' },
   gu: { meccan: 'મક્કી', medinan: 'મદની' },
-  hi: { meccan: 'मक्की', medinan: 'मदनी' },
   bn: { meccan: 'মাক্কী', medinan: 'মাদানী' },
   ru: { meccan: 'МЕККАНСКАЯ', medinan: 'МЕДИНСКАЯ' },
   fr: { meccan: 'MECQUOISE', medinan: 'MÉDINOISE' },
@@ -592,7 +534,6 @@ export const SERVICES_TOOLS_BANNER_I18N: Record<LanguageCode, string> = {
   ar: 'سِراج • ١٨ أداة روحانية',
   ur: 'سِراج • ۱۸ روحانی ٹولز',
   gu: 'સિરાજ • ૧૮ આધ્યાત્મિક સાધનો',
-  hi: 'सिराज • १८ आध्यात्मिक साधन',
   bn: 'সিরাজ • ১৮টি আধ্যাত্মিক সরঞ্জাম',
   ru: 'Siraj • 18 духовных инструментов',
   fr: 'Siraj • 18 outils spirituels',

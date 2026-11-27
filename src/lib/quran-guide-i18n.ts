@@ -1,7 +1,7 @@
 /**
  * Siraj — Quran Guide & Quran UI Multi-Language Translations
- * Complete, natural, idiomatic localization across all 8 app languages:
- * en (English), ur (اردو), gu (ગુજરાતી), ar (العربية), hi (हिन्दी), bn (বাংলা), ru (Русский), fr (Français)
+ * Complete, natural, idiomatic localization across supported app languages:
+ * en (English), ur (اردو), gu (ગુજરાતી), ar (العربية), bn (বাংলা), ru (Русский), fr (Français)
  */
 
 import type { LanguageCode } from './language-config';
@@ -113,7 +113,7 @@ const GUIDE_TRANSLATIONS: Record<LanguageCode, QuranGuideData> = {
         badge: 'Tafsir & Translations',
         title: 'Tafsir & Multi-Translation',
         description: 'Tap any verse number medallion or the top Study button to open comprehensive verse study.',
-        tip: "Switch between English (Sahih Int'l, Pickthall), Urdu & Hindi, plus Ibn Kathir & Ma'arif al-Qur'an Tafsirs.",
+        tip: "Switch between English (Sahih Int'l, Pickthall) & Urdu, plus Ibn Kathir & Ma'arif al-Qur'an Tafsirs.",
       },
       {
         id: 'hifz',
@@ -278,52 +278,6 @@ const GUIDE_TRANSLATIONS: Record<LanguageCode, QuranGuideData> = {
     footer: 'متاح في أي وقت عبر',
     footerHighlight: '؟ الدليل',
     gotIt: 'حسناً فهمت',
-  },
-
-  hi: {
-    title: 'क़ुरआन फीचर्स गाइड',
-    subtitle: 'इंटरैक्टिव टूल्स और स्मार्ट वर्कफ़्लो सीखें',
-    stepPrefix: 'चरण',
-    cards: [
-      {
-        id: 'wbw',
-        badge: 'शब्द अध्ययन',
-        title: '👆 शब्द-दर-शब्द अध्ययन और ऑडियो',
-        description: 'मुस्हफ़ पृष्ठ पर किसी भी अरबी शब्द पर टैप करके उसका सटीक अर्थ, उच्चारण और मूल शब्द देखें।',
-        tip: 'पॉपअप में ऑडियो बटन दबाकर क़ारी की आवाज़ में उस शब्द का सही उच्चारण सुनें।',
-      },
-      {
-        id: 'tafsir',
-        badge: 'तफ़सीर व अनुवाद',
-        title: 'तफ़सीर और बहुभाषी अनुवाद',
-        description: 'किसी भी आयत संख्या निशान या शीर्ष Study बटन पर टैप करके विस्तृत आयत अध्ययन व तफ़सीर खोलें।',
-        tip: 'हिन्दी, उर्दू और अंग्रेज़ी अनुवादों के साथ-साथ तफ़सीर इब्न कसीर और मआरिफ़ुल क़ुरआन में स्विच करें।',
-      },
-      {
-        id: 'hifz',
-        badge: 'हिफ़्ज़ इंजन',
-        title: '🔁 हिफ़्ज़ (कंठस्थ) इंजन',
-        description: 'Study → हिफ़्ज़ में किसी भी आयत या आयत समूह को 3 से 10 बार दोहराकर याद करें।',
-        tip: 'क़ारी के बाद पढ़ने के लिए Recite Pause चालू करें और याददाश्त परखने के लिए Blur Words स्लाइडर का उपयोग करें।',
-      },
-      {
-        id: 'modes',
-        badge: '4 पठन मोड',
-        title: '🎨 4 पठन मोड और तजवीद रंग',
-        description: 'अपना पसंदीदा मुस्हफ़ चुनें: ज्वेल (शाही लक्ज़री), पेपर (मदीना क्रीम), नाइट (डार्क OLED) या स्कैन (मूल प्रिंट)।',
-        tip: 'गुन्ना, इदग़ाम, क़लक़ला और मद के नियमों को रंगों में देखने के लिए 🎨 Tajweed पर टैप करें।',
-      },
-      {
-        id: 'khatmah',
-        badge: 'स्मार्ट प्रगति',
-        title: '📖 स्मार्ट ख़त्म और 5-रंगीन ऑटो-बुकमार्क्स',
-        description: '30, 60 या 90 दिनों का ख़त्म लक्ष्य तय करें जो आपके दैनिक पाठ के अनुसार रोज़ाना लक्ष्य अपने-आप समायोजित करता है।',
-        tip: '5 अलग रंगों के बुकमार्क इस्तेमाल करें, ऑटो-मूव के साथ हर पन्ना पलटने पर बुकमार्क आगे बढ़ता है।',
-      },
-    ],
-    footer: 'किसी भी समय उपलब्ध via',
-    footerHighlight: '? गाइड',
-    gotIt: 'समझ आ गया',
   },
 
   bn: {
@@ -678,59 +632,6 @@ const UI_STRINGS: Record<LanguageCode, QuranUIStrings> = {
     format15Lines: '١٥ سطرًا',
     format15LinesSub: 'المدينة',
   },
-  hi: {
-    welcomeBannerTitle: 'क़ुरआन के नए टूल्स जानें',
-    welcomeBannerDesc: 'शब्दार्थ, हिफ़्ज़ और तजवीद',
-    seeHow: 'देखें कैसे →',
-    guideBtn: 'गाइड',
-    studyBtn: 'अध्ययन',
-    quranBack: 'क़ुरआन',
-    page: 'पृष्ठ',
-    juz: 'पारा',
-    subToolbarHint: {
-      tapWord: 'शब्द पर टैप',
-      meaning: 'अर्थ',
-      tapMedallion: 'टैप',
-      tafsir: 'तफ़सीर',
-    },
-    autoPageOn: '🔄 ऑटो-पेज चालू',
-    syncAudio: '📍 ऑडियो सिंक',
-    subtitleStats: '114 सूरह • 30 जुज़ • 604 पृष्ठ',
-    continueReading: 'जारी रखें:',
-    resume: 'आगे पढ़ें →',
-    khatmah: 'खत्मह',
-    startPlan: '30–90 दिन की योजना शुरू करें',
-    tilawah: 'तिलावत',
-    tilawahSub: '47 कारी • निरंतर',
-    oftenRead: 'सुन्नत सूरतें',
-    searchPlaceholder: 'सूरह, जुज़, पृष्ठ खोजें...',
-    jump: 'जाएं',
-    surahsTab: 'सूरह',
-    juzTab: 'जुज़',
-    pagesTab: 'पृष्ठ',
-    savedTab: '★ सहेजे गए',
-    all: 'सभी',
-    meccan: 'मक्की',
-    medinan: 'मदनी',
-    verseOfTheDay: 'आज की आयत',
-    readInSurah: 'सूरह में पढ़ें',
-    study: 'अध्ययन',
-    jewel: 'रत्न',
-    paper: 'कागज़',
-    night: 'रात्रि',
-    scan: 'स्कैन',
-    tajweed: 'तजवीद',
-    prev: 'पिछला',
-    next: 'अगला',
-    ayahs: 'आयात',
-    mushafFormatHeader: '📖 क़ुरआन मुसहफ़ फ़ॉर्मेट',
-    format7Lines: '7 पंक्तियाँ',
-    format7LinesSub: 'बड़े अक्षर',
-    format13Lines: '13 पंक्तियाँ',
-    format13LinesSub: 'इंडो-पाक',
-    format15Lines: '15 पंक्तियाँ',
-    format15LinesSub: 'मदीना',
-  },
   bn: {
     welcomeBannerTitle: 'কুরআনের নতুন ফিচারসমূহ জানুন',
     welcomeBannerDesc: 'শব্দার্থ, হিফজ ও তাজবিদ',
@@ -952,21 +853,6 @@ const APPEARANCE_STRINGS: Record<LanguageCode, AppearanceUIStrings> = {
     splashScreenSubtitle: 'تفعيل حركة بدء تشغيل التطبيق',
     timeFormat24Title: 'تنسيق الوقت ٢٤ ساعة',
     timeFormat24Subtitle: 'استخدام نظام ٢٤ ساعة (١٧:٣٠) بدلاً من نظام ١٢ ساعة',
-  },
-  hi: {
-    language: 'भाषा',
-    appThemeTitle: 'ऐप थीम',
-    appThemeSubtitle: 'अपनी संपूर्ण ऐप के लिए रंग थीम चुनें',
-    fluidAnimationsTitle: 'सहज एनिमेशन',
-    fluidAnimationsSubtitle: 'सहज इंटरफ़ेस बदलाव सक्षम करें। सपाट और हल्की सतहों के लिए बंद करें।',
-    salamGreetingTitle: 'सलाम अभिवादन',
-    salamGreetingSubtitle: 'होम स्क्रीन पर दैनिक सलाम दिखाएं',
-    splashWelcomeTitle: 'प्रारंभिक स्वागत',
-    splashWelcomeSubtitle: 'शुरू में "Islamic Companion" दिखाएं',
-    splashScreenTitle: 'स्प्लैश स्क्रीन',
-    splashScreenSubtitle: 'ऐप स्टार्टअप एनिमेशन सक्षम करें',
-    timeFormat24Title: '24-घंटे समय प्रारूप',
-    timeFormat24Subtitle: '12-घंटे AM/PM के बजाय 24-घंटे की घड़ी (17:30) का उपयोग करें',
   },
   bn: {
     language: 'ভাষা',

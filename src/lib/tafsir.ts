@@ -136,8 +136,7 @@ export const TAFSIR_EDITIONS: TafsirEdition[] = [
     { id: "bn-tafseer-ibn-e-kaseer", name: "Tafseer ibn Kathir", language: "Bengali", author: "Tawheed Publication" },
     { id: "bn-tafsir-ahsanul-bayaan", name: "Tafsir Ahsanul Bayaan", language: "Bengali", author: "Bayaan Foundation" },
 
-    // Hindi & Gujarati Commentary
-    { id: "hin-suhelfarooqkhan", name: "Tafsir Suhel Farooq (Hindi)", language: "Hindi", author: "Suhel Farooq Khan" },
+    // Gujarati Commentary
     { id: "guj-rabila", name: "Tafsir Rabila (Gujarati)", language: "Gujarati", author: "Rabila Al-Umari" },
     
     // Russian Tafsirs

@@ -65,10 +65,6 @@ const LIVE_PREVIEW_SAMPLE: Record<ContentLang, { arabic: string; body: string }>
     arabic: 'إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ',
     body: 'અમલોનો આધાર નિયત પર છે, અને Allah (SWT) નિખાલસ નિયત મુજબ બદલો આપે છે.',
   },
-  hi: {
-    arabic: 'إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ',
-    body: 'अमल का दारोमदार नीयत पर है, और Allah (SWT) सच्ची नीयत के मुताबिक़ बदला अता फ़रमाता है।',
-  },
 };
 
 export function AaReaderControlsButton({ className = '' }: { className?: string }) {
@@ -398,7 +394,7 @@ export function BookProseParagraph({
   const isUrdu = actualLang === 'ur';
   const sanitizedText = formatIslamicProse(text, actualLang);
 
-  if (!fontReady && (actualLang === 'ur' || actualLang === 'hi')) {
+  if (!fontReady && actualLang === 'ur') {
     return (
       <div
         aria-busy="true"

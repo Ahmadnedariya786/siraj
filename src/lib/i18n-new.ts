@@ -22,9 +22,6 @@ export async function ensureLocaleLoaded(lang: string): Promise<void> {
     case 'gu':
       mod = await import('../locales/gu.json');
       break;
-    case 'hi':
-      mod = await import('../locales/hi.json');
-      break;
     case 'bn':
       mod = await import('../locales/bn.json');
       break;
@@ -46,6 +43,15 @@ export async function ensureLocaleLoaded(lang: string): Promise<void> {
 const resources = {
   en: { translation: enTranslations },
 };
+
+// Migrate any legacy 'hi' i18nextLng preference silently to 'en'
+try {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('i18nextLng') === 'hi') {
+    localStorage.setItem('i18nextLng', 'en');
+  }
+} catch {
+  // Ignore storage migration fallback
+}
 
 // Initialize i18next
 i18n

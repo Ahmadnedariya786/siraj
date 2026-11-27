@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
 import { ReaderTagChips } from "@/components/BookReaderControls";
@@ -16,10 +15,10 @@ export function ProphetCard({ prophet, onClick, index, variant = 'grid' }: Proph
   const { t } = useLanguage();
   const { contentLang, isRtl } = useContentLanguage();
 
-  const curatedName = (contentLang === 'ur' || contentLang === 'gu' || contentLang === 'hi')
+  const curatedName = (contentLang === 'ur' || contentLang === 'gu')
     ? PROPHET_NAME_TRANSLATIONS[prophet.id]?.[contentLang]
     : null;
-  const curatedTitle = (contentLang === 'ur' || contentLang === 'gu' || contentLang === 'hi')
+  const curatedTitle = (contentLang === 'ur' || contentLang === 'gu')
     ? PROPHET_SUBTITLE_TRANSLATIONS[prophet.id]?.[contentLang]
     : null;
 
@@ -52,11 +51,11 @@ export function ProphetCard({ prophet, onClick, index, variant = 'grid' }: Proph
   }, [prophet.id, prophet.name, prophet.title, contentLang, curatedName, curatedTitle]);
 
   const eraLabels: Record<ProphetSummary["era"], string> = {
-    "beginning-of-creation": contentLang === 'ur' ? 'ابتدائے آفرینش' : contentLang === 'gu' ? 'શરૂઆતનો સમય' : contentLang === 'hi' ? 'सृष्टि का आरंभ' : t("qisasEraBeginning"),
-    "pre-flood": contentLang === 'ur' ? 'طوفانِ نوح سے قبل' : contentLang === 'gu' ? 'નૂહ પૂર પહેલાં' : contentLang === 'hi' ? 'तूफ़ान-ए-नूह से पूर्व' : t("qisasEraPreFlood"),
-    patriarchal: contentLang === 'ur' ? 'دورِ ابراہیمی' : contentLang === 'gu' ? 'ઇબ્રાહીમ દોર' : contentLang === 'hi' ? 'इब्राहीमी दौर' : t("qisasEraPatriarchal"),
-    israelite: contentLang === 'ur' ? 'بنی اسرائیل کا دور' : contentLang === 'gu' ? 'ઇઝરાયલી દોર' : contentLang === 'hi' ? 'बनी इस्राईल का दौर' : t("qisasEraIsraelite"),
-    "post-israelite": contentLang === 'ur' ? 'مابعد بنی اسرائیل' : contentLang === 'gu' ? 'અન્ય પયગંબરો' : contentLang === 'hi' ? 'अन्य नबी' : t("qisasEraPostIsraelite"),
+    "beginning-of-creation": contentLang === 'ur' ? 'ابتدائے آفرینش' : contentLang === 'gu' ? 'શરૂઆતનો સમય' : t("qisasEraBeginning"),
+    "pre-flood": contentLang === 'ur' ? 'طوفانِ نوح سے قبل' : contentLang === 'gu' ? 'નૂહ પૂર પહેલાં' : t("qisasEraPreFlood"),
+    patriarchal: contentLang === 'ur' ? 'دورِ ابراہیمی' : contentLang === 'gu' ? 'ઇબ્રાહીમ દોર' : t("qisasEraPatriarchal"),
+    israelite: contentLang === 'ur' ? 'بنی اسرائیل کا دور' : contentLang === 'gu' ? 'ઇઝરાયલી દોર' : t("qisasEraIsraelite"),
+    "post-israelite": contentLang === 'ur' ? 'مابعد بنی اسرائیل' : contentLang === 'gu' ? 'અન્ય પયગંબરો' : t("qisasEraPostIsraelite"),
   };
 
   const visibleMentions = prophet.quranMentions.slice(0, 2);
@@ -64,13 +63,9 @@ export function ProphetCard({ prophet, onClick, index, variant = 'grid' }: Proph
 
   if (variant === 'list') {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: Math.min(index * 0.025, 0.2) }}
-        whileTap={{ scale: 0.99 }}
+      <div
         onClick={onClick}
-        className="bg-[var(--surface)] rounded-2xl p-3 cursor-pointer border border-[var(--border)] hover:border-[var(--accent)]/45 transition-colors flex items-center gap-3"
+        className="bg-[var(--surface)] rounded-2xl p-3 cursor-pointer border border-[var(--border)] hover:border-[var(--accent)]/45 active:scale-[0.99] transition-all duration-150 flex items-center gap-3"
       >
         <div
           className="w-16 h-12 rounded-xl border border-[var(--border)] flex items-center justify-center shrink-0"
@@ -117,19 +112,14 @@ export function ProphetCard({ prophet, onClick, index, variant = 'grid' }: Proph
             {translatedTitle}
           </p>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index * 0.035, 0.25) }}
-      whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.98 }}
+    <div
       onClick={onClick}
-      className="bg-[var(--surface)] rounded-[22px] p-3.5 cursor-pointer border border-[var(--border)] hover:border-[var(--accent)]/45 transition-all duration-200 space-y-2"
+      className="bg-[var(--surface)] rounded-[22px] p-3.5 cursor-pointer border border-[var(--border)] hover:border-[var(--accent)]/45 hover:scale-[1.01] active:scale-[0.98] transition-all duration-150 space-y-2"
     >
       {/* Compact Calligraphy Panel: surface-2 + accent-soft radial wash, Arabic name in accent-text 20px */}
       <div
@@ -205,6 +195,6 @@ export function ProphetCard({ prophet, onClick, index, variant = 'grid' }: Proph
           moreLabel={t("more")}
         />
       )}
-    </motion.div>
+    </div>
   );
 }

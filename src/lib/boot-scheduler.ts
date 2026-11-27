@@ -233,12 +233,12 @@ function installLongTaskObserver(ttiPerfMs: number): void {
   if (longTaskObserverInstalled || typeof window === 'undefined') return;
   longTaskObserverInstalled = true;
 
-  // Ingest any long tasks captured early in index.html <head>
+  // Ingest ONLY post-interactive long tasks (startMs >= ttiPerfMs within first 5s post-TTI)
   try {
     const win = window as Window & { __NOOR_BOOT_LONG_TASKS?: BootLongTaskEntry[] };
     if (Array.isArray(win.__NOOR_BOOT_LONG_TASKS)) {
       for (const entry of win.__NOOR_BOOT_LONG_TASKS) {
-        if (entry.durationMs > 50 && entry.startMs <= ttiPerfMs + 5000) {
+        if (entry.durationMs > 50 && entry.startMs >= ttiPerfMs && entry.startMs <= ttiPerfMs + 5000) {
           currentTrace.longTasksFirst5s.push(entry);
         }
       }
@@ -251,7 +251,7 @@ function installLongTaskObserver(ttiPerfMs: number): void {
     if (typeof PerformanceObserver === 'undefined') return;
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (entry.duration > 50 && entry.startTime <= ttiPerfMs + 5000) {
+        if (entry.duration > 50 && entry.startTime >= ttiPerfMs && entry.startTime <= ttiPerfMs + 5000) {
           currentTrace.longTasksFirst5s.push({
             name: entry.name || 'self',
             startMs: Math.round(entry.startTime * 10) / 10,

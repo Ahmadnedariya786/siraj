@@ -1,24 +1,21 @@
 import { useState, useEffect, memo, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Heart, Share2, BookHeart, Search, Volume2, Plus, Minus, Star, Sparkles, Check, RotateCcw } from "lucide-react";
+import { ArrowLeft, Heart, Share2, BookHeart, Search, Volume2, Star, Check, RotateCcw, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { getFavorites, toggleFavorite } from "@/lib/storage";
 import { duasData, duaCategories, type Dua } from "@/data/duas";
-import { ManuscriptDivider } from "@/components/ui/ManuscriptDivider";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 
 const FONT_LEVELS = [
-  { arabic: "1.35rem", translation: "0.82rem" },
-  { arabic: "1.52rem", translation: "0.88rem" },
-  { arabic: "1.70rem", translation: "0.95rem" },
-  { arabic: "1.88rem", translation: "1.02rem" },
-  { arabic: "2.05rem", translation: "1.10rem" },
+  { arabic: "18px", translation: "13px" },
+  { arabic: "20px", translation: "14px" },
+  { arabic: "22px", translation: "15px" },
+  { arabic: "25px", translation: "16.5px" },
+  { arabic: "28px", translation: "18px" },
 ];
 
 interface DuasI18n {
@@ -176,52 +173,6 @@ const DUAS_I18N: Record<string, DuasI18n> = {
       Fasting: "રોઝા",
       "Hajj & Umrah": "હજ અને ઉમરાહ",
       "New Moon": "નવો ચાંદ",
-    },
-  },
-  hi: {
-    title: "दुआएं और अज़कार",
-    supplications: "दुआएं",
-    searchPlaceholder: "दुआएं या संदर्भ खोजें...",
-    pronunciationShow: "▾ उच्चारण",
-    pronunciationHide: "▸ उच्चारण",
-    translationShow: "▾ अनुवाद",
-    translationHide: "▸ अनुवाद",
-    tap: "+ टैप",
-    saved: "सहेजे गए",
-    duaSingle: "दुआ",
-    duaPlural: "दुआएं",
-    matching: "से मेल खाते",
-    noDuasFound: "कोई दुआ नहीं मिली",
-    clearFilters: "फ़िल्टर हटाएं",
-    categories: {
-      All: "सभी",
-      Morning: "सुबह",
-      Evening: "शाम",
-      Travel: "सफ़र",
-      Eating: "भोजन",
-      Sleeping: "सोना",
-      Illness: "बीमारी",
-      Distress: "परेशानी",
-      Gratitude: "शुक्र",
-      Forgiveness: "माफ़ी",
-      Protection: "हिफ़ाज़त",
-      Weather: "मौसम",
-      "After Prayer": "नमाज़ के बाद",
-      Home: "घर",
-      Mosque: "मस्जिद",
-      Daily: "दैनिक",
-      "Special Days": "विशेष दिन",
-      Knowledge: "इल्म",
-      Character: "अख़लाक़",
-      Marriage: "निकाह",
-      Family: "परिवार",
-      Financial: "आर्थिक",
-      Afterlife: "आख़िरत",
-      Repentance: "तौबा",
-      Parents: "माता-पिता",
-      Fasting: "रोज़ा",
-      "Hajj & Umrah": "हज व उमरा",
-      "New Moon": "नया चाँद",
     },
   },
   ar: {
@@ -458,24 +409,32 @@ const DuaCard = memo(function DuaCard({
 
   const currentFont = FONT_LEVELS[fontLevel] || FONT_LEVELS[2];
 
+  const handleCopy = useCallback(async () => {
+    const bodyText = `"${dua.arabic}"\n\n${dua.transliteration}\n\n${translatedTranslation || dua.translation}\n— ${dua.reference || "Hisn al-Muslim"}`;
+    try {
+      await navigator.clipboard.writeText(bodyText);
+    } catch (err) {
+      console.debug('[Duas] Clipboard copy fallback:', err);
+    }
+  }, [dua.arabic, dua.transliteration, dua.translation, dua.reference, translatedTranslation]);
+
   return (
-    <div className="active:scale-[0.99] transition-transform duration-100">
+    <div className="w-full min-w-0 active:scale-[0.99] transition-transform duration-100">
       <Card
-        className={`p-5 relative overflow-hidden rounded-2xl border transition-all ${
-          isComplete ? "shadow-md ring-1 ring-[var(--accent)]" : "shadow-sm"
-        }`}
+        className={`w-full min-w-0 p-4 relative overflow-hidden rounded-2xl border transition-all ${
+          isDuaOfDay ? "siraj-translucent-subtle" : "siraj-translucent-card"
+        } ${isComplete ? "shadow-md ring-1 ring-[var(--accent)]" : "shadow-sm"}`}
         style={{
-          background: isDuaOfDay ? "var(--surface-2)" : "var(--surface)",
           borderColor: isComplete ? "var(--accent)" : "var(--border)",
         }}
       >
-        <div className="space-y-3.5">
-          {/* Header Row: Category + Repeat Badge + Actions */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {isDuaOfDay && <Star className="w-3.5 h-3.5 text-[var(--accent)] fill-[var(--accent)]" />}
+        <div className="w-full min-w-0 space-y-3">
+          {/* Header Row: Star + Category + Repeat Badge on Left; Audio / Favorite / Copy / Share on Right */}
+          <div className="flex items-center justify-between flex-wrap gap-2 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              {isDuaOfDay && <Star className="w-3.5 h-3.5 text-[var(--accent)] fill-[var(--accent)] shrink-0" />}
               <span
-                className={`px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider rounded-full border ${contentLang === 'ur' ? 'font-urdu' : ''}`}
+                className={`px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider rounded-full border max-w-full truncate ${contentLang === 'ur' ? 'font-urdu' : ''}`}
                 style={{
                   background: "var(--accent-soft)",
                   borderColor: "var(--accent)",
@@ -485,7 +444,7 @@ const DuaCard = memo(function DuaCard({
                 {strings.categories[dua.category] || dua.category}
               </span>
               <span
-                className="px-2 py-0.5 text-[11px] font-mono font-bold rounded-full border"
+                className="px-2 py-0.5 text-[11px] font-mono font-bold rounded-full border shrink-0"
                 style={{
                   background: "var(--surface-2)",
                   borderColor: "var(--border)",
@@ -496,12 +455,12 @@ const DuaCard = memo(function DuaCard({
               </span>
             </div>
 
-            {/* Quick Actions (Audio, Favorite, Share) */}
-            <div className="flex items-center gap-0.5">
+            {/* Quick Actions (Audio, Copy, Favorite, Share) */}
+            <div className="flex items-center gap-0.5 shrink-0">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+                className="h-8 w-8 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] shrink-0"
                 onClick={() => playAudio(dua.arabic)}
                 aria-label="Listen to audio pronunciation"
               >
@@ -510,7 +469,16 @@ const DuaCard = memo(function DuaCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-[var(--text-secondary)] hover:text-red-500 hover:bg-[var(--surface-2)]"
+                className="h-8 w-8 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] shrink-0"
+                onClick={handleCopy}
+                aria-label="Copy supplication"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full text-[var(--text-secondary)] hover:text-red-500 hover:bg-[var(--surface-2)] shrink-0"
                 onClick={() => onToggleFavorite(dua.id)}
                 aria-label="Save to favorites"
               >
@@ -519,7 +487,7 @@ const DuaCard = memo(function DuaCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+                className="h-8 w-8 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] shrink-0"
                 onClick={() => onShare(dua)}
                 aria-label="Share supplication"
               >
@@ -530,16 +498,17 @@ const DuaCard = memo(function DuaCard({
 
           {/* Arabic Calligraphy Text */}
           <p
-            className="font-arabic font-bold text-right tracking-wide select-text"
+            className="w-full min-w-0 font-arabic font-bold text-right break-words select-text"
             dir="rtl"
             style={{
               fontFamily: "'Amiri', 'Traditional Arabic', 'Scheherazade New', serif",
               fontSize: currentFont.arabic,
-              lineHeight: 2.25,
+              lineHeight: 2.0,
               wordSpacing: "2px",
               color: "var(--text-primary)",
               paddingTop: "4px",
               paddingBottom: "4px",
+              unicodeBidi: "plaintext",
             }}
           >
             {dua.arabic}
@@ -576,10 +545,12 @@ const DuaCard = memo(function DuaCard({
           {/* Transliteration */}
           {showPronunciation && (
             <p
-              className="font-serif italic leading-relaxed pt-1"
+              dir="ltr"
+              className="w-full min-w-0 font-serif italic leading-relaxed pt-1 break-words whitespace-normal text-left"
               style={{
                 fontSize: currentFont.translation,
                 color: "var(--accent-text)",
+                unicodeBidi: "plaintext",
               }}
             >
               {dua.transliteration}
@@ -589,12 +560,13 @@ const DuaCard = memo(function DuaCard({
           {/* Translation */}
           {showTranslation && (
             <p
-              className={`leading-relaxed font-medium ${contentLang === 'ur' ? 'font-urdu text-right text-base leading-[2.35]' : isRtl ? 'font-arabic text-right text-base leading-loose' : ''}`}
+              className={`w-full min-w-0 leading-relaxed font-medium break-words whitespace-normal ${contentLang === 'ur' ? 'font-urdu text-right leading-[2.35]' : 'text-left'}`}
               dir={isRtl ? 'rtl' : 'ltr'}
               style={{
                 fontSize: currentFont.translation,
                 color: "var(--text-primary)",
                 opacity: 0.95,
+                unicodeBidi: "plaintext",
               }}
             >
               {translatedTranslation || dua.translation}
@@ -603,15 +575,15 @@ const DuaCard = memo(function DuaCard({
 
           {/* Footer: Tactile Inline Tap Counter + Authentic Source Reference */}
           <div
-            className="flex items-center justify-between pt-3 border-t mt-1 gap-2"
+            className="flex items-center justify-between pt-3 border-t mt-1 gap-2 min-w-0 flex-wrap"
             style={{ borderColor: "var(--border)" }}
           >
             {/* Tactile Repetition Tap Counter */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={handleTap}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold transition-all active:scale-95 shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold transition-all active:scale-95 shadow-sm whitespace-nowrap"
                 style={{
                   background: isComplete ? "var(--accent)" : "var(--surface-2)",
                   borderColor: isComplete ? "var(--accent)" : "var(--border)",
@@ -642,7 +614,7 @@ const DuaCard = memo(function DuaCard({
 
             {/* Authentic Source Reference */}
             <div
-              className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] text-right truncate max-w-[170px]"
+              className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] text-right truncate max-w-[160px] min-w-0"
               title={dua.reference || "Authentic Supplication"}
             >
               {dua.reference || "Hisn al-Muslim"}
@@ -738,25 +710,31 @@ const Duas = memo(function Duas() {
   };
 
   return (
-    <div className={`min-h-screen bg-transparent pb-4 relative z-10 safe-top ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? 'rtl' : 'ltr'} style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}>
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
-        {/* Header with Row 1 (Back + Title + Font Sizer) and Row 2 (Full-Width Language Bar) */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3 min-w-0">
+    <div
+      data-testid="duas-page-root"
+      className={`min-h-screen w-full max-w-full overflow-x-hidden bg-transparent pb-4 relative z-10 safe-top ${contentLang === 'ur' ? 'font-urdu' : ''}`}
+      dir={isRtl ? 'rtl' : 'ltr'}
+      style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}
+    >
+      <div className="w-full max-w-lg mx-auto px-4 py-5 space-y-3.5 overflow-x-hidden box-border">
+        {/* Header with Row 1 (Back + Title + Font Sizer) and Row 2 (3-Language Bar) */}
+        <div className="w-full min-w-0 space-y-3">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate("/")}
                 className="rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] shrink-0"
+                aria-label="Back to Home"
               >
                 <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
               </Button>
-              <div className="min-w-0">
-                <h1 className={`text-2xl font-bold text-[var(--text-primary)] tracking-tight truncate ${contentLang === 'ur' ? 'font-urdu' : 'font-serif italic'}`}>
+              <div className="min-w-0 flex-1">
+                <h1 className={`text-xl font-bold text-[var(--text-primary)] tracking-tight truncate leading-tight ${contentLang === 'ur' ? 'font-urdu' : 'font-serif italic'}`}>
                   {strings.title}
                 </h1>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] mt-0.5 truncate">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--text-secondary)] mt-0.5 truncate">
                   {duasData.length} {strings.supplications}
                 </p>
               </div>
@@ -797,13 +775,13 @@ const Duas = memo(function Duas() {
         </div>
 
         {/* Search */}
-        <div className="relative">
+        <div className="relative w-full min-w-0">
           <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
           <Input
             placeholder={strings.searchPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 rtl:pl-4 rtl:pr-10 h-11 rounded-xl border shadow-sm focus-visible:ring-[var(--accent)]"
+            className="w-full min-w-0 pl-10 rtl:pl-4 rtl:pr-10 h-11 rounded-xl border shadow-sm focus-visible:ring-[var(--accent)]"
             style={{
               background: "var(--surface)",
               borderColor: "var(--border)",
@@ -812,9 +790,12 @@ const Duas = memo(function Duas() {
           />
         </div>
 
-        {/* Categories */}
-        <ScrollArea className="h-11">
-          <div className="flex gap-2 pb-2">
+        {/* Categories Strip: strictly self-contained horizontal scroller (never widens page) */}
+        <div
+          data-testid="duas-category-scroller"
+          className="w-full max-w-full overflow-x-auto no-scrollbar py-0.5"
+        >
+          <div className="flex flex-nowrap items-center gap-2 min-w-max">
             {duaCategories.map((cat) => {
               const isSelected = selectedCategory === cat;
               return (
@@ -822,7 +803,7 @@ const Duas = memo(function Duas() {
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={`whitespace-nowrap text-xs px-3.5 py-1.5 rounded-full font-bold shadow-sm transition-all border active:scale-95 ${contentLang === 'ur' ? 'font-urdu' : ''}`}
+                  className={`shrink-0 whitespace-nowrap text-xs px-3.5 py-1.5 rounded-full font-bold shadow-sm transition-all border active:scale-95 ${contentLang === 'ur' ? 'font-urdu' : ''}`}
                   style={{
                     background: isSelected ? "var(--accent)" : "var(--surface)",
                     borderColor: isSelected ? "var(--accent)" : "var(--border)",
@@ -834,11 +815,11 @@ const Duas = memo(function Duas() {
               );
             })}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Results count & Filter toggle */}
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)]">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] truncate min-w-0">
             {filteredDuas.length} {filteredDuas.length === 1 ? strings.duaSingle : strings.duaPlural}
             {searchQuery && ` ${strings.matching} "${searchQuery}"`}
           </p>
@@ -846,7 +827,7 @@ const Duas = memo(function Duas() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs gap-1 text-[var(--text-secondary)] hover:text-red-500"
+              className="h-7 text-xs gap-1 shrink-0 text-[var(--text-secondary)] hover:text-red-500"
               onClick={() => setSelectedCategory("All")}
             >
               <Heart className="w-3 h-3 fill-red-500 text-red-500" />
@@ -868,12 +849,11 @@ const Duas = memo(function Duas() {
         )}
 
         {/* Duas List */}
-        <div className="space-y-4 pb-24">
+        <div className="w-full min-w-0 space-y-3.5 pb-20">
           {filteredDuas.length === 0 ? (
             <Card
-              className="p-8 text-center rounded-2xl border shadow-sm"
+              className="w-full p-8 text-center rounded-2xl border shadow-sm siraj-translucent-card"
               style={{
-                background: "var(--surface)",
                 borderColor: "var(--border)",
               }}
             >
@@ -899,9 +879,9 @@ const Duas = memo(function Duas() {
               </Button>
             </Card>
           ) : (
-            <div className="flex flex-col gap-3.5">
+            <div className="w-full min-w-0 flex flex-col gap-3.5">
               {filteredDuas.map((dua) => (
-                <div key={dua.id} style={{ contentVisibility: "auto", containIntrinsicSize: "auto 260px" }}>
+                <div key={dua.id} className="w-full min-w-0" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 260px" }}>
                   <DuaCard
                     dua={dua}
                     isFavorite={favorites.includes(dua.id)}

@@ -73,10 +73,18 @@ async function persistLanguage(lang: LanguageCode) {
 async function loadSavedLanguageCode(): Promise<LanguageCode | null> {
   try {
     const localSaved = localStorage.getItem(PREF_KEY);
+    if (localSaved === 'hi') {
+      await persistLanguage('en');
+      return 'en';
+    }
     if (localSaved && SUPPORTED_CODES.includes(localSaved as LanguageCode)) {
       return localSaved as LanguageCode;
     }
     const { value } = await Preferences.get({ key: PREF_KEY });
+    if (value === 'hi') {
+      await persistLanguage('en');
+      return 'en';
+    }
     if (value && SUPPORTED_CODES.includes(value as LanguageCode)) {
       return value as LanguageCode;
     }
@@ -144,6 +152,10 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
   const [language, setLanguageState] = useState<LanguageCode>(() => {
     try {
       const saved = localStorage.getItem(PREF_KEY);
+      if (saved === 'hi') {
+        localStorage.setItem(PREF_KEY, 'en');
+        return 'en';
+      }
       if (saved && SUPPORTED_CODES.includes(saved as LanguageCode)) {
         return saved as LanguageCode;
       }

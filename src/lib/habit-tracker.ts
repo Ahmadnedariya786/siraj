@@ -77,7 +77,7 @@ export const DEFAULT_HABITS: Habit[] = [
   {
     id: 'maghrib-prayer',
     name: 'Maghrib Prayer',
-    description: 'Perform Maghrib prayer on time',
+    description: 'Perform Maghrib on time',
     category: 'prayer',
     icon: '🙏',
     color: 'bg-orange-500'

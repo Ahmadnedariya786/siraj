@@ -557,29 +557,8 @@ function AppShell() {
 
     let notificationManagerStop: (() => void) | null = null;
 
-    // P1 — Idle-chunked critical background tasks (yielded between every slice so UI stays 100% interactive)
+    // P1 — Idle-chunked critical background tasks (alarms arm FIRST, yielded cleanly so UI stays 100% interactive)
     runP1IdleChunks([
-      {
-        name: 'p1-prayer-qaza-sajdah',
-        run: async () => {
-          await import('@/lib/qaza-tracker')
-            .then(({ initQazaRolloverListeners }) => initQazaRolloverListeners())
-            .catch((err) => console.debug('Qaza rollover init skipped:', err));
-          await import('@/lib/sajdah-reminder')
-            .then(({ initSajdahReminderLifecycle }) => initSajdahReminderLifecycle())
-            .catch((err) => console.debug('Sajdah reminder init skipped:', err));
-          markStartupStep('notification-service-init');
-          try {
-            const { notificationManager } = await import('@/lib/notification-manager');
-            notificationManager.start();
-            notificationManagerStop = () => notificationManager.stop();
-          } catch (e) {
-            console.warn('Startup: notificationManager.start failed', e);
-          } finally {
-            completeStartupStep('notification-service-init');
-          }
-        },
-      },
       {
         name: 'p1-native-alarms-init',
         run: async () => {
@@ -611,6 +590,27 @@ function AppShell() {
             .finally(() => {
               completeStartupStep('islamic-events-init');
             });
+        },
+      },
+      {
+        name: 'p1-prayer-qaza-sajdah',
+        run: async () => {
+          await import('@/lib/qaza-tracker')
+            .then(({ initQazaRolloverListeners }) => initQazaRolloverListeners())
+            .catch((err) => console.debug('Qaza rollover init skipped:', err));
+          await import('@/lib/sajdah-reminder')
+            .then(({ initSajdahReminderLifecycle }) => initSajdahReminderLifecycle())
+            .catch((err) => console.debug('Sajdah reminder init skipped:', err));
+          markStartupStep('notification-service-init');
+          try {
+            const { notificationManager } = await import('@/lib/notification-manager');
+            notificationManager.start();
+            notificationManagerStop = () => notificationManager.stop();
+          } catch (e) {
+            console.warn('Startup: notificationManager.start failed', e);
+          } finally {
+            completeStartupStep('notification-service-init');
+          }
         },
       },
       {

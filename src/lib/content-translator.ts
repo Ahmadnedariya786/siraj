@@ -1,10 +1,10 @@
 /**
  * Unified Multi-Language Islamic Content Translation Engine
  * ─────────────────────────────────────────────────────────────
- * Supports: 'en' | 'ur' (Urdu) | 'gu' (Gujarati) | 'hi' (Hindi)
+ * Supports: 'en' | 'ur' (Urdu) | 'gu' (Gujarati)
  * Features:
  *  - Permanent IndexedDB offline store (`siraj_translated_books_v1`)
- *  - Authentic Urdu Scholar Hadith Editions (`urd-bukhari`, `urd-muslim`, etc.)
+ *  - Authentic Urdu Scholar Hadith Editions (`urd-bukhari`, `urd-muslim`, etc.) keyed by canonical global number
  *  - CORS-free native `CapacitorHttp.get` on Android + Web fetch fallback
  *  - Paragraph chunked streaming (`<= 850` chars/chunk) preserving Arabic & honorifics
  *  - Multi-endpoint fallback (Google GTX -> MyMemory)
@@ -16,7 +16,7 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { useLanguage } from '@/contexts/LanguageContext-new';
 import { formatIslamicProse, getHonorificLabels, getReaderLineHeight } from '@/lib/reader-typography';
 
-export type ContentLang = 'en' | 'ur' | 'gu' | 'hi';
+export type ContentLang = 'en' | 'ur' | 'gu';
 export type BookModuleType = 'hadith' | 'seerah' | 'prophet' | 'generic';
 
 export const CONTENT_LANG_STORAGE_KEY = 'noor_content_lang_v1';
@@ -36,7 +36,6 @@ export const CONTENT_LANGUAGES: ContentLangOption[] = [
   { code: 'en', label: 'English', nativeLabel: 'English', shortLabel: 'EN', dir: 'ltr' },
   { code: 'ur', label: 'Urdu', nativeLabel: 'اردو', shortLabel: 'اردو', dir: 'rtl' },
   { code: 'gu', label: 'Gujarati', nativeLabel: 'ગુજરાતી', shortLabel: 'ગુજ', dir: 'ltr' },
-  { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी', shortLabel: 'हिं', dir: 'ltr' },
 ];
 
 export interface CachedBookTranslation {
@@ -400,6 +399,75 @@ const URDU_HADITH_EDITIONS: Record<string, string> = {
   nawawi: 'urd-nawawi',
 };
 
+const MULTI_BOOK_URDU_COLLECTIONS = new Set([
+  'bukhari',
+  'muslim',
+  'abudawud',
+  'tirmidhi',
+  'nasai',
+  'ibnmajah',
+  'malik',
+]);
+
+const COLLECTION_REF_PATTERNS: Record<string, RegExp> = {
+  bukhari: /bukhari\s*[:#]?\s*(\d+)([a-z]?)/i,
+  muslim: /muslim\s*[:#]?\s*(\d+)([a-z]?)/i,
+  abudawud: /(?:abi\s*dawud|abudawud|abu\s*dawood)\s*[:#]?\s*(\d+)([a-z]?)/i,
+  tirmidhi: /tirmidhi\s*[:#]?\s*(\d+)([a-z]?)/i,
+  nasai: /nasa['`]?i\s*[:#]?\s*(\d+)([a-z]?)/i,
+  ibnmajah: /ibn\s*majah\s*[:#]?\s*(\d+)([a-z]?)/i,
+  malik: /(?:malik|muwatta)\s*[:#]?\s*(\d+)([a-z]?)/i,
+  forty: /(?:hadith|nawawi)\s*[:#]?\s*(\d+)([a-z]?)/i,
+  nawawi: /(?:hadith|nawawi)\s*[:#]?\s*(\d+)([a-z]?)/i,
+};
+
+/**
+ * Resolves the canonical collection-global Hadith number from `references` (e.g.
+ * `"Sahih Muslim 225"` -> `"225"`) so chapter-relative indices like `#4` in Book 2
+ * never fetch wrong global Hadith `#4`. Returns `null` when ambiguous or when a
+ * multi-narration suffix (`b`..`z`) would collide with the `a` narration in Urdu APIs.
+ */
+export function extractCanonicalHadithNumber(
+  collectionSlug: string,
+  hadithNumber: string | number,
+  references?: string,
+  bookNumber?: string | number
+): string | null {
+  const cleanCol = (collectionSlug || '').toLowerCase().trim();
+  const refStr = (references || '').trim();
+  const pattern = COLLECTION_REF_PATTERNS[cleanCol];
+
+  if (refStr && pattern) {
+    const match = refStr.match(pattern);
+    if (match && match[1]) {
+      const suffix = (match[2] || '').toLowerCase();
+      if (suffix && suffix !== 'a') {
+        return null;
+      }
+      return match[1];
+    }
+  }
+
+  // Fallback check: extract explicit integer if single-book or Book 1
+  const cleanBook = String(bookNumber ?? '').trim().toLowerCase();
+  if (MULTI_BOOK_URDU_COLLECTIONS.has(cleanCol) && cleanBook && cleanBook !== '1' && cleanBook !== 'forty') {
+    // Multi-book chapters > 1 without an explicit canonical reference string:
+    // `hadithNumber` is chapter-local (e.g., 4 instead of 225) — NEVER misuse it!
+    return null;
+  }
+
+  const numStr = String(hadithNumber ?? '').trim();
+  const rawSuffixMatch = numStr.match(/^(\d+)([a-z]?)$/i);
+  if (rawSuffixMatch) {
+    const suffix = (rawSuffixMatch[2] || '').toLowerCase();
+    if (suffix && suffix !== 'a') return null;
+    return rawSuffixMatch[1];
+  }
+
+  const digits = numStr.replace(/[^\d]/g, '');
+  return digits || null;
+}
+
 export function getUrduHadithEditionSlug(collectionSlug: string): string | null {
   const key = (collectionSlug || '').toLowerCase().trim();
   return URDU_HADITH_EDITIONS[key] ?? null;
@@ -407,30 +475,39 @@ export function getUrduHadithEditionSlug(collectionSlug: string): string | null 
 
 export async function fetchAuthenticUrduHadith(
   collectionSlug: string,
-  hadithNumber: string | number
+  hadithNumber: string | number,
+  references?: string,
+  bookNumber?: string | number
 ): Promise<string | null> {
   const edition = getUrduHadithEditionSlug(collectionSlug);
   if (!edition) return null;
 
-  const numStr = String(hadithNumber).replace(/[^\d]/g, '');
+  const numStr = extractCanonicalHadithNumber(collectionSlug, hadithNumber, references, bookNumber);
   if (!numStr) return null;
 
-  const cacheId = `hadith:${collectionSlug.toLowerCase()}:${numStr}:ur`;
+  const cacheId = `hadith:${collectionSlug.toLowerCase()}:canon:${numStr}:ur`;
   const cached = await getBookTranslationFromCache(cacheId);
   if (cached?.text && cached.source === 'scholar-edition') {
     return cached.text;
   }
 
   const url = `https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/${edition}/${numStr}.json`;
-  const json = await safeHttpGetJson<{ hadiths?: Array<{ text?: string }> }>(url, 5000);
-  const urduText = json?.hadiths?.[0]?.text?.trim();
+  const json = await safeHttpGetJson<{ hadiths?: Array<{ hadithnumber?: number | string; text?: string }> }>(url, 5000);
+  const firstEntry = json?.hadiths?.[0];
+  if (
+    firstEntry?.hadithnumber !== undefined &&
+    String(firstEntry.hadithnumber).replace(/[^\d]/g, '') !== numStr
+  ) {
+    return null;
+  }
+  const urduText = firstEntry?.text?.trim();
   if (!urduText) return null;
 
   const cleaned = sanitizeIslamicHonorifics(urduText, 'ur');
   await saveBookTranslationToCache({
     id: cacheId,
     module: 'hadith',
-    itemId: `${collectionSlug.toLowerCase()}:${numStr}`,
+    itemId: `${collectionSlug.toLowerCase()}:canon:${numStr}`,
     lang: 'ur',
     text: cleaned,
     source: 'scholar-edition',
@@ -444,6 +521,8 @@ export async function fetchAuthenticUrduHadith(
 export interface TranslateHadithOptions {
   collection: string;
   hadithNumber: string | number;
+  references?: string;
+  bookNumber?: string | number;
   englishText: string;
   targetLang: ContentLang;
 }
@@ -470,7 +549,16 @@ export async function translateHadithContent(
 
   const cleanCol = (opts.collection || 'generic').toLowerCase().trim();
   const cleanNum = String(opts.hadithNumber || fastHash(cleanEn)).trim();
-  const cacheId = `hadith:${cleanCol}:${cleanNum}:${opts.targetLang}`;
+  const canonicalNum = extractCanonicalHadithNumber(
+    cleanCol,
+    opts.hadithNumber,
+    opts.references,
+    opts.bookNumber
+  );
+  const scopedItemKey = canonicalNum
+    ? `canon:${canonicalNum}`
+    : `b${String(opts.bookNumber ?? '0').trim()}_h${cleanNum}_${fastHash(cleanEn).slice(0, 6)}`;
+  const cacheId = `hadith:${cleanCol}:${scopedItemKey}:${opts.targetLang}`;
   try {
     const { markP2FeatureVisited } = await import('@/lib/boot-scheduler');
     markP2FeatureVisited('translations');
@@ -489,9 +577,9 @@ export async function translateHadithContent(
     };
   }
 
-  // Try authentic scholar Urdu Hadith edition first when lang === 'ur'
-  if (opts.targetLang === 'ur') {
-    const scholarUr = await fetchAuthenticUrduHadith(cleanCol, cleanNum);
+  // Try authentic scholar Urdu Hadith edition first when lang === 'ur' using canonical global number
+  if (opts.targetLang === 'ur' && canonicalNum) {
+    const scholarUr = await fetchAuthenticUrduHadith(cleanCol, canonicalNum, opts.references, opts.bookNumber);
     if (scholarUr) {
       return {
         text: scholarUr,
@@ -833,77 +921,77 @@ export async function translateIslamicBatch(
   return Promise.all(texts.map((t) => translateIslamicText(t, targetLang)));
 }
 
-// ─── Curated & Cached Tag Chip Translator (Never Expose English Slugs in UR/GU/HI) ─
+// ─── Curated & Cached Tag Chip Translator (Never Expose English Slugs in UR/GU) ─
 
-const CURATED_TAG_TRANSLATIONS: Record<string, { ur: string; gu: string; hi: string }> = {
-  ahzab: { ur: 'غزوۂ احزاب', gu: 'અહઝાબ', hi: 'अहज़ाब' },
-  'arab-history': { ur: 'تاریخِ عرب', gu: 'અરબ ઇતિહાસ', hi: 'अरब इतिहास' },
-  ark: { ur: 'کشتیِ نوح', gu: 'નૂહનું વહાણ', hi: 'नूह की नाव' },
-  ascension: { ur: 'معراج النبی ﷺ', gu: 'મેરાજ', hi: 'मेराज' },
-  badr: { ur: 'غزوۂ بدر', gu: 'બદ્રની લડાઈ', hi: 'बद्र की जंग' },
-  battle: { ur: 'غزوہ', gu: 'જંગ', hi: 'जंग' },
-  birth: { ur: 'ولادتِ باسعادت', gu: 'જન્મ', hi: 'जन्म' },
-  'birth-miracle': { ur: 'معجزاتی ولادت', gu: 'ચમત્કારિક જન્મ', hi: 'चमत्कारिक जन्म' },
-  'children-of-israel': { ur: 'بنی اسرائیل', gu: 'બની ઇઝરાયેલ', hi: 'बनी इस्राईल' },
-  conquest: { ur: 'فتحِ مکہ', gu: 'ફતેહ', hi: 'फ़तह' },
-  covenant: { ur: 'عہد و میثاق', gu: 'કરાર', hi: 'अहद' },
-  creation: { ur: 'تخلیقِ کائنات', gu: 'સર્જન', hi: 'सृष्टि' },
-  death: { ur: 'وصالِ مبارک', gu: 'વફાત', hi: 'वफ़ात' },
-  dreams: { ur: 'تعبیرِ خواب', gu: 'સ્વપ્ન', hi: 'ख़्वाब' },
-  'early-life': { ur: 'ابتدائی حیات', gu: 'પ્રારંભિક જીવન', hi: 'प्रारंभिक जीवन' },
-  exodus: { ur: 'ہجرتِ بنی اسرائیل', gu: 'હિજરત', hi: 'पलायन' },
-  farewell: { ur: 'حجۃ الوداع', gu: 'અંતિમ વિદાય', hi: 'विदाई' },
-  'final-days': { ur: 'آخری ایام', gu: 'અંતિમ દિવસો', hi: 'अंतिम दिन' },
-  fire: { ur: 'آگ کا معجزہ', gu: 'અગ્નિ પરીક્ષા', hi: 'अग्नि परीक्षा' },
-  'first-prophet': { ur: 'پہلے نبی', gu: 'પ્રથમ પયગંબર', hi: 'प्रथम नबी' },
-  flood: { ur: 'طوفانِ نوح', gu: 'મહાપૂર', hi: 'महाप्रलय' },
-  hijrah: { ur: 'ہجرتِ مدینہ', gu: 'હિજરત', hi: 'हिजरत' },
-  hudaibiyah: { ur: 'صلحِ حدیبیہ', gu: 'હુદૈબિયા સંધિ', hi: 'हुदैबिया संधि' },
-  idolatry: { ur: 'بت پرستی کا رد', gu: 'મૂર્તિપૂજા વિરોધ', hi: 'मूर्तिपूजा विरोध' },
-  illness: { ur: 'ابتلا و بیماری', gu: 'બીમારીમાં સબ્ર', hi: 'बीमारी में सब्र' },
-  justice: { ur: 'عدل و انصاف', gu: 'ન્યાય', hi: 'न्याय' },
-  kaaba: { ur: 'خانہ کعبہ', gu: 'કાબા શરીફ', hi: 'काबा शरीफ़' },
-  kingdom: { ur: 'سلطنت و حکمرانی', gu: 'શાસન', hi: 'सल्तनत' },
-  lineage: { ur: 'نسبِ مبارک', gu: 'વંશાવળી', hi: 'वंश' },
-  madinah: { ur: 'مدینہ منورہ', gu: 'મદીના', hi: 'मदीना' },
-  makkah: { ur: 'مکہ مکرمہ', gu: 'મક્કા', hi: 'मक्का' },
-  migration: { ur: 'ہجرت', gu: 'હિજરત', hi: 'हिजरत' },
-  military: { ur: 'سرایا و مہمات', gu: 'લશ્કરી અભિયાન', hi: 'सैन्य अभियान' },
-  miracles: { ur: 'معجزات', gu: 'મોઅજેઝા', hi: 'मोजिज़ात' },
-  monotheism: { ur: 'توحید', gu: 'તૌહીદ', hi: 'तौहीद' },
-  patience: { ur: 'صبر و استقامت', gu: 'સબ્ર અને ધીરજ', hi: 'सब्र और धैर्य' },
-  persecution: { ur: 'مظالم و صبر', gu: 'અત્યાચાર અને ધીરજ', hi: 'अत्याचार व सब्र' },
-  pharaoh: { ur: 'فرعون', gu: 'ફિરઔન', hi: 'फ़िरऔन' },
-  pilgrimage: { ur: 'حج و عمرہ', gu: 'હજ', hi: 'हज' },
-  prayer: { ur: 'نماز و دعا', gu: 'નમાઝ અને દુઆ', hi: 'नमाज़ और दुआ' },
-  'pre-islam': { ur: 'عہدِ جاہلیت', gu: 'ઇસ્લામ પૂર્વે', hi: 'इस्लाम-पूर्व' },
-  preaching: { ur: 'دعوت و تبلیغ', gu: 'દાઅવત', hi: 'दावत व प्रचार' },
-  prophecy: { ur: 'نبوت', gu: 'પયગંબરી', hi: 'नुबुव्वत' },
-  repentance: { ur: 'توبہ و استغفار', gu: 'તૌબા', hi: 'तौबा' },
-  return: { ur: 'واپسی', gu: 'વાપસી', hi: 'वापसी' },
-  revelation: { ur: 'نزولِ وحی', gu: 'વહીનું અવતરણ', hi: 'वह्य का अवतरण' },
-  sacrifice: { ur: 'قربانی', gu: 'કુરબાની', hi: 'क़ुर्बानी' },
-  shepherd: { ur: 'گلہ بانی', gu: 'ભરવાડ', hi: 'चरवाहा' },
-  society: { ur: 'اسلامی معاشرہ', gu: 'ઇસ્લામી સમાજ', hi: 'इस्लामी समाज' },
-  taif: { ur: 'سفرِ طائف', gu: 'તાઇફ યાત્રા', hi: 'ताइफ़ की यात्रा' },
-  trade: { ur: 'تجارت', gu: 'વેપાર', hi: 'व्यापार' },
-  treaty: { ur: 'معاہدہ', gu: 'સંધિ', hi: 'संधि' },
-  trial: { ur: 'آزمائش', gu: 'કસોટી', hi: 'आज़माइश' },
-  tribes: { ur: 'قبائلِ عرب', gu: 'કબીલાઓ', hi: 'क़बीले' },
-  uhud: { ur: 'غزوۂ احد', gu: 'ઉહુદની લડાઈ', hi: 'उहुद की जंग' },
-  well: { ur: 'کنواں', gu: 'કૂવો', hi: 'कुआं' },
-  whale: { ur: 'مچھلی کا واقعہ', gu: 'માછલીની ઘટના', hi: 'मछली की घटना' },
-  wisdom: { ur: 'حکمت و دانائی', gu: 'હિકમત', hi: 'हिकमत' },
-  intentions: { ur: 'نیت', gu: 'નિયત', hi: 'नीयत' },
-  actions: { ur: 'اعمال', gu: 'કર્મો', hi: 'अमल' },
-  faith: { ur: 'ایمان', gu: 'ઈમાન', hi: 'ईमान' },
-  companions: { ur: 'صحابہ کرام', gu: 'સહાબા', hi: 'सहाबा' },
-  virtue: { ur: 'فضیلت', gu: 'ફઝીલત', hi: 'फ़ज़ीलत' },
-  islam: { ur: 'اسلام', gu: 'ઇસ્લામ', hi: 'इस्लाम' },
-  general: { ur: 'عمومی', gu: 'સામાન્ય', hi: 'सामान्य' },
-  charity: { ur: 'صدقہ و خیرات', gu: 'સદકો', hi: 'सदक़ा' },
-  knowledge: { ur: 'علم', gu: 'જ્ઞાન', hi: 'इल्म' },
-  manners: { ur: 'اخلاق و آداب', gu: 'શિષ્ટાચાર', hi: 'अख़लाक़' },
+const CURATED_TAG_TRANSLATIONS: Record<string, { ur: string; gu: string }> = {
+  ahzab: { ur: 'غزوۂ احزاب', gu: 'અહઝાબ' },
+  'arab-history': { ur: 'تاریخِ عرب', gu: 'અરબ ઇતિહાસ' },
+  ark: { ur: 'کشتیِ نوح', gu: 'નૂહનું વહાણ' },
+  ascension: { ur: 'معراج النبی ﷺ', gu: 'મેરાજ' },
+  badr: { ur: 'غزوۂ بدر', gu: 'બદ્રની લડાઈ' },
+  battle: { ur: 'غزوہ', gu: 'જંગ' },
+  birth: { ur: 'ولادتِ باسعادت', gu: 'જન્મ' },
+  'birth-miracle': { ur: 'معجزاتی ولادت', gu: 'ચમત્કારિક જન્મ' },
+  'children-of-israel': { ur: 'بنی اسرائیل', gu: 'બની ઇઝરાયેલ' },
+  conquest: { ur: 'فتحِ مکہ', gu: 'ફતેહ' },
+  covenant: { ur: 'عہد و میثاق', gu: 'કરાર' },
+  creation: { ur: 'تخلیقِ کائنات', gu: 'સર્જન' },
+  death: { ur: 'وصالِ مبارک', gu: 'વફાત' },
+  dreams: { ur: 'تعبیرِ خواب', gu: 'સ્વપ્ન' },
+  'early-life': { ur: 'ابتدائی حیات', gu: 'પ્રારંભિક જીવન' },
+  exodus: { ur: 'ہجرتِ بنی اسرائیل', gu: 'હિજરત' },
+  farewell: { ur: 'حجۃ الوداع', gu: 'અંતિમ વિદાય' },
+  'final-days': { ur: 'آخری ایام', gu: 'અંતિમ દિવસો' },
+  fire: { ur: 'آگ کا معجزہ', gu: 'અગ્નિ પરીક્ષા' },
+  'first-prophet': { ur: 'پہلے نبی', gu: 'પ્રથમ પયગંબર' },
+  flood: { ur: 'طوفانِ نوح', gu: 'મહાપૂર' },
+  hijrah: { ur: 'ہجرتِ مدینہ', gu: 'હિજરત' },
+  hudaibiyah: { ur: 'صلحِ حدیبیہ', gu: 'હુદૈબિયા સંધિ' },
+  idolatry: { ur: 'بت پرستی کا رد', gu: 'મૂર્તિપૂજા વિરોધ' },
+  illness: { ur: 'ابتلا و بیماری', gu: 'બીમારીમાં સબ્ર' },
+  justice: { ur: 'عدل و انصاف', gu: 'ન્યાય' },
+  kaaba: { ur: 'خانہ کعبہ', gu: 'કાબા શરીફ' },
+  kingdom: { ur: 'سلطنت و حکمرانی', gu: 'શાસન' },
+  lineage: { ur: 'نسبِ مبارک', gu: 'વંશાવળી' },
+  madinah: { ur: 'مدینہ منورہ', gu: 'મદીના' },
+  makkah: { ur: 'مکہ مکرمہ', gu: 'મક્કા' },
+  migration: { ur: 'ہجرت', gu: 'હિજરત' },
+  military: { ur: 'سرایا و مہمات', gu: 'લશ્કરી અભિયાન' },
+  miracles: { ur: 'معجزات', gu: 'મોઅજેઝા' },
+  monotheism: { ur: 'توحید', gu: 'તૌહીદ' },
+  patience: { ur: 'صبر و استقامت', gu: 'સબ્ર અને ધીરજ' },
+  persecution: { ur: 'مظالم و صبر', gu: 'અત્યાચાર અને ધીરજ' },
+  pharaoh: { ur: 'فرعون', gu: 'ફિરઔન' },
+  pilgrimage: { ur: 'حج و عمرہ', gu: 'હજ' },
+  prayer: { ur: 'نماز و دعا', gu: 'નમાઝ અને દુઆ' },
+  'pre-islam': { ur: 'عہدِ جاہلیت', gu: 'ઇસ્લામ પૂર્વે' },
+  preaching: { ur: 'دعوت و تبلیغ', gu: 'દાઅવત' },
+  prophecy: { ur: 'نبوت', gu: 'પયગંબરી' },
+  repentance: { ur: 'توبہ و استغفار', gu: 'તૌબા' },
+  return: { ur: 'واپسی', gu: 'વાપસી' },
+  revelation: { ur: 'نزولِ وحی', gu: 'વહીનું અવતરણ' },
+  sacrifice: { ur: 'قربانی', gu: 'કુરબાની' },
+  shepherd: { ur: 'گلہ بانی', gu: 'ભરવાડ' },
+  society: { ur: 'اسلامی معاشرہ', gu: 'ઇસ્લામી સમાજ' },
+  taif: { ur: 'سفرِ طائف', gu: 'તાઇફ યાત્રા' },
+  trade: { ur: 'تجارت', gu: 'વેપાર' },
+  treaty: { ur: 'معاہدہ', gu: 'સંધિ' },
+  trial: { ur: 'آزمائش', gu: 'કસોટી' },
+  tribes: { ur: 'قبائلِ عرب', gu: 'કબીલાઓ' },
+  uhud: { ur: 'غزوۂ احد', gu: 'ઉહુદની લડાઈ' },
+  well: { ur: 'کنواں', gu: 'કૂવો' },
+  whale: { ur: 'مچھلی کا واقعہ', gu: 'માછલીની ઘટના' },
+  wisdom: { ur: 'حکمت و دانائی', gu: 'હિકમત' },
+  intentions: { ur: 'نیت', gu: 'નિયત' },
+  actions: { ur: 'اعمال', gu: 'કર્મો' },
+  faith: { ur: 'ایمان', gu: 'ઈમાન' },
+  companions: { ur: 'صحابہ کرام', gu: 'સહાબા' },
+  virtue: { ur: 'فضیلت', gu: 'ફઝીલત' },
+  islam: { ur: 'اسلام', gu: 'ઇસ્લામ' },
+  general: { ur: 'عمومی', gu: 'સામાન્ય' },
+  charity: { ur: 'صدقہ و خیرات', gu: 'સદકો' },
+  knowledge: { ur: 'علم', gu: 'જ્ઞાન' },
+  manners: { ur: 'اخلاق و آداب', gu: 'શિષ્ટાચાર' },
 };
 
 function normalizeTagSlug(tag: string): string {
@@ -1007,15 +1095,23 @@ export async function translateTagsBatch(
 
 export function getStoredContentLang(globalLang?: string): ContentLang {
   try {
-    const saved = localStorage.getItem(CONTENT_LANG_STORAGE_KEY) as ContentLang | null;
-    if (saved && (saved === 'en' || saved === 'ur' || saved === 'gu' || saved === 'hi')) {
+    const saved = localStorage.getItem(CONTENT_LANG_STORAGE_KEY);
+    if (saved === 'hi') {
+      try {
+        localStorage.setItem(CONTENT_LANG_STORAGE_KEY, 'en');
+      } catch {
+        // Ignore quota restriction during migration
+      }
+      return 'en';
+    }
+    if (saved && (saved === 'en' || saved === 'ur' || saved === 'gu')) {
       return saved;
     }
   } catch {
     // Ignore storage read error
   }
 
-  if (globalLang === 'ur' || globalLang === 'gu' || globalLang === 'hi') {
+  if (globalLang === 'ur' || globalLang === 'gu') {
     return globalLang;
   }
   return 'en';
@@ -1026,8 +1122,17 @@ export function useContentLanguage() {
   const [contentLang, setContentLangState] = useState<ContentLang>(() => getStoredContentLang(globalLang));
 
   useEffect(() => {
-    if (globalLang === 'ur' || globalLang === 'gu' || globalLang === 'hi' || globalLang === 'en') {
+    if (globalLang === 'ur' || globalLang === 'gu' || globalLang === 'en') {
       const saved = localStorage.getItem(CONTENT_LANG_STORAGE_KEY);
+      if (saved === 'hi') {
+        try {
+          localStorage.setItem(CONTENT_LANG_STORAGE_KEY, 'en');
+        } catch {
+          // Ignore storage error
+        }
+        setContentLangState('en');
+        return;
+      }
       if (!saved || saved === globalLang) {
         setContentLangState(globalLang as ContentLang);
       }
@@ -1036,9 +1141,10 @@ export function useContentLanguage() {
 
   useEffect(() => {
     const handleLangChange = (e: Event) => {
-      const customEvent = e as CustomEvent<ContentLang>;
-      if (customEvent.detail && customEvent.detail !== contentLang) {
-        setContentLangState(customEvent.detail);
+      const customEvent = e as CustomEvent<ContentLang | string>;
+      const incoming = customEvent.detail === 'hi' ? 'en' : customEvent.detail;
+      if (incoming && (incoming === 'en' || incoming === 'ur' || incoming === 'gu') && incoming !== contentLang) {
+        setContentLangState(incoming);
       }
     };
 
@@ -1051,14 +1157,15 @@ export function useContentLanguage() {
   }, [contentLang]);
 
   const setContentLang = useCallback((newLang: ContentLang) => {
-    setContentLangState(newLang);
+    const safeLang: ContentLang = (newLang === 'ur' || newLang === 'gu') ? newLang : 'en';
+    setContentLangState(safeLang);
     try {
-      localStorage.setItem(CONTENT_LANG_STORAGE_KEY, newLang);
+      localStorage.setItem(CONTENT_LANG_STORAGE_KEY, safeLang);
     } catch {
       // Ignore storage error
     }
-    window.dispatchEvent(new CustomEvent('noor-content-lang-change', { detail: newLang }));
-    window.dispatchEvent(new CustomEvent('noor-content-lang-changed', { detail: newLang }));
+    window.dispatchEvent(new CustomEvent('noor-content-lang-change', { detail: safeLang }));
+    window.dispatchEvent(new CustomEvent('noor-content-lang-changed', { detail: safeLang }));
   }, []);
 
   const isRtl = contentLang === 'ur';

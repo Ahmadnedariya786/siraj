@@ -713,7 +713,7 @@ export default function ZakatCalculator({ isEmbedded = false, onBack }: ZakatCal
           </div>
         </div>
 
-        {/* Content Language Bar (English | Urdu | Gujarati | Hindi) */}
+        {/* Content Language Bar (English | Urdu | Gujarati) */}
         <div className="max-w-xl mx-auto mt-2">
           <ContentLanguageBar compact />
         </div>

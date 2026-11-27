@@ -176,7 +176,7 @@ const BookCard = memo(function BookCard({ book, bookIndex, collection, navigate 
           <div className="flex items-center gap-2">
             <Users className="w-3 h-3 text-[var(--text-secondary)]" />
             <span className="text-xs text-[var(--text-secondary)]">
-              {book.hadithCount} {contentLang === 'ur' ? 'احادیث' : contentLang === 'gu' ? 'હદીસ' : contentLang === 'hi' ? 'हदीस' : 'hadith'}
+              {book.hadithCount} {contentLang === 'ur' ? 'احادیث' : contentLang === 'gu' ? 'હદીસ' : 'hadith'}
             </span>
           </div>
         )}
@@ -272,7 +272,7 @@ const BookCard = memo(function BookCard({ book, bookIndex, collection, navigate 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)] mb-2">
-                  {contentLang === 'ur' ? 'مؤلف' : contentLang === 'gu' ? 'સંકલનકર્તા' : contentLang === 'hi' ? 'संकलनकर्ता' : 'Compiler'}
+                  {contentLang === 'ur' ? 'مؤلف' : contentLang === 'gu' ? 'સંકલનકર્તા' : 'Compiler'}
                 </h3>
                 <p className="text-sm text-[var(--text-secondary)]">{collectionData.author}</p>
                 {formatCompilerLifespan(collectionData.compilerPeriod, collectionData.death) && (
@@ -283,11 +283,11 @@ const BookCard = memo(function BookCard({ book, bookIndex, collection, navigate 
               </div>
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)] mb-2">
-                  {contentLang === 'ur' ? 'اعداد و شمار' : contentLang === 'gu' ? 'આંકડાકીય માહિતી' : contentLang === 'hi' ? 'आंकड़े' : 'Statistics'}
+                  {contentLang === 'ur' ? 'اعداد و شمار' : contentLang === 'gu' ? 'આંકડાકીય માહિતી' : 'Statistics'}
                 </h3>
                 <div className="space-y-1">
                   <p className="text-sm">
-                    <span className="font-medium">{collectionData.totalBooks}</span> {contentLang === 'ur' ? 'کتب' : contentLang === 'gu' ? 'પુસ્તકો' : contentLang === 'hi' ? 'किताबें' : 'Books'}
+                    <span className="font-medium">{collectionData.totalBooks}</span> {contentLang === 'ur' ? 'کتب' : contentLang === 'gu' ? 'પુસ્તકો' : 'Books'}
                   </p>
                   <p className="text-sm font-medium text-[var(--text-primary)]">
                     {formatCollectionHadithCount(collectionData.totalHadith, collectionData.totalNarrations)}
@@ -296,7 +296,7 @@ const BookCard = memo(function BookCard({ book, bookIndex, collection, navigate 
               </div>
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)] mb-2">
-                  {contentLang === 'ur' ? 'تعارف و تفصیل' : contentLang === 'gu' ? 'વિગતો' : contentLang === 'hi' ? 'विवरण' : 'Description'}
+                  {contentLang === 'ur' ? 'تعارف و تفصیل' : contentLang === 'gu' ? 'વિગતો' : 'Description'}
                 </h3>
                 <p
                   className={`text-sm text-[var(--text-secondary)] leading-relaxed ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
@@ -314,7 +314,7 @@ const BookCard = memo(function BookCard({ book, bookIndex, collection, navigate 
         <div className="relative max-w-md mx-auto mb-6">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder={contentLang === 'ur' ? 'کتاب یا باب تلاش کریں...' : contentLang === 'gu' ? 'પુસ્તક શોધો...' : contentLang === 'hi' ? 'किताब खोजें...' : 'Search books...'}
+            placeholder={contentLang === 'ur' ? 'کتاب یا باب تلاش کریں...' : contentLang === 'gu' ? 'પુસ્તક શોધો...' : 'Search books...'}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 rounded-xl border-border/50 focus:border-primary/50"

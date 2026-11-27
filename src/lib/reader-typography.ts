@@ -319,15 +319,10 @@ export function getArabicLineHeight(mode: ReaderLineHeightMode = 'standard'): nu
 
 /**
  * Font stack per active reading language.
- * Urdu and Hindi bodies render with Noto Nastaliq Urdu in stack (Hindi falls back cleanly
- * to Noto Sans Devanagari for Devanagari glyphs while honorific/Urdu glyphs use Nastaliq).
  */
 export function getReaderFontFamily(actualBodyLang: ContentLang | string): string | undefined {
   if (actualBodyLang === 'ur') {
     return "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', serif";
-  }
-  if (actualBodyLang === 'hi') {
-    return "'Noto Nastaliq Urdu', 'Noto Sans Devanagari', ui-sans-serif, system-ui, sans-serif";
   }
   if (actualBodyLang === 'gu') {
     return "'Noto Sans Gujarati', ui-sans-serif, system-ui, sans-serif";
@@ -389,7 +384,7 @@ export async function ensureNastaliqFontReady(timeoutMs = 700): Promise<boolean>
  * (zero skeleton gate blocking); only Clip Studio media exports enforce a strict font gate.
  */
 export function useNastaliqFontReady(lang: ContentLang | string): boolean {
-  const needsNastaliq = lang === 'ur' || lang === 'hi';
+  const needsNastaliq = lang === 'ur';
 
   useEffect(() => {
     if (!needsNastaliq) return;
@@ -424,14 +419,6 @@ export function getHonorificLabels(lang: ContentLang = 'en') {
       pbuh: '(ﷺ)',
       as: '(અ.સ.)',
       ra: '(ર.અ.)',
-    };
-  }
-  if (lang === 'hi') {
-    return {
-      swt: '(SWT)',
-      pbuh: '(ﷺ)',
-      as: '(अ.स.)',
-      ra: '(र.अ.)',
     };
   }
   return {

@@ -102,6 +102,8 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
         ? translateHadithContent({
             collection,
             hadithNumber: hadith.hadithNumber || hadith.id,
+            references: hadith.references,
+            bookNumber: hadith.bookNumber || book,
             englishText: cleanEn,
             targetLang: contentLang,
           })
@@ -232,7 +234,7 @@ const HadithCard = memo(function HadithCard({ hadith, collection, book, bookmark
                   actualLang === 'ur' ? 'font-urdu' : ''
                 }`}
               >
-                {actualLang === 'ur' ? 'راوی:' : actualLang === 'gu' ? 'વર્ણનકર્તા:' : actualLang === 'hi' ? 'वर्णनकर्ता:' : 'Narrated by:'}{' '}
+                {actualLang === 'ur' ? 'راوی:' : actualLang === 'gu' ? 'વર્ણનકર્તા:' : 'Narrated by:'}{' '}
                 {translatedNarrator || hadith.narrator}
               </p>
             )}
@@ -501,8 +503,6 @@ export function HadithBookContent() {
     ? 'احادیث مبارکہ کا مستند اور بابرکت باب جس میں نبی کریم ﷺ کے فرامین محفوظ ہیں۔'
     : contentLang === 'gu'
     ? 'આ પુસ્તકમાં રસૂલુલ્લાહ ﷺ ની પ્રમાણભૂત હદીસો સંગ્રહિત છે.'
-    : contentLang === 'hi'
-    ? 'इस अध्याय में अल्लाह के रसूल ﷺ की प्रामाणिक हदीसों का संग्रह है।'
     : 'Authentic traditions of the Prophet Muhammad ﷺ recorded in this chapter.';
 
   const remainingCount = filteredHadith.length - displayCount;
@@ -510,33 +510,27 @@ export function HadithBookContent() {
     ? `${filteredHadith.length} میں سے ${displayCount} احادیث دکھائی جا رہی ہیں`
     : contentLang === 'gu'
     ? `${filteredHadith.length} માંથી ${displayCount} હદીસ દર્શાવી રહ્યા છીએ`
-    : contentLang === 'hi'
-    ? `${filteredHadith.length} में से ${displayCount} हदीस दिखाई जा रही हैं`
     : `Showing ${displayCount} of ${filteredHadith.length} hadith`;
 
   const loadMoreText = contentLang === 'ur'
     ? `مزید لوڈ کریں (${remainingCount} باقی)`
     : contentLang === 'gu'
     ? `વધુ લોડ કરો (${remainingCount} બાકી)`
-    : contentLang === 'hi'
-    ? `और लोड करें (${remainingCount} शेष)`
     : `Load More (${remainingCount} remaining)`;
 
   const showAllText = contentLang === 'ur'
     ? 'تمام دیکھیں'
     : contentLang === 'gu'
     ? 'બધા જુઓ'
-    : contentLang === 'hi'
-    ? 'सभी देखें'
     : 'Show All';
 
   const noHadithFoundTitle = hadithData.length === 0
-    ? (contentLang === 'ur' ? 'ابھی تک کوئی حدیث امپورٹ نہیں ہوئی' : contentLang === 'gu' ? 'હજુ સુધી કોઈ હદીસ ઇમ્પોર્ટ નથી થઈ' : contentLang === 'hi' ? 'अभी तक कोई हदीस इम्पोर्ट नहीं हुई' : 'No Hadith Imported Yet')
-    : (contentLang === 'ur' ? 'کوئی حدیث نہیں ملی' : contentLang === 'gu' ? 'કોઈ હદીસ મળી નથી' : contentLang === 'hi' ? 'कोई हदीस नहीं मिली' : 'No Hadith Found');
+    ? (contentLang === 'ur' ? 'ابھی تک کوئی حدیث امپورٹ نہیں ہوئی' : contentLang === 'gu' ? 'હજુ સુધી કોઈ હદીસ ઇમ્પોર્ટ નથી થઈ' : 'No Hadith Imported Yet')
+    : (contentLang === 'ur' ? 'کوئی حدیث نہیں ملی' : contentLang === 'gu' ? 'કોઈ હદીસ મળી નથી' : 'No Hadith Found');
 
   const noHadithFoundDesc = hadithData.length === 0
-    ? (contentLang === 'ur' ? 'یہ کتاب تشکیل شدہ ہے لیکن ابھی تک کوئی لوکل ڈیٹا فائل موجود نہیں ہے۔' : contentLang === 'gu' ? 'આ પુસ્તક સેટઅપ થયેલ છે પરંતુ હજુ કોઈ લોકલ ડેટા ફાઇલ નથી.' : contentLang === 'hi' ? 'यह किताब सेटअप है लेकिन अभी तक कोई लोकल डेटा फ़ाइल उपलब्ध नहीं है।' : 'This book is configured but has no local hadith data files yet.')
-    : (contentLang === 'ur' ? 'اپنی تلاش کو تبدیل کر کے دوبارہ کوشش کریں۔' : contentLang === 'gu' ? 'તમારા શોધ શબ્દો બદલીને ફરી પ્રયાસ કરો.' : contentLang === 'hi' ? 'खोज शब्दों को बदलकर पुनः प्रयास करें।' : "Try adjusting your search terms to find what you're looking for.");
+    ? (contentLang === 'ur' ? 'یہ کتاب تشکیل شدہ ہے لیکن ابھی تک کوئی لوکل ڈیٹا فائل موجود نہیں ہے۔' : contentLang === 'gu' ? 'આ પુસ્તક સેટઅપ થયેલ છે પરંતુ હજુ કોઈ લોકલ ડેટા ફાઇલ નથી.' : 'This book is configured but has no local hadith data files yet.')
+    : (contentLang === 'ur' ? 'اپنی تلاش کو تبدیل کر کے دوبارہ کوشش کریں۔' : contentLang === 'gu' ? 'તમારા શોધ શબ્દો બદલીને ફરી પ્રયાસ કરો.' : "Try adjusting your search terms to find what you're looking for.");
 
   if (!collectionData) {
     return (
@@ -614,7 +608,7 @@ export function HadithBookContent() {
               <AaReaderControlsButton />
               <Badge variant="secondary" className="text-xs shrink-0">
                 {loading && hadithData.length === 0
-                  ? (contentLang === 'ur' ? 'لوڈ...' : contentLang === 'gu' ? 'લોડ...' : contentLang === 'hi' ? 'लोड...' : 'Loading...')
+                  ? (contentLang === 'ur' ? 'لوڈ...' : contentLang === 'gu' ? 'લોડ...' : 'Loading...')
                   : `${hadithData.length > 0 ? hadithData.length : (bookInfo?.hadithCount || 0)}`}
               </Badge>
             </div>
@@ -633,23 +627,23 @@ export function HadithBookContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
-                  {contentLang === 'ur' ? 'کتاب کی معلومات' : contentLang === 'gu' ? 'પુસ્તકની માહિતી' : contentLang === 'hi' ? 'किताब की जानकारी' : 'Book Information'}
+                  {contentLang === 'ur' ? 'کتاب کی معلومات' : contentLang === 'gu' ? 'પુસ્તકની માહિતી' : 'Book Information'}
                 </h3>
                 <div className="space-y-2">
                   <p className="text-sm">
-                    <span className="font-medium">{contentLang === 'ur' ? 'مجموعہ:' : contentLang === 'gu' ? 'સંગ્રહ:' : contentLang === 'hi' ? 'संग्रह:' : 'Collection:'}</span> {collectionData.title}
+                    <span className="font-medium">{contentLang === 'ur' ? 'مجموعہ:' : contentLang === 'gu' ? 'સંગ્રહ:' : 'Collection:'}</span> {collectionData.title}
                   </p>
                   <p className="text-sm">
-                    <span className="font-medium">{contentLang === 'ur' ? 'کتاب نمبر:' : contentLang === 'gu' ? 'પુસ્તક ક્રમાંક:' : contentLang === 'hi' ? 'किताब क्रमांक:' : 'Book Number:'}</span> {bookInfo?.number ?? book}
+                    <span className="font-medium">{contentLang === 'ur' ? 'کتاب نمبر:' : contentLang === 'gu' ? 'પુસ્તક ક્રમાંક:' : 'Book Number:'}</span> {bookInfo?.number ?? book}
                   </p>
                   <p className="text-sm">
-                    <span className="font-medium">{contentLang === 'ur' ? 'کل احادیث:' : contentLang === 'gu' ? 'કુલ હદીસ:' : contentLang === 'hi' ? 'कुल हदीस:' : 'Total Hadith:'}</span> {hadithData.length > 0 ? hadithData.length : (bookInfo?.hadithCount || 0)}
+                    <span className="font-medium">{contentLang === 'ur' ? 'کل احادیث:' : contentLang === 'gu' ? 'કુલ હદીસ:' : 'Total Hadith:'}</span> {hadithData.length > 0 ? hadithData.length : (bookInfo?.hadithCount || 0)}
                   </p>
                 </div>
               </div>
               <div>
                 <h3 className="font-semibold text-foreground mb-2">
-                  {contentLang === 'ur' ? 'تفصیل و تعارف' : contentLang === 'gu' ? 'વર્ણન' : contentLang === 'hi' ? 'विवरण' : 'Description'}
+                  {contentLang === 'ur' ? 'تفصیل و تعارف' : contentLang === 'gu' ? 'વર્ણન' : 'Description'}
                 </h3>
                 <p
                   className={`text-sm text-[var(--text-secondary)] leading-relaxed ${contentLang === 'ur' ? 'font-urdu text-right' : isRtl ? 'font-arabic text-right' : 'text-left'}`}
@@ -667,7 +661,7 @@ export function HadithBookContent() {
         <div className="relative max-w-md mx-auto mb-6">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder={contentLang === 'ur' ? 'اس کتاب میں حدیث تلاش کریں...' : contentLang === 'gu' ? 'આ પુસ્તકમાં હદીસ શોધો...' : contentLang === 'hi' ? 'इस किताब में हदीस खोजें...' : 'Search hadith in this book...'}
+            placeholder={contentLang === 'ur' ? 'اس کتاب میں حدیث تلاش کریں...' : contentLang === 'gu' ? 'આ પુસ્તકમાં હદીસ શોધો...' : 'Search hadith in this book...'}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 rounded-xl border-border/50 focus:border-primary/50"

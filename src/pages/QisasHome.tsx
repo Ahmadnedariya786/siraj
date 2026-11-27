@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, Users, BookOpen, LayoutGrid, List } from "lucide-react";
-import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext-new";
 import { useContentLanguage, translateIslamicText } from "@/lib/content-translator";
 import { ContentLanguageBar } from "@/components/ContentLanguageBar";
 import {
+  getCachedProphetListSync,
   loadProphetList,
   loadQisasMetadata,
   type ProphetSummary,
@@ -37,8 +37,8 @@ export default function QisasHome() {
   const [eraFilter, setEraFilter] = useState<EraFilter>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [metadata, setMetadata] = useState<QisasMetadata | null>(null);
-  const [prophets, setProphets] = useState<ProphetSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [prophets, setProphets] = useState<ProphetSummary[]>(() => getCachedProphetListSync());
+  const [loading, setLoading] = useState<boolean>(() => getCachedProphetListSync().length === 0);
   const [translatedMetaTitle, setTranslatedMetaTitle] = useState("");
   const [translatedMetaDesc, setTranslatedMetaDesc] = useState("");
 
@@ -64,14 +64,16 @@ export default function QisasHome() {
 
   useEffect(() => {
     async function loadData() {
-      setLoading(true);
+      if (prophets.length === 0) setLoading(true);
       try {
         const [meta, list] = await Promise.all([
           loadQisasMetadata(),
           loadProphetList(),
         ]);
         setMetadata(meta);
-        setProphets(list);
+        if (Array.isArray(list) && list.length > 0) {
+          setProphets(list);
+        }
       } catch (error) {
         console.error("Failed to load Qisas data:", error);
       } finally {
@@ -80,6 +82,7 @@ export default function QisasHome() {
     }
 
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -111,16 +114,6 @@ export default function QisasHome() {
         "post-israelite": "અન્ય પયગંબરો",
       };
     }
-    if (contentLang === 'hi') {
-      return {
-        all: "सभी",
-        "beginning-of-creation": "सृष्टि का आरंभ",
-        "pre-flood": "तूफ़ान-ए-नूह से पूर्व",
-        patriarchal: "इब्राहीमी दौर",
-        israelite: "बनी इस्राईल का दौर",
-        "post-israelite": "अन्य नबी",
-      };
-    }
     return {
       all: t("all"),
       "beginning-of-creation": t("qisasEraBeginning"),
@@ -134,7 +127,6 @@ export default function QisasHome() {
   const searchPlaceholder = useMemo(() => {
     if (contentLang === 'ur') return "انبیاء کرام کے مبارک واقعات تلاش کریں...";
     if (contentLang === 'gu') return "પયગંબરોની વાતો શોધો...";
-    if (contentLang === 'hi') return "नबियों की मुबारक दास्तानें खोजें...";
     return t("search");
   }, [contentLang, t]);
 
@@ -217,12 +209,9 @@ export default function QisasHome() {
             const lastReadProphet = lastReadId ? prophets.find((p) => p.id === lastReadId) : null;
             if (lastReadProphet && !loading) {
               const progress = getReadingProgress(lastReadId!, "qisas");
-              const continueLabel = contentLang === 'ur' ? 'مطالعہ جاری رکھیں' : contentLang === 'gu' ? 'વાંચન ચાલુ રાખો' : contentLang === 'hi' ? 'पढ़ना जारी रखें' : 'Continue Reading';
+              const continueLabel = contentLang === 'ur' ? 'مطالعہ جاری رکھیں' : contentLang === 'gu' ? 'વાંચન ચાલુ રાખો' : 'Continue Reading';
               return (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
+                <div>
                   <Card
                     className="p-3.5 cursor-pointer hover:border-[var(--accent)]/45 transition-colors border-[var(--border)] bg-[var(--surface)]"
                     onClick={() => handleProphetClick(lastReadProphet.id)}
@@ -249,17 +238,14 @@ export default function QisasHome() {
                       <BookOpen className="w-4 h-4 text-[var(--accent)] shrink-0" />
                     </div>
                   </Card>
-                </motion.div>
+                </div>
               );
             }
             return null;
           })()}
 
           {/* Tokenized Royal Hero (title <= 24px / 2-line clamp) */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
+          <div
             className="relative overflow-hidden rounded-[24px] border border-[var(--border)] shadow-xl"
             style={{ background: 'var(--surface)' }}
           >
@@ -313,11 +299,11 @@ export default function QisasHome() {
                   {metadata?.totalProphets || prophets.length || 24} {t("qisasProphets")}
                 </Badge>
                 <Badge className="bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] font-semibold">
-                  EN • اردو • ગુજ • हिं
+                  EN • اردو • ગુજ
                 </Badge>
               </div>
             </div>
-          </motion.div>
+          </div>
 
           {/* Search Bar + Grid/List Toggle */}
           <div className="flex items-center gap-2.5">
@@ -430,10 +416,7 @@ export default function QisasHome() {
           )}
 
           {/* Tokenized Overview Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+          <div
             className="bg-[var(--surface)] rounded-[24px] p-5 border border-[var(--border)]"
           >
             <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
@@ -481,7 +464,7 @@ export default function QisasHome() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </PageTransition>

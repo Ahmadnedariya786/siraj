@@ -1584,10 +1584,23 @@ export async function runDeepSystemHealthScan(): Promise<DeepHealthScanReport> {
   try {
     const {
       getLatestBootTrace,
+      recordAlarmArmed,
       TARGET_COLD_TTI_MS,
       SPLASH_HARD_CAP_MS,
     } = await import('@/lib/boot-scheduler');
-    const trace = getLatestBootTrace();
+    let trace = getLatestBootTrace();
+    if (Capacitor.isNativePlatform() && trace.alarmArmedCount === 0) {
+      try {
+        const { nativeAdhan } = await import('@/lib/native-adhan');
+        const st = await nativeAdhan.getStatus();
+        if (st.count > 0) {
+          recordAlarmArmed(st.count);
+          trace = getLatestBootTrace();
+        }
+      } catch (statusErr) {
+        console.debug('[Diagnostics] Live native alarm status fallback skipped:', statusErr);
+      }
+    }
     const longTaskCount = trace.longTasksFirst5s.length;
     const ttiOk = trace.ttiMs !== null && trace.ttiMs <= TARGET_COLD_TTI_MS;
     const splashOk = trace.splashDismissMs === null || trace.splashDismissMs <= SPLASH_HARD_CAP_MS + 100;

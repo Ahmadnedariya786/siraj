@@ -93,8 +93,6 @@ export const TRANSLATION_EDITIONS: TranslationEdition[] = [
   { id: 'ur.junagarhi', name: 'جوناگڑھی (Urdu)', lang: 'Urdu', isRtl: true },
   // Gujarati
   { id: 'gu.omari', name: 'ઓમારી (Gujarati)', lang: 'Gujarati' },
-  // Hindi
-  { id: 'hi.hindi', name: 'फ़ारूक़ ख़ान (Hindi)', lang: 'Hindi' },
   // International
   { id: 'bn.bengali', name: 'মুহিউদ্দীন (Bengali)', lang: 'Bengali' },
   { id: 'tr.diyanet', name: 'Diyanet (Türkçe)', lang: 'Turkish' },
@@ -228,16 +226,7 @@ export const TAFSIR_EDITIONS: TafsirEdition[] = [
     lineHeight: 2.1,
   },
 
-  // Hindi & Gujarati Commentary
-  {
-    id: 991,
-    slug: 'hin-suhelfarooqkhan',
-    name: 'तफ़सीर सुहेल फ़ारूक़ (Hindi)',
-    author: 'Suhel Farooq Khan (हिन्दी)',
-    lang: 'Hindi',
-    isRtl: false,
-    lineHeight: 1.8,
-  },
+  // Gujarati Commentary
   {
     id: 992,
     slug: 'guj-rabila',
@@ -1562,7 +1551,7 @@ export const AyahStudySheet: React.FC<AyahStudySheetProps> = ({
             <div className="space-y-3">
               {/* Language Filter Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                {['All', 'Urdu', 'English', 'Arabic', 'Hindi', 'Gujarati'].map((lang) => {
+                {['All', 'Urdu', 'English', 'Arabic', 'Gujarati'].map((lang) => {
                   const isActive = tafsirLangFilter === lang;
                   return (
                     <button

@@ -445,21 +445,17 @@ export function EnhancedDailyHadith() {
   const isEnglishLong = (hadith.englishTranslation?.length || 0) > 170 || wordCount > 40;
   const needsTruncation = isArabicLong || isEnglishLong;
 
-  const readMoreText = contentLang === 'ur' ? 'مزید پڑھیں' : contentLang === 'gu' ? 'વધુ વાંચો' : contentLang === 'hi' ? 'और पढ़ें' : (ui.readMore || 'Read More');
-  const showLessText = contentLang === 'ur' ? 'کم دکھائیں' : contentLang === 'gu' ? 'ઓછું બતાવો' : contentLang === 'hi' ? 'कम दिखाएं' : (ui.showLess || 'Show Less');
+  const readMoreText = contentLang === 'ur' ? 'مزید پڑھیں' : contentLang === 'gu' ? 'વધુ વાંચો' : (ui.readMore || 'Read More');
+  const showLessText = contentLang === 'ur' ? 'کم دکھائیں' : contentLang === 'gu' ? 'ઓછું બતાવો' : (ui.showLess || 'Show Less');
   const wordCountLabel = contentLang === 'ur'
     ? `${wordCount} الفاظ`
     : contentLang === 'gu'
     ? `${wordCount} શબ્દો`
-    : contentLang === 'hi'
-    ? `${wordCount} शब्द`
     : `${wordCount} words`;
   const updatedDailyLabel = contentLang === 'ur'
     ? 'روزانہ اپ ڈیٹ'
     : contentLang === 'gu'
     ? 'રોજ અપડેટ થાય છે'
-    : contentLang === 'hi'
-    ? 'प्रतिदिन अपडेट'
     : 'Updated daily';
 
   const isGradeValid = Boolean(
@@ -647,10 +643,10 @@ export function EnhancedDailyHadith() {
         {/* Ornamental Manuscript Divider */}
         <ManuscriptDivider />
 
-        {/* 4-Language Content Switcher Bar */}
+        {/* 3-Language Content Switcher Bar */}
         <div className="flex items-center justify-between pb-1 pt-0.5">
           <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-            {contentLang === 'ur' ? 'ترجمہ' : contentLang === 'gu' ? 'અનુવાદ' : contentLang === 'hi' ? 'अनुवाद' : 'Translation'}
+            {contentLang === 'ur' ? 'ترجمہ' : contentLang === 'gu' ? 'અનુવાદ' : 'Translation'}
           </span>
           <ContentLanguageBar compact />
         </div>
@@ -712,7 +708,7 @@ export function EnhancedDailyHadith() {
             }}
           >
             <span className={`text-[var(--accent)] font-semibold not-italic mr-1.5 inline-block ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? "rtl" : "ltr"} style={{ unicodeBidi: 'isolate' }}>
-              {contentLang === 'ur' ? 'تدبر و غور:' : contentLang === 'gu' ? 'ચિંતન:' : contentLang === 'hi' ? 'चिंतन:' : 'Reflection:'}
+              {contentLang === 'ur' ? 'تدبر و غور:' : contentLang === 'gu' ? 'ચિંતન:' : 'Reflection:'}
             </span>
             <span>{translatedReflection || hadith.reflection}</span>
           </div>
@@ -723,7 +719,7 @@ export function EnhancedDailyHadith() {
           <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1.5 text-xs px-1 text-[var(--text-secondary)] font-medium">
             <div className={`flex items-center gap-1.5 min-w-0 bidi-plaintext ${isRtl ? "flex-row-reverse" : ""}`} style={{ unicodeBidi: 'plaintext' }}>
               <span className={`text-[var(--accent)] font-semibold shrink-0 inline-block ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? "rtl" : "ltr"} style={{ unicodeBidi: 'isolate' }}>
-                {contentLang === 'ur' ? 'راوی:' : contentLang === 'gu' ? 'વર્ણનકર્તા:' : contentLang === 'hi' ? 'वर्णनकर्ता:' : 'Narrator:'}
+                {contentLang === 'ur' ? 'راوی:' : contentLang === 'gu' ? 'વર્ણનકર્તા:' : 'Narrator:'}
               </span>
               <span className={`text-[var(--text-primary)] font-medium ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{translatedNarrator || activeNarrator}</span>
             </div>

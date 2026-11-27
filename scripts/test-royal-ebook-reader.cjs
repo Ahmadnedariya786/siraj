@@ -211,9 +211,6 @@ async function runTests() {
             if (tl === 'gu') {
               return { status: 200, data: [[[`ગુજરાતી અનુવાદ: ${q.slice(0, 40)}`, q]]] };
             }
-            if (tl === 'hi') {
-              return { status: 200, data: [[[`हिन्दी अनुवाद: ${q.slice(0, 40)}`, q]]] };
-            }
           }
           return { status: 404, data: null };
         },
@@ -480,17 +477,9 @@ async function runTests() {
       adamIn: 'આદમ ()',
       adamOut: 'આદમ (અ.સ.)',
     },
-    hi: {
-      allahIn: 'अल्लाह ()',
-      allahOut: 'अल्लाह (SWT)',
-      lutIn: 'लूत ()',
-      lutOut: 'लूत (अ.स.)',
-      adamIn: 'आदम ()',
-      adamOut: 'आदम (अ.स.)',
-    },
   };
 
-  for (const lang of ['en', 'ur', 'gu', 'hi']) {
+  for (const lang of ['en', 'ur', 'gu']) {
     const snap = expectedHonorificSnapshot[lang];
     assert.strictEqual(typoMod.formatIslamicProse(snap.allahIn, lang), snap.allahOut, `Allah () mismatch in ${lang}`);
     assert.strictEqual(typoMod.formatIslamicProse(snap.lutIn, lang), snap.lutOut, `Lut () mismatch in ${lang}`);
@@ -498,7 +487,7 @@ async function runTests() {
     // Also verify English tokens passed directly get the active-language honorific suffix cleanly
     assert.strictEqual(
       typoMod.formatIslamicProse('Lut ()', lang),
-      lang === 'en' ? 'Lut (AS)' : lang === 'ur' ? 'Lut (علیہ السلام)' : lang === 'gu' ? 'Lut (અ.સ.)' : 'Lut (अ.स.)'
+      lang === 'en' ? 'Lut (AS)' : lang === 'ur' ? 'Lut (علیہ السلام)' : 'Lut (અ.સ.)'
     );
 
     const adamParas = qisasMod.buildCleanStoryParagraphs(adam.story, lang);
@@ -517,7 +506,7 @@ async function runTests() {
     const cleaned = typoMod.formatIslamicProse(ch.content, 'en');
     assert.ok(!/\(\s*\)/.test(cleaned), `Seerah cleaned ${ch.id} has empty ()`);
   }
-  console.log('  PASS: Adam & Lut honorifics snapshots verified across EN, UR, GU, HI (0 empty ())');
+  console.log('  PASS: Adam & Lut honorifics snapshots verified across EN, UR, GU (0 empty ())');
 
   // ── SUITE 4: Denominator Lock & Cache-Hit Timing (<50ms second open) ─────
   console.log('\n[4/6] Translation Streaming Denominator Lock & Cache-Hit Timing (<50ms)...');

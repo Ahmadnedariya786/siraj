@@ -133,7 +133,7 @@ async function runTests() {
   assert.strictEqual(typoMod.getReaderBlockDirection('en').dir, 'auto');
   assert.strictEqual(typoMod.getReaderBlockDirection('en').textAlign, 'left');
   assert.strictEqual(typoMod.getReaderBlockDirection('gu').dir, 'auto');
-  assert.strictEqual(typoMod.getReaderBlockDirection('hi').dir, 'auto');
+  assert.strictEqual(typoMod.getReaderBlockDirection('gu').textAlign, 'left');
   assert.strictEqual(typoMod.getReaderBlockDirection('ur').dir, 'auto');
   assert.strictEqual(typoMod.getReaderBlockDirection('ur').textAlign, 'right');
   console.log('[PASS] 1: Typography defaults (15px/22px), Allah () sanitizer & strict LTR/RTL direction');

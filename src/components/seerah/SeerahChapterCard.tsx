@@ -29,10 +29,10 @@ export function SeerahChapterCard({ chapter, onClick, index }: SeerahChapterCard
   }, [chapter.title, contentLang]);
 
   const periodLabels: Record<SeerahChapterSummary["period"], string> = {
-    "pre-prophethood": contentLang === 'ur' ? 'قبل از نبوت' : contentLang === 'gu' ? 'નબુવ્વત પહેલાં' : contentLang === 'hi' ? 'नुबुव्वत से पहले' : t("seerahPeriodPreProphethood"),
-    makkan: contentLang === 'ur' ? 'مکی دور' : contentLang === 'gu' ? 'મક્કી દોર' : contentLang === 'hi' ? 'मक्की दौर' : t("seerahPeriodMakkan"),
-    madinan: contentLang === 'ur' ? 'مدنی دور' : contentLang === 'gu' ? 'મદની દોર' : contentLang === 'hi' ? 'मदनी दौर' : t("seerahPeriodMadinan"),
-    "final-days": contentLang === 'ur' ? 'آخری ایام' : contentLang === 'gu' ? 'આખરી દિવસો' : contentLang === 'hi' ? 'अंतिम दिन' : t("seerahPeriodFinalDays"),
+    "pre-prophethood": contentLang === 'ur' ? 'قبل از نبوت' : contentLang === 'gu' ? 'નબુવ્વત પહેલાં' : t("seerahPeriodPreProphethood"),
+    makkan: contentLang === 'ur' ? 'مکی دور' : contentLang === 'gu' ? 'મક્કી દોર' : t("seerahPeriodMakkan"),
+    madinan: contentLang === 'ur' ? 'مدنی دور' : contentLang === 'gu' ? 'મદની દોર' : t("seerahPeriodMadinan"),
+    "final-days": contentLang === 'ur' ? 'آخری ایام' : contentLang === 'gu' ? 'આખરી દિવસો' : t("seerahPeriodFinalDays"),
   };
 
   return (

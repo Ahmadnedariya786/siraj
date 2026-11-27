@@ -187,14 +187,6 @@ export default function SeerahReader() {
         "final-days": "આખરી દિવસો",
       };
     }
-    if (contentLang === "hi") {
-      return {
-        "pre-prophethood": "नुबुव्वत से पहले",
-        makkan: "मक्की दौर",
-        madinan: "मदनी दौर",
-        "final-days": "अंतिम दिन",
-      };
-    }
     return {
       "pre-prophethood": t("seerahPeriodPreProphethood"),
       makkan: t("seerahPeriodMakkan"),

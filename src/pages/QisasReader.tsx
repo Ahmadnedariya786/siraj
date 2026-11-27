@@ -286,15 +286,6 @@ export default function QisasReader() {
         "post-israelite": "અન્ય પયગંબરો",
       };
     }
-    if (contentLang === "hi") {
-      return {
-        "beginning-of-creation": "सृष्टि का आरंभ",
-        "pre-flood": "तूफ़ान-ए-नूह से पूर्व",
-        patriarchal: "इब्राहीमी दौर",
-        israelite: "बनी इस्राईल का दौर",
-        "post-israelite": "अन्य नबी",
-      };
-    }
     return {
       "beginning-of-creation": t("qisasEraBeginning"),
       "pre-flood": t("qisasEraPreFlood"),

@@ -1,7 +1,7 @@
 /**
  * ContentLanguageBar Component
  * ─────────────────────────────────────────────────────────────
- * Royal 4-pill language selector: [ English ] [ اردو ] [ ગુજરાતી ] [ हिन्दी ]
+ * Royal 3-pill language selector: [ English ] [ اردو ] [ ગુજરાતી ]
  * Strictly consumes Siraj CSS variable tokens:
  *   Active:   var(--accent), var(--on-accent)
  *   Inactive: var(--surface-2), var(--border), var(--text-secondary)
@@ -46,7 +46,7 @@ export const ContentLanguageBar: React.FC<ContentLanguageBarProps> = ({
     <div
       className={`${
         fullWidth
-          ? 'grid grid-cols-4 w-full gap-1.5 p-1 rounded-2xl'
+          ? 'grid grid-cols-3 w-full gap-1.5 p-1 rounded-2xl'
           : 'inline-flex items-center gap-1.5 p-1 rounded-full'
       } border border-[var(--border)] select-none transition-colors duration-150 ${className}`}
       style={{

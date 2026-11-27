@@ -262,7 +262,7 @@ export default function QuranReader() {
 
     const loadCardTranslations = async () => {
       setIsCardTranslationLoading(true);
-      const targetLang = language === 'ur' ? 'ur.jalandhry' : language === 'hi' ? 'hi.hindi' : 'en.sahih';
+      const targetLang = language === 'ur' ? 'ur.jalandhry' : 'en.sahih';
       const cacheKey = `noor_card_page_${mushafPageNumber}_${targetLang}`;
 
       try {

@@ -105,6 +105,8 @@ export function HadithDetail() {
         ? translateHadithContent({
             collection: hadith.collection || collection || 'generic',
             hadithNumber: hadith.hadithNumber || hadith.id,
+            references: hadith.references,
+            bookNumber: hadith.bookNumber || book,
             englishText: cleanEn,
             targetLang: contentLang,
           })
@@ -434,7 +436,7 @@ export function HadithDetail() {
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <ReaderHeading
                   level="h3"
-                  text={actualLang === 'ur' ? 'ترجمہ' : actualLang === 'gu' ? 'અનુવાદ' : actualLang === 'hi' ? 'अनुवाद' : 'Translation'}
+                  text={actualLang === 'ur' ? 'ترجمہ' : actualLang === 'gu' ? 'અનુવાદ' : 'Translation'}
                   actualLang={actualLang}
                   clampTwoLines={false}
                 />

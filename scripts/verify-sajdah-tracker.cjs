@@ -251,16 +251,16 @@ async function runTests() {
   assert.strictEqual(tracker.loadSajdahState().totalPerformedAllTime, 1);
   assert.strictEqual(tracker.isSajdahReminderEnabled(), true);
 
-  // 7. Deep X-Ray Check #12
-  assert.strictEqual(diagnostics.TOTAL_HEALTH_CHECKS, 12);
+  // 7. Deep X-Ray Check #12 (total checks >= 12, currently 13 with Startup)
+  assert.strictEqual(diagnostics.TOTAL_HEALTH_CHECKS, 13);
   const report = await diagnostics.runDeepSystemHealthScan();
-  assert.strictEqual(report.totalChecks, 12);
+  assert.strictEqual(report.totalChecks, 13);
   const check12 = report.checks.find((c) => c.id === 'sajdah-ledger-integrity');
   assert.ok(check12, 'Check #12 sajdah-ledger-integrity must exist');
   assert.strictEqual(check12.status, 'PASS');
 
-  // 8. 4-Language I18N & Static Visual Guard (zero backdrop-filter / drop-shadow)
-  for (const lang of ['en', 'ur', 'gu', 'hi']) {
+  // 8. 3-Language I18N & Static Visual Guard (zero backdrop-filter / drop-shadow)
+  for (const lang of ['en', 'ur', 'gu']) {
     const dict = i18nMod.getSajdahI18n(lang);
     assert.ok(dict.pageTitle && dict.settingsReminderTitle && dict.guideDuaBadge.includes('580'));
     assert.strictEqual(dict.guideSteps.length, 5);

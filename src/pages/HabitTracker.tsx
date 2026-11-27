@@ -1,4 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef, memo } from "react";
+import { createPortal } from "react-dom";
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 import {
   Check,
   Flame,
@@ -8,6 +12,8 @@ import {
   Trash2,
   Pencil,
   Download,
+  Copy,
+  X,
   RotateCcw,
   Sparkles,
   CalendarDays,
@@ -24,12 +30,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -833,17 +833,98 @@ export default function HabitTrackerPage() {
     toast({ title: "Deeds restored", description: "All hidden habits are back." });
   }, [reload, toast]);
 
-  const exportData = useCallback(() => {
-    const data = habitTracker.exportData();
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `habit-tracker-${today}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Data exported", description: "Your habit data has been exported." });
-  }, [today, toast]);
+  const buildExportPayload = useCallback(() => {
+    const raw = habitTracker.exportData();
+    try {
+      const parsed = JSON.parse(raw);
+      return JSON.stringify(
+        {
+          app: "Siraj Habit Tracker",
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          ...parsed,
+        },
+        null,
+        2
+      );
+    } catch (err) {
+      console.debug("[HabitTracker] Export payload fallback:", err);
+      return raw;
+    }
+  }, []);
+
+  const exportData = useCallback(async () => {
+    const jsonString = buildExportPayload();
+    const fileName = `siraj-habits-${today}.json`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Filesystem.writeFile({
+          path: fileName,
+          data: jsonString,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        });
+        const uriRes = await Filesystem.getUri({
+          path: fileName,
+          directory: Directory.Cache,
+        });
+        toast({
+          title: "Habit data ready to save/share",
+          description: `${fileName} prepared for sharing.`,
+        });
+        await Share.share({
+          title: "Siraj Habit Tracker Export",
+          text: "Your Siraj habits backup JSON",
+          files: [uriRes.uri],
+          dialogTitle: "Export Habits JSON",
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err || "");
+        if (/cancel/i.test(msg)) return;
+        console.warn("[HabitTracker] Native export failed:", err);
+        toast({
+          title: "Export failed",
+          description: "Could not prepare native export file. Use Copy JSON instead.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    try {
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Data exported", description: `${fileName} downloaded.` });
+    } catch (err) {
+      console.warn("[HabitTracker] Web export failed:", err);
+      toast({
+        title: "Export failed",
+        description: "Unable to download JSON file in this browser.",
+        variant: "destructive",
+      });
+    }
+  }, [buildExportPayload, today, toast]);
+
+  const copyExportJson = useCallback(async () => {
+    const jsonString = buildExportPayload();
+    try {
+      await navigator.clipboard.writeText(jsonString);
+      toast({ title: "Copied JSON", description: "Habit backup JSON copied to clipboard." });
+    } catch (err) {
+      console.warn("[HabitTracker] Clipboard copy failed:", err);
+      toast({
+        title: "Copy unavailable",
+        description: "Clipboard access was blocked on this device.",
+        variant: "destructive",
+      });
+    }
+  }, [buildExportPayload, toast]);
 
   const isCustom = (id: string) => id.startsWith("custom-");
 
@@ -1011,114 +1092,145 @@ export default function HabitTrackerPage() {
         )}
 
         {/* --------------------- Data management -------------------- */}
-        <Card className="p-3.5 border-border/40 flex items-center justify-between">
-          <div>
+        <Card className="p-3.5 border-border/40 flex items-center justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold">Data</h3>
-            <p className="text-[10px] text-muted-foreground">Export your tracking history as JSON</p>
+            <p className="text-[10px] text-muted-foreground">Export or copy your tracking history as JSON</p>
           </div>
-          <Button variant="outline" size="sm" onClick={exportData} className="gap-1.5">
-            <Download className="w-4 h-4" />
-            Export
-          </Button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button variant="outline" size="sm" onClick={copyExportJson} className="gap-1.5 h-8 px-2.5 text-xs">
+              <Copy className="w-3.5 h-3.5" />
+              Copy JSON
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportData} className="gap-1.5 h-8 px-2.5 text-xs">
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
+          </div>
         </Card>
       </div>
 
-      {/* ---------------------- Add / Edit dialog -------------------- */}
-      <Dialog open={formMode !== null} onOpenChange={(open) => !open && setFormMode(null)}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {formMode === "edit" ? <Pencil className="w-4 h-4 text-[#C9860A]" /> : <Plus className="w-4 h-4 text-[#C9860A]" />}
-              {formMode === "edit" ? "Edit deed" : "Plant a new deed"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label htmlFor="deed-name">Name</Label>
-              <Input
-                id="deed-name"
-                value={form.name}
-                onChange={(e) => {
-                  setForm(f => ({ ...f, name: e.target.value }));
-                  if (formError) setFormError("");
-                }}
-                placeholder="e.g., Read one page of Quran"
-                autoFocus
-              />
-              {formError && <p className="text-xs text-red-500 mt-1">{formError}</p>}
+      {/* ---------------------- Add / Edit portal modal (z-[9999] strictly above mini-players) -------------------- */}
+      {formMode !== null && typeof document !== "undefined" && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={formMode === "edit" ? "Edit deed" : "Plant a new deed"}
+          data-testid="habit-form-portal-modal"
+          className="fixed inset-0 flex items-end sm:items-center justify-center p-3 sm:p-4"
+          style={{ zIndex: 9999, backgroundColor: "rgba(2, 4, 10, 0.78)" }}
+          onClick={() => setFormMode(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[420px] max-h-[88dvh] overflow-y-auto rounded-2xl border border-[var(--border)] shadow-2xl p-5 space-y-4"
+            style={{ background: "var(--surface)", color: "var(--text-primary)", zIndex: 9999 }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                {formMode === "edit" ? <Pencil className="w-4 h-4 text-[#C9860A]" /> : <Plus className="w-4 h-4 text-[#C9860A]" />}
+                {formMode === "edit" ? "Edit deed" : "Plant a new deed"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setFormMode(null)}
+                aria-label="Close dialog"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--surface-2)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div>
-              <Label>Category</Label>
-              <div className="grid grid-cols-3 gap-2 mt-1.5">
-                {CATEGORY_ORDER.map(cat => {
-                  const meta = CATEGORY_META[cat];
-                  const selected = form.category === cat;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setForm(f => ({ ...f, category: cat }))}
-                      className={cn(
-                        "flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all duration-200 active:scale-95",
-                        selected ? "border-[#C9860A] bg-[#C9860A]/10" : "border-border hover:border-[#C9860A]/30"
-                      )}
-                    >
-                      <span className="text-lg">{meta.icon}</span>
-                      <span className={cn("text-[10px] font-medium capitalize", selected ? "text-[#C9860A]" : "text-muted-foreground")}>
-                        {cat}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-4">
               <div>
-                <Label htmlFor="deed-target">Daily target</Label>
+                <Label htmlFor="deed-name">Name</Label>
                 <Input
-                  id="deed-target"
-                  type="number"
-                  min={1}
-                  inputMode="numeric"
-                  value={form.targetCount}
-                  onChange={(e) => setForm(f => ({ ...f, targetCount: e.target.value }))}
-                  placeholder="Optional"
+                  id="deed-name"
+                  value={form.name}
+                  onChange={(e) => {
+                    setForm(f => ({ ...f, name: e.target.value }));
+                    if (formError) setFormError("");
+                  }}
+                  placeholder="e.g., Read one page of Quran"
+                  autoFocus
+                />
+                {formError && <p className="text-xs text-red-500 mt-1">{formError}</p>}
+              </div>
+
+              <div>
+                <Label>Category</Label>
+                <div className="grid grid-cols-3 gap-2 mt-1.5">
+                  {CATEGORY_ORDER.map(cat => {
+                    const meta = CATEGORY_META[cat];
+                    const selected = form.category === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, category: cat }))}
+                        className={cn(
+                          "flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all duration-200 active:scale-95",
+                          selected ? "border-[#C9860A] bg-[#C9860A]/10" : "border-border hover:border-[#C9860A]/30"
+                        )}
+                      >
+                        <span className="text-lg">{meta.icon}</span>
+                        <span className={cn("text-[10px] font-medium capitalize", selected ? "text-[#C9860A]" : "text-muted-foreground")}>
+                          {cat}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="deed-target">Daily target</Label>
+                  <Input
+                    id="deed-target"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={form.targetCount}
+                    onChange={(e) => setForm(f => ({ ...f, targetCount: e.target.value }))}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="deed-unit">Unit</Label>
+                  <Input
+                    id="deed-unit"
+                    value={form.unit}
+                    onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))}
+                    placeholder="e.g. pages, mins"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="deed-desc">Note</Label>
+                <Textarea
+                  id="deed-desc"
+                  value={form.description}
+                  onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Why this deed matters to you…"
+                  rows={2}
                 />
               </div>
-              <div>
-                <Label htmlFor="deed-unit">Unit</Label>
-                <Input
-                  id="deed-unit"
-                  value={form.unit}
-                  onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))}
-                  placeholder="pages, minutes…"
-                />
+
+              <div className="flex gap-2 pt-1 pb-2">
+                <Button onClick={saveForm} className="flex-1">
+                  {formMode === "edit" ? "Save changes" : "Plant deed"}
+                </Button>
+                <Button variant="outline" onClick={() => setFormMode(null)}>
+                  Cancel
+                </Button>
               </div>
-            </div>
-
-            <div>
-              <Label htmlFor="deed-desc">Note</Label>
-              <Textarea
-                id="deed-desc"
-                value={form.description}
-                onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Why this deed matters to you…"
-                rows={2}
-              />
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <Button onClick={saveForm} className="flex-1">
-                {formMode === "edit" ? "Save changes" : "Plant deed"}
-              </Button>
-              <Button variant="outline" onClick={() => setFormMode(null)}>
-                Cancel
-              </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>,
+        document.body
+      )}
 
       {/* ---------------------- Delete confirm ----------------------- */}
       <AlertDialog open={removeTarget !== null} onOpenChange={(open) => !open && setRemoveTarget(null)}>

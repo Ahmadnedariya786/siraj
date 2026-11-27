@@ -37,15 +37,6 @@ const LIVE_STRINGS = {
     fallbackDesc: 'જો મુખ્ય સ્ટ્રીમમાં સમસ્યા આવે, તો આપમેળે ગૌણ સ્ત્રોત પર સ્વિચ થાય છે અને ફરી પ્રયાસનો વિકલ્પ મળે છે.',
     footerTip: 'જો સ્ટ્રીમમાં અડચણ આવે, તો રીટ્રાય દબાવો. મક્કા / મદીના ટેબથી સ્થાન બદલો.',
   },
-  hi: {
-    title: 'सीधा प्रसारण',
-    subtitle: 'मक्का · मदीना',
-    sourcesTitle: 'लाइव स्रोत',
-    sourcesDesc: 'हरमैन शरीफ़ैन से 24/7 सीधा प्रसारण — मक्का मुकर्रमा (अल-क़ुरआन) और मदीना मुनव्वरा (अस-सुन्नाह)।',
-    fallbackTitle: 'ऑटो फ़ॉलबैक',
-    fallbackDesc: 'यदि मुख्य स्ट्रीम बाधित होती है, तो यह तुरंत बैकअप सर्वर से जुड़ती है और पुनः प्रयास का विकल्प देती है।',
-    footerTip: 'यदि स्ट्रीम बाधित हो तो पुनः प्रयास करें। मक्का / मदीना टैब से स्थान बदलें।',
-  },
 };
 
 export default function LiveStreams() {
@@ -82,7 +73,7 @@ export default function LiveStreams() {
           </div>
         </div>
 
-        {/* 4-Language Selector Bar */}
+        {/* 3-Language Selector Bar */}
         <ContentLanguageBar fullWidth />
 
         {/* Player */}

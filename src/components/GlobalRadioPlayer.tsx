@@ -658,9 +658,7 @@ export function GlobalRadioPlayer() {
           ? (globalRadio.isPlaying ? 'لائیو' : 'روک دیا گیا')
           : contentLang === 'gu'
             ? (globalRadio.isPlaying ? 'લાઈવ' : 'રોકેલું છે')
-            : contentLang === 'hi'
-              ? (globalRadio.isPlaying ? 'लाइव' : 'रोका गया')
-              : (globalRadio.isPlaying ? 'Live' : 'Paused');
+            : (globalRadio.isPlaying ? 'Live' : 'Paused');
 
         return (
           <div

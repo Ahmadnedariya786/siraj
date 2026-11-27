@@ -86,20 +86,6 @@ const PLAYER_STRINGS = {
     hd720: '720p એચડી',
     fhd1080: '1080p ફુલ એચડી',
   },
-  hi: {
-    makkah: 'मक्का मुकर्रमा',
-    madinah: 'मदीना मुनव्वरा',
-    live: 'लाइव',
-    offline: 'ऑफ़लाइन',
-    connecting: 'पवित्र लाइव प्रसारण से जुड़ रहा है…',
-    buffering: 'बफ़रिंग',
-    unavailable: 'स्ट्रीम अनुपलब्ध है',
-    retry: 'पुनः प्रयास करें',
-    auto: 'ऑटो (अनुकूली)',
-    dataSaver: '360p (डेटा सेवर)',
-    hd720: '720p एचडी',
-    fhd1080: '1080p फुल एचडी',
-  },
 };
 
 export default function IslamicStreamPlayer() {

@@ -389,8 +389,8 @@ export function EnhancedDailyAyah() {
   const isTranslationLong = (ayah.translation?.length || 0) > 95;
   const isReflectionLong = (ayah.reflection?.length || 0) > 80;
 
-  const readMoreText = contentLang === 'ur' ? 'مزید پڑھیں' : contentLang === 'gu' ? 'વધુ વાંચો' : contentLang === 'hi' ? 'और पढ़ें' : (ui.readMore || 'Read More');
-  const showLessText = contentLang === 'ur' ? 'کم دکھائیں' : contentLang === 'gu' ? 'ઓછું બતાવો' : contentLang === 'hi' ? 'कम दिखाएं' : (ui.showLess || 'Show Less');
+  const readMoreText = contentLang === 'ur' ? 'مزید پڑھیں' : contentLang === 'gu' ? 'વધુ વાંચો' : (ui.readMore || 'Read More');
+  const showLessText = contentLang === 'ur' ? 'کم دکھائیں' : contentLang === 'gu' ? 'ઓછું બતાવો' : (ui.showLess || 'Show Less');
 
   const localizedSurahName = getLocalizedSurahName(ayah.surahNumber || ayah.surah, contentLang);
 
@@ -463,8 +463,6 @@ export function EnhancedDailyAyah() {
                   ? `سورۃ ${localizedSurahName} • آیت ${ayah.ayahNumber}`
                   : contentLang === 'gu'
                   ? `સૂરહ ${localizedSurahName} • આયત ${ayah.ayahNumber}`
-                  : contentLang === 'hi'
-                  ? `सूरह ${localizedSurahName} • आयत ${ayah.ayahNumber}`
                   : `Surah ${ayah.surah} • Ayah ${ayah.ayahNumber}`}
               </span>
             </div>
@@ -558,10 +556,10 @@ export function EnhancedDailyAyah() {
           <div className="flex-1 h-px bg-gradient-to-l from-transparent via-[var(--accent)]/30 to-[var(--accent)]/10" />
         </div>
 
-        {/* 4-Language Content Switcher Bar */}
+        {/* 3-Language Content Switcher Bar */}
         <div className="flex items-center justify-between pb-1 pt-0.5">
           <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-            {contentLang === 'ur' ? 'ترجمہ' : contentLang === 'gu' ? 'અનુવાદ' : contentLang === 'hi' ? 'अनुवाद' : 'Translation'}
+            {contentLang === 'ur' ? 'ترجمہ' : contentLang === 'gu' ? 'અનુવાદ' : 'Translation'}
           </span>
           <ContentLanguageBar compact />
         </div>
@@ -612,7 +610,7 @@ export function EnhancedDailyAyah() {
           >
             <div className={`flex items-start gap-1.5 ${isRtl ? "flex-row-reverse justify-end" : ""}`}>
               <span className={`text-[var(--accent)] font-semibold not-italic shrink-0 inline-block ${contentLang === 'ur' ? 'font-urdu' : ''}`} dir={isRtl ? "rtl" : "ltr"} style={{ unicodeBidi: 'isolate' }}>
-                {contentLang === 'ur' ? 'تدبر و غور:' : contentLang === 'gu' ? 'ચિંતન:' : contentLang === 'hi' ? 'चिंतन:' : 'Reflection:'}
+                {contentLang === 'ur' ? 'تدبر و غور:' : contentLang === 'gu' ? 'ચિંતન:' : 'Reflection:'}
               </span>
               <p
                 className={`break-words select-text transition-all duration-300 bidi-plaintext ${
@@ -648,14 +646,12 @@ export function EnhancedDailyAyah() {
               ? `سورۃ ${localizedSurahName} • آیت ${ayah.ayahNumber}`
               : contentLang === 'gu'
               ? `સૂરહ ${localizedSurahName} • આયત ${ayah.ayahNumber}`
-              : contentLang === 'hi'
-              ? `सूरह ${localizedSurahName} • आयत ${ayah.ayahNumber}`
               : `Surah ${ayah.surah} • Verse ${ayah.ayahNumber}`}
           </span>
           <span className="flex items-center gap-1.5 shrink-0 ml-2">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
             <span className={contentLang === 'ur' ? 'font-urdu text-[11px]' : ''}>
-              {contentLang === 'ur' ? 'فجر کے وقت تجدید' : contentLang === 'gu' ? 'દૈનિક નવીકરણ' : contentLang === 'hi' ? 'दैनिक नवीनीकरण' : 'Updated daily at Fajr'}
+              {contentLang === 'ur' ? 'فجر کے وقت تجدید' : contentLang === 'gu' ? 'દૈનિક નવીકરણ' : 'Updated daily at Fajr'}
             </span>
           </span>
         </div>

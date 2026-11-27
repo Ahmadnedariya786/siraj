@@ -94,7 +94,7 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
   const [aspectRatio, setAspectRatio] = useState<AspectRatioType>('9:16');
   const [sceneId, setSceneId] = useState<SceneId>('auto-meaning');
   const [withTashkeel, setWithTashkeel] = useState<boolean>(true);
-  const [subtitleLang, setSubtitleLang] = useState<'none' | 'en' | 'ur' | 'hi' | 'gu'>('en');
+  const [subtitleLang, setSubtitleLang] = useState<'none' | 'en' | 'ur' | 'gu'>('en');
   const [audioMastering, setAudioMastering] = useState<'haramain' | 'pure'>('haramain');
   const [autoSaveToGallery, setAutoSaveToGallery] = useState<boolean>(() => {
     try {
@@ -236,8 +236,6 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
           const offlinePackKey =
             subtitleLang === 'gu'
               ? `noor_offline_trans_gu.omari_${surahNumber}`
-              : subtitleLang === 'hi'
-              ? `noor_offline_trans_hi.hindi_${surahNumber}`
               : subtitleLang === 'ur'
               ? `noor_offline_trans_ur.jalandhry_${surahNumber}`
               : `noor_offline_trans_en.sahih_${surahNumber}`;
@@ -262,7 +260,7 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
 
         // Fetch missing online
         try {
-          const alquranUrl = `https://api.alquran.cloud/v1/ayah/${surahNumber}:${a}/editions/quran-uthmani,en.sahih,ur.jalandhry,hi.hindi`;
+          const alquranUrl = `https://api.alquran.cloud/v1/ayah/${surahNumber}:${a}/editions/quran-uthmani,en.sahih,ur.jalandhry`;
           const gujaratiUrl = `https://quranenc.com/api/v1/translation/aya/gujarati_omari/${surahNumber}/${a}`;
 
           const [alRes, guRes] = await Promise.allSettled([
@@ -278,7 +276,6 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
                 if (id === 'quran-uthmani' && item.text) uthmani = item.text;
                 else if (id === 'en.sahih' && item.text) transMap.en = item.text;
                 else if (id === 'ur.jalandhry' && item.text) transMap.ur = item.text;
-                else if (id === 'hi.hindi' && item.text) transMap.hi = item.text;
               });
             }
           }
@@ -306,24 +303,6 @@ export const QuranClipStudioModal: React.FC<QuranClipStudioModalProps> = ({
                 const v = cdnData?.chapter?.find((item: { verse: number; text: string }) => item.verse === a);
                 if (v?.text) {
                   transMap.gu = v.text.replace(/^[૦-૯0-9]+\.\s*/, '').trim();
-                }
-              }
-            } catch {
-              // Safe CDN catch
-            }
-          }
-
-          // Hindi CDN fallback if AlQuran fails
-          if (subtitleLang === 'hi' && !transMap.hi) {
-            try {
-              const cdnRes = await fetch(
-                `https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions/hin-muhammadfarooqk/${surahNumber}/${a}.json`,
-                { signal: AbortSignal.timeout(3000) }
-              );
-              if (cdnRes.ok) {
-                const cdnData = await cdnRes.json();
-                if (cdnData?.text) {
-                  transMap.hi = cdnData.text.trim();
                 }
               }
             } catch {
@@ -1431,17 +1410,16 @@ ${firstTranslation}📖 Surah ${surahNameEnglish} [${surahNumber}:${fromAyah}]
                 <span className="font-semibold text-[var(--text-secondary)]">Subtitles:</span>
                 {isLoadingVerses && subtitleLang !== 'none' && !versesData[fromAyah]?.translations?.[subtitleLang] && (
                   <span className="text-[10px] text-[var(--accent-text)] animate-pulse">
-                    Loading {subtitleLang === 'gu' ? 'Gujarati' : subtitleLang === 'hi' ? 'Hindi' : subtitleLang === 'ur' ? 'Urdu' : 'English'}...
+                    Loading {subtitleLang === 'gu' ? 'Gujarati' : subtitleLang === 'ur' ? 'Urdu' : 'English'}...
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-5 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
                 {(
                   [
                     { id: 'none', label: 'Arabic' },
                     { id: 'en', label: 'English' },
                     { id: 'ur', label: 'Urdu' },
-                    { id: 'hi', label: 'Hindi' },
                     { id: 'gu', label: 'Gujarati' },
                   ] as const
                 ).map((sub) => (
