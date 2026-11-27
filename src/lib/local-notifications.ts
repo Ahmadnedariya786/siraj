@@ -7,6 +7,7 @@
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import { AladhanAPI, type AladhanPrayerTime } from './aladhan-api';
 import { Capacitor } from '@capacitor/core';
+import { recordAlarmArmed } from '@/lib/boot-scheduler';
 import { getAdhanUrlForPrayer, type PrayerName } from './adhan-preferences';
 import { nativeAdhan, type NativeAdhanAlarm } from './native-adhan';
 import { adhanService, type AdhanConfig } from './adhan-service';
@@ -298,9 +299,11 @@ export class LocalNotificationManager {
           if (Capacitor.isNativePlatform()) {
             const nativeStatus = await nativeAdhan.getStatus();
             if (nativeStatus.count > 0 && nativeStatus.enabled) {
+              recordAlarmArmed(nativeStatus.count);
               return;
             }
           } else {
+            recordAlarmArmed(PRAYER_NAMES.length);
             return;
           }
         }
@@ -497,6 +500,7 @@ export class LocalNotificationManager {
             await LocalNotifications.schedule({
               notifications
             });
+            recordAlarmArmed(notifications.length);
             localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
             if (Object.keys(syncTimings).length > 0) {
               this.syncWithServiceWorker(syncTimings);

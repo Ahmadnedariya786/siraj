@@ -12,6 +12,7 @@ import { useReciters } from "@/hooks/useReciters";
 import { quranService, type SurahInfo } from "@/lib/quran-service";
 import { downloadManager } from "@/lib/download-manager";
 import { useToast } from "@/hooks/use-toast";
+import { markP2FeatureVisited } from "@/lib/boot-scheduler";
 
 const GOLD = "#C9860A";
 const RECITER_STORAGE_KEY = "mp3quran-selected-reciter";
@@ -278,6 +279,11 @@ export default function QuranAudio() {
   const surahs = useMemo(() => quranService.getAllSurahs(), []);
   const reciterId = reciter?.id ?? null;
 
+  // Default reciter + P2 lazy-on-visit audio index initialization
+  useEffect(() => {
+    markP2FeatureVisited('audio');
+  }, []);
+
   // Default reciter: saved → Mishary (full 114) → full reciter → first
   useEffect(() => {
     if (!reciters.length || reciter) return;
@@ -302,7 +308,9 @@ export default function QuranAudio() {
         if (cancelled) return;
         setDownloadedNums(new Set(items.filter((it) => it.reciterId === reciterId).map((it) => it.surahNumber)));
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.debug('[QuranAudio] listDownloaded skipped:', err);
+      });
     return () => { cancelled = true; };
   }, [reciterId]);
 

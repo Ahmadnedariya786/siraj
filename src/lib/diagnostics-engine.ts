@@ -1001,10 +1001,10 @@ export function initDiagnosticsEngine(): void {
 }
 
 // -------------------------------------------------------------
-// Active Deep Health Scanner (12 Subsystem Checks)
+// Active Deep Health Scanner (13 Subsystem Checks)
 // -------------------------------------------------------------
 
-export const TOTAL_HEALTH_CHECKS = 12;
+export const TOTAL_HEALTH_CHECKS = 13;
 
 export const REQUIRED_THEME_TOKENS = [
   '--bg-base',
@@ -1580,6 +1580,39 @@ export async function runDeepSystemHealthScan(): Promise<DeepHealthScanReport> {
     });
   }
 
+  // 13. Startup (Interactive-First Boot & Phase Timeline)
+  try {
+    const {
+      getLatestBootTrace,
+      TARGET_COLD_TTI_MS,
+      SPLASH_HARD_CAP_MS,
+    } = await import('@/lib/boot-scheduler');
+    const trace = getLatestBootTrace();
+    const longTaskCount = trace.longTasksFirst5s.length;
+    const ttiOk = trace.ttiMs !== null && trace.ttiMs <= TARGET_COLD_TTI_MS;
+    const splashOk = trace.splashDismissMs === null || trace.splashDismissMs <= SPLASH_HARD_CAP_MS + 100;
+    const alarmOk = trace.alarmArmedAtMs === null || trace.alarmArmedAtMs <= 5000;
+    const bootPass = ttiOk && longTaskCount === 0 && splashOk && alarmOk;
+    checks.push({
+      id: 'startup-boot-trace',
+      name: 'Startup',
+      status: bootPass ? 'PASS' : 'WARN',
+      summary:
+        trace.ttiMs !== null
+          ? `Cold/Warm TTI ${trace.ttiMs}ms • P1 ${trace.p1DurationMs ?? '--'}ms • LongTasks(>50ms): ${longTaskCount}`
+          : 'Startup trace active (awaiting interactive checkpoint)',
+      details: `mode=${trace.launchMode}, cacheHit=${trace.homeCacheHit}, fonts=${trace.fontStrategy}, splashDismiss=${trace.splashDismissMs ?? '--'}ms (cap ${SPLASH_HARD_CAP_MS}ms), alarmArmed=${trace.alarmArmedAtMs ?? '--'}ms (count=${trace.alarmArmedCount}), p2=[${trace.p2Triggered.join(',') || 'none'}], p3=${trace.p3DurationMs ?? '--'}ms, chunks=${trace.chunks.length}`,
+    });
+  } catch (err) {
+    checks.push({
+      id: 'startup-boot-trace',
+      name: 'Startup',
+      status: 'WARN',
+      summary: 'Unable to audit Startup boot trace',
+      details: String(err),
+    });
+  }
+
   const passedCount = checks.filter((c) => c.status === 'PASS').length;
   const warnCount = checks.filter((c) => c.status === 'WARN').length;
   const failCount = checks.filter((c) => c.status === 'FAIL').length;
@@ -1717,9 +1750,28 @@ export async function generateAiDiagnosticReport(existingScan?: DeepHealthScanRe
           md += `*No native trace entries recorded yet.*\n`;
         }
       }
-    } catch {
-      // Safe native alarm diagnostics fallback
+    } catch (err) {
+      console.debug('[Diagnostics] Native alarm report section skipped:', err);
     }
+  }
+
+  // 6. Startup Boot Trace & Phase Timeline
+  try {
+    const { getRecentBootTraces } = await import('@/lib/boot-scheduler');
+    const traces = getRecentBootTraces(3);
+    md += `\n---\n\n## 6. STARTUP BOOT TRACE & PHASE TIMELINE (LAST ${traces.length} BOOTS)\n\n`;
+    traces.forEach((tr, idx) => {
+      md += `### Boot #${idx + 1} (\`${tr.traceId}\` • ${tr.launchMode.toUpperCase()} • ${tr.status})\n`;
+      md += `- **TTI (P0 Interactive):** ${tr.ttiMs ?? '--'}ms | **Home Cache Hit:** ${tr.homeCacheHit} | **Fonts:** \`${tr.fontStrategy}\`\n`;
+      md += `- **Splash Dismiss:** ${tr.splashDismissMs ?? '--'}ms | **P1 Duration:** ${tr.p1DurationMs ?? '--'}ms | **Alarms Armed:** ${tr.alarmArmedAtMs ?? '--'}ms (${tr.alarmArmedCount})\n`;
+      md += `- **P2 Lazy Features:** ${tr.p2Triggered.length ? tr.p2Triggered.join(', ') : 'none (0ms on Home)'} | **P3 Duration:** ${tr.p3DurationMs ?? '--'}ms | **LongTasks(>50ms/5s):** ${tr.longTasksFirst5s.length}\n`;
+      if (tr.chunks.length > 0) {
+        md += `- **Chunks:** ${tr.chunks.map((c) => `${c.phase}:${c.name}=${c.durationMs}ms`).join(', ')}\n`;
+      }
+      md += `\n`;
+    });
+  } catch (err) {
+    console.debug('[Diagnostics] Startup boot trace report section skipped:', err);
   }
 
   if (md.length > 16000) {

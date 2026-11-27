@@ -16,6 +16,7 @@ import {
   type OtaStatus,
 } from '@/lib/update-checker';
 import { BUILD_COMMIT, APP_VERSION } from '@/buildInfo';
+import { subscribeP3NetworkIdle } from '@/lib/boot-scheduler';
 
 const LAST_AUTO_CHECK_KEY = 'noor_last_auto_check';
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -62,10 +63,15 @@ export const UpdateBanner: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Silent auto-check on Home mount once per app launch
+    // 1. Defer silent OTA check strictly to P3 (network-idle after P0 interactive + P1 alarms)
+    let unsubscribeP3: (() => void) | null = null;
     if (!autoCheckedThisLaunch) {
       autoCheckedThisLaunch = true;
-      runSilentUpdateCheck();
+      unsubscribeP3 = subscribeP3NetworkIdle(() => {
+        if (isMounted) {
+          runSilentUpdateCheck();
+        }
+      });
     }
 
     // 2. Resume-from-background check if older than 6 hours
@@ -123,6 +129,7 @@ export const UpdateBanner: React.FC = () => {
 
     return () => {
       isMounted = false;
+      unsubscribeP3?.();
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('noor-update-check-result', handleUpdateResult as EventListener);
       unsubscribeOta();

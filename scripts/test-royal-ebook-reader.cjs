@@ -347,19 +347,20 @@ async function runTests() {
   assert.strictEqual(urStyle['text-align'], 'right');
   assert.ok(urStyle['font-family'].includes('Noto Nastaliq Urdu'), 'Urdu must use Noto Nastaliq Urdu');
 
-  // Font-readiness gate test: when Noto Nastaliq Urdu is NOT yet loaded, render skeleton instead of fallback Naskh flash
+  // Async swap font strategy: reader prose does NOT block with a skeleton gate even while isNastaliqFontReadySync() is false; only Clip Studio gates via ensureFontsReady()
   fontLoadedFlag = false;
-  // Reset module-level cache by reloading fresh bundle
   const freshTypoMod = await bundleModule('src/lib/reader-typography.ts', customReq);
   const freshControlsMod = await bundleModule('src/components/BookReaderControls.tsx', customReq);
   assert.strictEqual(freshTypoMod.isNastaliqFontReadySync(), false);
-  const gatedMarkup = ReactDOMServer.renderToStaticMarkup(
+  const swapMarkup = ReactDOMServer.renderToStaticMarkup(
     React.createElement(freshControlsMod.BookProseParagraph, {
       text: 'نبی کریم ﷺ نے صبر کی تعلیم دی۔',
       actualLang: 'ur',
     })
   );
-  assert.ok(gatedMarkup.includes('aria-busy="true"'), 'Font gate must block fallback naskh flash with skeleton');
+  assert.ok(!swapMarkup.includes('aria-busy="true"') && swapMarkup.includes('نبی کریم'), 'Readers must use font-display:swap without blocking prose');
+  const clipSrc = fs.readFileSync(path.join(ROOT, 'src/lib/quran-clip-renderer.ts'), 'utf8');
+  assert.ok(clipSrc.includes('ensureFontsReady'), 'Clip Studio renderer must retain strict font readiness gate');
   fontLoadedFlag = true;
 
   // Test Arabic block computed styles (26px + relaxed 2.25 LH + padding:12px + text-align:right)

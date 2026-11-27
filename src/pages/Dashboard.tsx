@@ -43,6 +43,8 @@ import { LOCATION_STORAGE_KEY } from "@/lib/location-config";
 
 import { hasHomeEntranceCompleted, markHomeEntranceCompleted } from "@/lib/home-entrance";
 import { getPrayerMinuteOffsets, applyOffsetsToTimings, applyOffsetToDate, PRAYER_OFFSETS_CHANGED_EVENT } from "@/lib/prayer-offsets";
+import { readHomeLastStateSync, saveHomeLastState, buildHomeCountsAndPointers } from "@/lib/home-last-state";
+import { markP0Interactive, yieldToMainThread } from "@/lib/boot-scheduler";
 
 // Persistent module-level cache so prayer times remain mounted across route transitions and clock style switches
 let cachedDashboardPrayers: PrayerTime[] = [];
@@ -136,6 +138,17 @@ function getInitialCachedPrayers(): PrayerTime[] {
       return cachedDashboardPrayers;
     }
   }
+  const snap = readHomeLastStateSync();
+  if (snap && snap.dateKey === todayKey && Array.isArray(snap.prayers) && snap.prayers.length >= 5) {
+    const hydrated = snap.prayers.map(p => ({
+      name: p.name,
+      time: p.time,
+      date: p.dateIso && !isNaN(new Date(p.dateIso).getTime()) ? new Date(p.dateIso) : undefined,
+      icon: null,
+    })) as PrayerTime[];
+    cachedDashboardPrayers = hydrated;
+    return hydrated;
+  }
   try {
     const stored = localStorage.getItem('noor_cached_dashboard_prayers');
     if (stored) {
@@ -168,6 +181,16 @@ function getInitialNextPrayer(): { name: string; time: string; targetTime: Date 
       return { name: cachedNextPrayerName, time: cachedNextPrayerTime, targetTime: cachedTargetTime };
     }
   }
+  const snap = readHomeLastStateSync();
+  if (snap && snap.dateKey === todayKey && snap.nextPrayer?.name && snap.nextPrayer?.targetTimeIso) {
+    const targetDate = new Date(snap.nextPrayer.targetTimeIso);
+    if (!isNaN(targetDate.getTime()) && targetDate.getTime() > now.getTime()) {
+      cachedNextPrayerName = snap.nextPrayer.name;
+      cachedNextPrayerTime = snap.nextPrayer.time;
+      cachedTargetTime = targetDate;
+      return { name: snap.nextPrayer.name, time: snap.nextPrayer.time, targetTime: targetDate };
+    }
+  }
   try {
     const stored = localStorage.getItem('noor_cached_next_prayer');
     if (stored) {
@@ -190,6 +213,10 @@ function getInitialNextPrayer(): { name: string; time: string; targetTime: Date 
 }
 
 function getInitialSuhoorIftaar(): { suhoorTime: string; suhoorLabel: string; iftaarTime: string; iftaarLabel: string } | undefined {
+  const snap = readHomeLastStateSync();
+  if (snap?.suhoorIftaar?.suhoorTime && snap?.suhoorIftaar?.iftaarTime) {
+    return snap.suhoorIftaar;
+  }
   try {
     const stored = localStorage.getItem('noor_cached_suhoor_iftaar');
     if (stored) {
@@ -210,16 +237,22 @@ export default function Dashboard() {
   const { t: ti18n } = useI18n();
   const { timeFormat, animationEnabled } = useSettings();
   const isFirstMount = !hasHomeEntranceCompleted();
+  const initialHomeSnapshot = useMemo(() => readHomeLastStateSync(), []);
+  const didInitialIdlePrayerSyncRef = useRef(false);
 
-  useEffect(() => {
-    markHomeEntranceCompleted();
-  }, []);
   const [minuteTick, setMinuteTick] = useState(0);
   const [greeting, setGreeting] = useState("");
 
   const initialCached = useMemo(() => getInitialCachedPrayers(), []);
   const initialNext = useMemo(() => getInitialNextPrayer(), []);
   const initialSuhoor = useMemo(() => getInitialSuhoorIftaar(), []);
+
+  useEffect(() => {
+    markHomeEntranceCompleted();
+    markP0Interactive({
+      homeCacheHit: Boolean(initialHomeSnapshot && initialCached.length >= 5),
+    });
+  }, [initialCached.length, initialHomeSnapshot]);
 
   const [prayers, setPrayers] = useState<PrayerTime[]>(() => initialCached);
   const [loading, setLoading] = useState(() => initialCached.length === 0);
@@ -657,18 +690,28 @@ export default function Dashboard() {
           variant: "destructive",
         });
       }
-    } catch {
-      // Never crash
+    } catch (err) {
+      console.debug('[Dashboard] Location detection fallback:', err);
     }
   };
 
 
-// Initialize prayer times when location or time format changes
+// Initialize / refresh prayer times: yield initial boot fetch to P1 idle when cached prayers already painted frame 1
    useEffect(() => {
-     if (location.latitude && location.longitude) {
-       loadPrayerTimes();
+     if (!(location.latitude && location.longitude)) return;
+     if (!didInitialIdlePrayerSyncRef.current && initialCached.length >= 5) {
+       didInitialIdlePrayerSyncRef.current = true;
+       let cancelled = false;
+       yieldToMainThread(true, 900).then(() => {
+         if (!cancelled) loadPrayerTimes();
+       });
+       return () => {
+         cancelled = true;
+       };
      }
-   }, [location.latitude, location.longitude, loadPrayerTimes]);
+     didInitialIdlePrayerSyncRef.current = true;
+     loadPrayerTimes();
+   }, [location.latitude, location.longitude, loadPrayerTimes, initialCached.length]);
 
   // Clear stale location data on mount to prevent ISTRES issue
   useEffect(() => {
@@ -706,35 +749,42 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Safe street GPS auto-refresh on app boot if not locked to manual city
+  // Safe street GPS auto-refresh on app boot if not locked to manual city (deferred to P1 idle)
   useEffect(() => {
-    try {
-      const mode = localStorage.getItem('noor_location_mode');
-      if (mode === 'manual') return;
+    let cancelled = false;
+    yieldToMainThread(true, 1200).then(() => {
+      if (cancelled) return;
+      try {
+        const mode = localStorage.getItem('noor_location_mode');
+        if (mode === 'manual') return;
 
-      if (typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            if (pos?.coords && Number.isFinite(pos.coords.latitude) && Number.isFinite(pos.coords.longitude)) {
-              const curLat = location.latitude;
-              const curLon = location.longitude;
-              const diffLat = Math.abs(pos.coords.latitude - curLat);
-              const diffLon = Math.abs(pos.coords.longitude - curLon);
-              // If street coordinates differ by > ~100m, refresh to exact street GPS
-              if (diffLat > 0.001 || diffLon > 0.001) {
-                location.setLocation(pos.coords.latitude, pos.coords.longitude, location.locationName, location.timeZone);
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              if (pos?.coords && Number.isFinite(pos.coords.latitude) && Number.isFinite(pos.coords.longitude)) {
+                const curLat = location.latitude;
+                const curLon = location.longitude;
+                const diffLat = Math.abs(pos.coords.latitude - curLat);
+                const diffLon = Math.abs(pos.coords.longitude - curLon);
+                // If street coordinates differ by > ~100m, refresh to exact street GPS
+                if (diffLat > 0.001 || diffLon > 0.001) {
+                  location.setLocation(pos.coords.latitude, pos.coords.longitude, location.locationName, location.timeZone);
+                }
               }
-            }
-          },
-          () => {
-            // Handled silently: no prompt popup disturbance, zero crash
-          },
-          { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
-        );
+            },
+            (err) => {
+              console.debug('[Dashboard] Passive GPS auto-refresh skipped:', err?.message || err);
+            },
+            { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
+          );
+        }
+      } catch (err) {
+        console.debug('[Dashboard] Passive GPS check skipped:', err);
       }
-    } catch {
-      // Handled silently
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
 
@@ -850,6 +900,29 @@ const handleCheckIn = useCallback((pKey: PrayerName) => {
     };
   }, [prayers, nextPrayerName, nextPrayerTime, targetTime, timeFormat]);
 
+  // Persist compact Last-State snapshot cleanly whenever Home state mutates
+  useEffect(() => {
+    if (prayers.length < 5) return;
+    const counts = buildHomeCountsAndPointers();
+    saveHomeLastState({
+      ...counts,
+      dateKey: getLocalDatePartKey(new Date()),
+      locationLabel: locationLabel || '',
+      hijriDate: hijriDate || initialHomeSnapshot?.hijriDate || '',
+      prayers: prayers.map((p) => ({
+        name: p.name,
+        time: p.time,
+        dateIso: p.date instanceof Date && !isNaN(p.date.getTime()) ? p.date.toISOString() : undefined,
+      })),
+      nextPrayer: {
+        name: nextPrayerName,
+        time: nextPrayerTime,
+        targetTimeIso: targetTime instanceof Date && !isNaN(targetTime.getTime()) ? targetTime.toISOString() : null,
+      },
+      suhoorIftaar,
+    });
+  }, [prayers, nextPrayerName, nextPrayerTime, targetTime, suhoorIftaar, locationLabel, hijriDate, initialHomeSnapshot?.hijriDate]);
+
   // Stable callbacks for PremiumDashboard props
   const onServiceClick = useCallback((route: string) => navigate(route, { replace: true }), [navigate]);
   const onVerseClick = useCallback(() => navigate('/quran', { replace: true }), [navigate]);
@@ -865,12 +938,14 @@ const handleCheckIn = useCallback((pKey: PrayerName) => {
               location.setLocation(pos.coords.latitude, pos.coords.longitude, location.locationName, location.timeZone);
             }
           },
-          () => {},
+          (err) => {
+            console.debug('[Dashboard] Modal open GPS lookup skipped:', err?.message || err);
+          },
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
         );
       }
-    } catch {
-      // Handled silently
+    } catch (err) {
+      console.debug('[Dashboard] Modal GPS pre-check skipped:', err);
     }
     setShowManualLocationDialog(true);
   }, [location, setShowManualLocationDialog]);
@@ -878,7 +953,7 @@ const handleCheckIn = useCallback((pKey: PrayerName) => {
 return (
     <PageTransition skipTransition={!isFirstMount || !animationEnabled}>
       <PremiumDashboard
-        hijriDate={hijriDate || ""}
+        hijriDate={hijriDate || initialHomeSnapshot?.hijriDate || ""}
         nextPrayer={nextPrayerInfo}
         previousPrayer={previousPrayerInfo}
         prayers={dashboardPrayers}

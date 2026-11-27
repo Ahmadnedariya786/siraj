@@ -85,13 +85,13 @@ export function useWidgetSync() {
     const onStorage = (e: StorageEvent) => {
       if (e.key === QURAN_PROGRESS_KEY) {
         const payload = parseQuranProgress(e.newValue);
-        if (payload) syncQuranProgress(payload).catch(() => {});
+        if (payload) syncQuranProgress(payload).catch((err) => console.debug('[WidgetSync] syncQuranProgress skipped:', err));
       } else if (e.key === TASBEEH_TOTAL_KEY) {
         const next = Number(e.newValue ?? '0');
         if (!isNaN(next) && prevTasbeehRef.current !== null) {
           const delta = next - prevTasbeehRef.current;
           if (delta > 0) {
-            pushTasbeehIncrement(delta).catch(() => {});
+            pushTasbeehIncrement(delta).catch((err) => console.debug('[WidgetSync] pushTasbeehIncrement skipped:', err));
           }
         }
         prevTasbeehRef.current = isNaN(next) ? prevTasbeehRef.current : next;
@@ -102,9 +102,9 @@ export function useWidgetSync() {
     const onQuranProgressCustom = () => {
       try {
         const payload = parseQuranProgress(localStorage.getItem(QURAN_PROGRESS_KEY));
-        if (payload) syncQuranProgress(payload).catch(() => {});
-      } catch {
-        // Error is non-critical, silently ignored
+        if (payload) syncQuranProgress(payload).catch((err) => console.debug('[WidgetSync] syncQuranProgress skipped:', err));
+      } catch (err) {
+        console.debug('[WidgetSync] Custom quran-progress parse skipped:', err);
       }
     };
 
@@ -113,11 +113,11 @@ export function useWidgetSync() {
         const next = Number(localStorage.getItem(TASBEEH_TOTAL_KEY) ?? '0');
         if (prevTasbeehRef.current !== null && !isNaN(next)) {
           const delta = next - prevTasbeehRef.current;
-          if (delta > 0) pushTasbeehIncrement(delta).catch(() => {});
+          if (delta > 0) pushTasbeehIncrement(delta).catch((err) => console.debug('[WidgetSync] pushTasbeehIncrement skipped:', err));
           prevTasbeehRef.current = next;
         }
-      } catch {
-        // Error is non-critical, silently ignored
+      } catch (err) {
+        console.debug('[WidgetSync] Custom tasbeeh sync skipped:', err);
       }
     };
 
@@ -125,9 +125,9 @@ export function useWidgetSync() {
       try {
         import('@/lib/widget-service').then(({ WidgetService }) => {
           WidgetService.coalesceSyncWidgets();
-        }).catch(() => {});
-      } catch {
-        // Safe fallback
+        }).catch((err) => console.debug('[WidgetSync] WidgetService coalesce skipped:', err));
+      } catch (err) {
+        console.debug('[WidgetSync] WidgetService import failed:', err);
       }
     };
 

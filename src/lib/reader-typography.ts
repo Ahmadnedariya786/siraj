@@ -384,32 +384,21 @@ export async function ensureNastaliqFontReady(timeoutMs = 700): Promise<boolean>
   return true;
 }
 
+/**
+ * Non-blocking font warming hook: text always renders cleanly via `font-display: swap`
+ * (zero skeleton gate blocking); only Clip Studio media exports enforce a strict font gate.
+ */
 export function useNastaliqFontReady(lang: ContentLang | string): boolean {
   const needsNastaliq = lang === 'ur' || lang === 'hi';
-  const [ready, setReady] = useState<boolean>(() =>
-    !needsNastaliq ? true : isNastaliqFontReadySync()
-  );
 
   useEffect(() => {
-    if (!needsNastaliq) {
-      setReady(true);
-      return;
-    }
-    if (isNastaliqFontReadySync()) {
-      setReady(true);
-      return;
-    }
-    let active = true;
-    setReady(false);
-    ensureNastaliqFontReady(700).then(() => {
-      if (active) setReady(true);
-    });
-    return () => {
-      active = false;
-    };
+    if (!needsNastaliq) return;
+    ensureNastaliqFontReady(700).catch((err) =>
+      console.debug('[ReaderTypography] Async font warm skipped:', err)
+    );
   }, [needsNastaliq]);
 
-  return ready;
+  return true;
 }
 
 // ─── Honorific Protection, Normalization & BiDi Punctuation Sanitizer ────────

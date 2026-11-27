@@ -50,26 +50,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { whenIdle } from "@/lib/performance-optimizations";
-import './lib/i18n-new'; // Initialize new offline-first i18n
-
-// Initialize local notifications strictly after first paint / idle so it never blocks WebView boot
-whenIdle(() => {
-  markStartupStep('notification-service-init-idle');
-  import('@/lib/local-notifications')
-    .then(({ localNotifications }) => localNotifications.initialize())
-    .catch((e) => {
-      console.warn("localNotifications.initialize failed:", e);
-    })
-    .finally(() => {
-      completeStartupStep('notification-service-init-idle');
-    });
-});
-
+import './lib/i18n-new'; // Initialize offline-first i18n (EN synchronous; secondary locales lazy)
 import { LanguageProvider } from "@/contexts/LanguageContext-new";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Capacitor } from "@capacitor/core";
+import { isLowEndDevice } from "@/lib/performance-optimizations";
 
 // 2. Mount React application root with breadcrumb tracing
 markStartupStep('boot-main');
@@ -117,7 +103,6 @@ try {
 }
 
 // Defer low-end device detection until after React root is created
-import { isLowEndDevice } from "@/lib/performance-optimizations";
 try {
   if (isLowEndDevice()) {
     document.documentElement.classList.add("low-end-device");

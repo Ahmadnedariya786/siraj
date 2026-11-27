@@ -11,6 +11,7 @@ import {
 import nasheedsData from '@/data/nasheeds.json';
 import { useGlobalNasheed, type NasheedTrack } from '@/lib/global-nasheed';
 import { nasheedCache } from '@/lib/nasheed-cache';
+import { markP2FeatureVisited } from '@/lib/boot-scheduler';
 
 const CDN_URL = "https://noor-nasheed-cdn.arifubaid0345.workers.dev";
 
@@ -155,8 +156,9 @@ export default function NasheedPlayer() {
     // ── O(1) Set lookup for favorites ─────────────────────────────────────────
     const favSet = useMemo(() => new Set(favorites), [favorites]);
 
-    // ── Cache status ──────────────────────────────────────────────────────────
+    // ── Cache status (P2 lazy-on-first-visit) ─────────────────────────────────
     useEffect(() => {
+        markP2FeatureVisited('nasheeds');
         nasheedCache.getCachedUrls().then(urls => setCachedUrls(new Set(urls)));
     }, [currentTrack?.url]);
 

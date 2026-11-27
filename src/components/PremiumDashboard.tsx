@@ -23,6 +23,8 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { ClockHero } from "@/components/clocks/ClockHero";
 import { TopQazaReminderBanner } from "@/components/TopQazaReminderBanner";
 import { hasHomeEntranceCompleted } from "@/lib/home-entrance";
+import { subscribeP1SlowSync } from "@/lib/boot-scheduler";
+import { saveHomeLastState } from "@/lib/home-last-state";
 import { PrayerTimesSection } from "@/components/PrayerTimesSection";
 import { getDayWorshipLog, formatDateKey } from "@/lib/worship-log";
 import { getPrayerHistory } from "@/lib/salah-tracker";
@@ -461,6 +463,17 @@ function PremiumDashboardInner({
   const { isRamadan, ramadanDay } = useIslamicCalendar();
   const [widgets, setWidgets] = useState<DashboardWidgetConfig[]>([]);
   const [todayWorship, setTodayWorship] = useState(() => getDayWorshipLog(formatDateKey(new Date())));
+  const [slowSyncing, setSlowSyncing] = useState(false);
+
+  useEffect(() => subscribeP1SlowSync(setSlowSyncing), []);
+
+  useEffect(() => {
+    if (widgets.length > 0) {
+      saveHomeLastState({
+        visibleCardIds: widgets.filter((w) => w.visible).map((w) => w.id),
+      });
+    }
+  }, [widgets]);
 
   useEffect(() => {
     const handleWorshipSync = () => {
@@ -792,8 +805,22 @@ function PremiumDashboardInner({
             <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
           </button>
 
-          {/* Right actions: Qibla bearing pill + Notification bell */}
+          {/* Right actions: P1 slow-sync chip (if >3s) + Qibla bearing pill + Notification bell */}
           <div className="flex items-center gap-2 shrink-0">
+            {slowSyncing && (
+              <span
+                data-testid="syncing-alarms-chip"
+                className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold whitespace-nowrap shrink-0"
+                style={{
+                  background: 'var(--surface-2)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[var(--accent)]" />
+                Syncing alarms...
+              </span>
+            )}
             {qiblaBearing !== null && (
               <button
                 type="button"

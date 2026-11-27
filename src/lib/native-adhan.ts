@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { showExactAlarmRationale } from '@/components/ExactAlarmPermissionDialog';
+import { recordAlarmArmed } from '@/lib/boot-scheduler';
 
 export interface NativeAdhanAlarm {
   id: number;
@@ -131,7 +132,11 @@ class NativeAdhanBridge {
 
     try {
       const result = await NativeAdhanPlugin.schedule({ alarms, enabled });
-      return result.scheduled ?? 0;
+      const count = result.scheduled ?? 0;
+      if (count > 0) {
+        recordAlarmArmed(count);
+      }
+      return count;
     } catch (error) {
       console.warn('Failed to schedule native adhan alarms:', error);
       return 0;

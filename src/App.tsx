@@ -27,7 +27,13 @@ import { preloadCriticalResources, isLowEndDevice, monitorFPS } from "@/lib/perf
 import { applyTieredVisualOverrides, getAnimationTier } from "@/lib/device-performance";
 import { recordBreadcrumb } from "@/lib/diagnostics-engine";
 import { TilawahProvider, useTilawah } from "@/contexts/TilawahContext";
-import { deferAfterFirstPaint, primeNonCriticalMetadata } from "@/lib/startup-deferral";
+import {
+  runP1IdleChunks,
+  scheduleP3NetworkIdle,
+  SPLASH_HARD_CAP_MS,
+  markSplashDismissed,
+} from "@/lib/boot-scheduler";
+import { initHomeLastStateSyncListeners } from "@/lib/home-last-state";
 
 /**
  * RouteBreadcrumbTracker — automatically logs timestamped breadcrumbs on every route change.
@@ -107,7 +113,9 @@ function DeepLinkListener() {
           routeFromUrl(data.url);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.debug('DeepLink getLaunchUrl skipped:', err);
+      });
 
     // Handle taps on native Sajdah-e-Tilawat reminder notifications cleanly (deferred dynamic import)
     let notifHandle: { remove?: () => Promise<void> } | null = null;
@@ -239,22 +247,6 @@ const WidgetSettings = lazy(() => import("./pages/WidgetSettings"));
 const MosqueFinder = lazy(() => import("./pages/MosqueFinder"));
 const SettingsCalculationPage = lazy(() => import("./pages/SettingsCalculationPage"));
 const SajdahTracker = lazy(() => import("./pages/SajdahTracker"));
-
-/**
- * Light idle preload strictly AFTER Home settles so first tap on bottom tabs feels instant.
- */
-function preloadRouteChunks() {
-  if (typeof window === 'undefined') return;
-  const runIdle = () => {
-    const idleCallback = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 500));
-    idleCallback(() => {
-      import("./pages/SurahList").catch((err) => console.debug('Idle preload SurahList:', err));
-      import("./pages/Qibla").catch((err) => console.debug('Idle preload Qibla:', err));
-      import("./pages/Services").catch((err) => console.debug('Idle preload Services:', err));
-    });
-  };
-  setTimeout(runIdle, 4000);
-}
 
 function AppRoutes() {
   const location = useLocation();
@@ -452,19 +444,8 @@ function AppShell() {
   // Push Quran-progress + tasbeeh state to native widgets when they change
   useWidgetSync();
 
-  // Initialize Qaza next-day rollover engine, Sajdah reminder sync, and background metadata strictly after first paint
-  useEffect(() => {
-    deferAfterFirstPaint(() => {
-      import('@/lib/qaza-tracker')
-        .then(({ initQazaRolloverListeners }) => initQazaRolloverListeners())
-        .catch((err) => console.debug('Qaza rollover init skipped:', err));
-      import('@/lib/sajdah-reminder')
-        .then(({ initSajdahReminderLifecycle }) => initSajdahReminderLifecycle())
-        .catch((err) => console.debug('Sajdah reminder init skipped:', err));
-    }, 250);
-    preloadRouteChunks();
-    primeNonCriticalMetadata();
-  }, []);
+  // Keep Home Last-State cache synchronized on Qaza/Sajdah/Theme/Widget mutations
+  useEffect(() => initHomeLastStateSyncListeners(), []);
 
   // Sync native Android window and WebView background color immediately on startup
   useEffect(() => {
@@ -518,6 +499,7 @@ function AppShell() {
     try {
       setShowSplash(false);
       forceReleaseSplashScrollLock();
+      markSplashDismissed();
     } catch (e) {
       console.warn('Splash handoff error', e);
     } finally {
@@ -525,7 +507,7 @@ function AppShell() {
     }
   }, []);
 
-  // Safety fallback: ensure splash screen handoff always completes cleanly within 550ms
+  // Hard cap failsafe: splash dismisses at P0 complete or at most 1200ms
   useEffect(() => {
     if (!splashEnabled) {
       handleSplashComplete();
@@ -535,7 +517,7 @@ function AppShell() {
     const timer = setTimeout(() => {
       handleSplashComplete();
       forceReleaseSplashScrollLock();
-    }, 550);
+    }, SPLASH_HARD_CAP_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Strictly empty dependency array []
@@ -575,139 +557,169 @@ function AppShell() {
 
     let notificationManagerStop: (() => void) | null = null;
 
-    // Defer ALL non-critical startup services strictly AFTER first paint via requestIdleCallback (250ms fallback)
-    deferAfterFirstPaint(() => {
-      // 1. Notification service init
-      markStartupStep('notification-service-init');
-      import('@/lib/notification-manager')
-        .then(({ notificationManager }) => {
-          notificationManager.start();
-          notificationManagerStop = () => notificationManager.stop();
-        })
-        .catch((e) => {
-          console.warn('Startup: notificationManager.start failed', e);
-        })
-        .finally(() => {
-          completeStartupStep('notification-service-init');
-        });
-
-      // 2. Backup service init & auto snapshot
-      markStartupStep('backup-restore');
-      import('@/lib/backup-service')
-        .then(({ initBackupService }) => initBackupService())
-        .catch((e) => {
-          console.warn('Startup: initBackupService failed', e);
-        })
-        .finally(() => {
-          completeStartupStep('backup-restore');
-        });
-
-      // 3. Safety clear for Ramadan notifications if it's not Ramadan
-      import('@/lib/islamic-calendar-service')
-        .then(async ({ islamicCalendarService }) => {
-          const info = await islamicCalendarService.getIslamicCalendarInfo();
-          if (info.hijriMonth !== 9) {
-            const { RamadanNotifications } = await import('@/lib/ramadan-notifications');
-            const instance = RamadanNotifications.getInstance();
-            await instance.clearRamadanNotifications();
+    // P1 — Idle-chunked critical background tasks (yielded between every slice so UI stays 100% interactive)
+    runP1IdleChunks([
+      {
+        name: 'p1-prayer-qaza-sajdah',
+        run: async () => {
+          await import('@/lib/qaza-tracker')
+            .then(({ initQazaRolloverListeners }) => initQazaRolloverListeners())
+            .catch((err) => console.debug('Qaza rollover init skipped:', err));
+          await import('@/lib/sajdah-reminder')
+            .then(({ initSajdahReminderLifecycle }) => initSajdahReminderLifecycle())
+            .catch((err) => console.debug('Sajdah reminder init skipped:', err));
+          markStartupStep('notification-service-init');
+          try {
+            const { notificationManager } = await import('@/lib/notification-manager');
+            notificationManager.start();
+            notificationManagerStop = () => notificationManager.stop();
+          } catch (e) {
+            console.warn('Startup: notificationManager.start failed', e);
+          } finally {
+            completeStartupStep('notification-service-init');
           }
-        })
-        .catch((e) => console.warn('Failed to safety clear Ramadan notifications', e));
-
-      // 4. Schedule upcoming Islamic events
-      markStartupStep('islamic-events-init');
-      import('@/lib/islamic-events-service')
-        .then(({ islamicEventsService }) => islamicEventsService.scheduleUpcomingEvents())
-        .catch((error) => {
-          console.warn('Failed to schedule Islamic events:', error);
-        })
-        .finally(() => {
-          completeStartupStep('islamic-events-init');
-        });
-
-      // 5. Service worker handling (PWA - web production only; native platforms strictly unregister)
-      markStartupStep('service-worker-init');
-      try {
-        if (Capacitor.isNativePlatform()) {
-          if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations()
-              .then((regs) => Promise.all(regs.map((r) => r.unregister())))
-              .catch((err) => console.debug('SW unregister skipped:', err));
+        },
+      },
+      {
+        name: 'p1-native-alarms-init',
+        run: async () => {
+          try {
+            const { localNotifications } = await import('@/lib/local-notifications');
+            await localNotifications.initialize();
+            await localNotifications.schedulePrayerNotificationsFromAPI();
+          } catch (e) {
+            console.warn('Startup: localNotifications alarm init failed', e);
           }
-          if (typeof window !== 'undefined' && 'caches' in window) {
-            caches.keys()
-              .then((keys) => Promise.all(keys.filter((k) => /workbox|precache|vite-pwa/i.test(k)).map((k) => caches.delete(k))))
-              .catch((err) => console.debug('Cache cleanup skipped:', err));
-          }
-          completeStartupStep('service-worker-init');
-        } else if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.serviceWorker.controller) {
-          import('@/lib/service-worker-registration')
-            .then(({ serviceWorkerManager }) => serviceWorkerManager.register())
-            .catch((err) => {
-              console.warn('Service worker registration failed:', err);
+
+          import('@/lib/islamic-calendar-service')
+            .then(async ({ islamicCalendarService }) => {
+              const info = await islamicCalendarService.getIslamicCalendarInfo();
+              if (info.hijriMonth !== 9) {
+                const { RamadanNotifications } = await import('@/lib/ramadan-notifications');
+                const instance = RamadanNotifications.getInstance();
+                await instance.clearRamadanNotifications();
+              }
+            })
+            .catch((e) => console.warn('Failed to safety clear Ramadan notifications', e));
+
+          markStartupStep('islamic-events-init');
+          import('@/lib/islamic-events-service')
+            .then(({ islamicEventsService }) => islamicEventsService.scheduleUpcomingEvents())
+            .catch((error) => {
+              console.warn('Failed to schedule Islamic events:', error);
             })
             .finally(() => {
-              completeStartupStep('service-worker-init');
+              completeStartupStep('islamic-events-init');
             });
-        } else {
-          completeStartupStep('service-worker-init');
-        }
-      } catch (e) {
-        completeStartupStep('service-worker-init');
-        console.warn('Startup: serviceWorkerManager failed', e);
-      }
+        },
+      },
+      {
+        name: 'p1-widgets-backup-events',
+        run: async () => {
+          markStartupStep('backup-restore');
+          import('@/lib/backup-service')
+            .then(({ initBackupService }) => initBackupService())
+            .catch((e) => {
+              console.warn('Startup: initBackupService failed', e);
+            })
+            .finally(() => {
+              completeStartupStep('backup-restore');
+            });
 
-      // 6. Widget auto-update initialization
-      markStartupStep('widget-auto-update-init');
-      try {
-        const savedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
-        if (savedLocation) {
-          const parsed = JSON.parse(savedLocation);
-          if (parsed && typeof parsed === 'object' && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
-            const { latitude, longitude, locationName } = parsed;
-            import('@/lib/widget-service')
-              .then(({ WidgetService }) => {
+          markStartupStep('widget-auto-update-init');
+          try {
+            const savedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
+            if (savedLocation) {
+              const parsed = JSON.parse(savedLocation);
+              if (parsed && typeof parsed === 'object' && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+                const { latitude, longitude, locationName } = parsed;
+                const { WidgetService } = await import('@/lib/widget-service');
                 try {
                   WidgetService.startAutoUpdate(latitude, longitude, locationName);
                 } catch (e) {
                   console.warn('Failed to start widget auto-update', e);
-                } finally {
-                  completeStartupStep('widget-auto-update-init');
                 }
-              })
-              .catch((err) => {
-                console.warn('Failed to import widget-service', err);
-                completeStartupStep('widget-auto-update-init');
-              });
-          } else {
+              }
+            }
+          } catch (err) {
+            console.warn('Startup: widget auto-update failed', err);
+          } finally {
             completeStartupStep('widget-auto-update-init');
           }
-        } else {
-          completeStartupStep('widget-auto-update-init');
-        }
-      } catch (err) {
-        completeStartupStep('widget-auto-update-init');
-        console.warn('Startup: widget auto-update failed', err);
-      }
 
-      // 7. First-launch permission onboarding sequence
-      markStartupStep('onboarding-permissions-init');
-      if (Capacitor.isNativePlatform()) {
-        import('@/lib/onboarding-permissions')
-          .then(({ healPermissionOnboardingFlags, runFirstLaunchPermissionOnboarding }) => {
-            healPermissionOnboardingFlags().catch((err) => console.debug('Heal onboarding skipped:', err));
-            return runFirstLaunchPermissionOnboarding();
-          })
-          .catch((err) => {
-            console.warn('Startup permission onboarding error:', err);
-          })
-          .finally(() => {
+          markStartupStep('service-worker-init');
+          try {
+            if (Capacitor.isNativePlatform()) {
+              if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations()
+                  .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+                  .catch((err) => console.debug('SW unregister skipped:', err));
+              }
+              if (typeof window !== 'undefined' && 'caches' in window) {
+                caches.keys()
+                  .then((keys) => Promise.all(keys.filter((k) => /workbox|precache|vite-pwa/i.test(k)).map((k) => caches.delete(k))))
+                  .catch((err) => console.debug('Cache cleanup skipped:', err));
+              }
+              completeStartupStep('service-worker-init');
+            } else if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.serviceWorker.controller) {
+              import('@/lib/service-worker-registration')
+                .then(({ serviceWorkerManager }) => serviceWorkerManager.register())
+                .catch((err) => {
+                  console.warn('Service worker registration failed:', err);
+                })
+                .finally(() => {
+                  completeStartupStep('service-worker-init');
+                });
+            } else {
+              completeStartupStep('service-worker-init');
+            }
+          } catch (e) {
+            completeStartupStep('service-worker-init');
+            console.warn('Startup: serviceWorkerManager failed', e);
+          }
+
+          markStartupStep('onboarding-permissions-init');
+          if (Capacitor.isNativePlatform()) {
+            import('@/lib/onboarding-permissions')
+              .then(({ healPermissionOnboardingFlags, runFirstLaunchPermissionOnboarding }) => {
+                healPermissionOnboardingFlags().catch((err) => console.debug('Heal onboarding skipped:', err));
+                return runFirstLaunchPermissionOnboarding();
+              })
+              .catch((err) => {
+                console.warn('Startup permission onboarding error:', err);
+              })
+              .finally(() => {
+                completeStartupStep('onboarding-permissions-init');
+              });
+          } else {
             completeStartupStep('onboarding-permissions-init');
-          });
-      } else {
-        completeStartupStep('onboarding-permissions-init');
-      }
-    }, 250);
+          }
+        },
+      },
+    ]);
+
+    // P3 — Network-idle prefetch (OTA handled via BOOT_P3_READY_EVENT + bullion + nearby mosques)
+    scheduleP3NetworkIdle([
+      {
+        name: 'p3-bullion-rates-prefetch',
+        run: async () => {
+          const { fetchLiveMetalRates } = await import('@/lib/zakat-market-api');
+          await fetchLiveMetalRates();
+        },
+      },
+      {
+        name: 'p3-nearby-mosques-prefetch',
+        run: async () => {
+          const savedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
+          if (!savedLocation) return;
+          const parsed = JSON.parse(savedLocation);
+          if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+            const { fetchNearbyMosques } = await import('@/lib/mosque-service');
+            await fetchNearbyMosques(parsed.latitude, parsed.longitude);
+          }
+        },
+      },
+    ], 2600);
 
     // ── Defensive Resume Handler (idempotent, guarded) ──
     const handleResume = () => {

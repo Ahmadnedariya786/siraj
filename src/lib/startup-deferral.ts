@@ -30,26 +30,10 @@ export function deferAfterFirstPaint(callback: () => void, timeoutMs = 250): voi
 }
 
 /**
- * Primes secondary non-critical catalogs during browser idle time:
- * 1. Quiz rewards catalog & store state
- * 2. Nasheed library index
- * 3. Services grid secondary category mapping
+ * Legacy helper retained as a zero-work P2 no-op on cold boot.
+ * P2 secondary features (Quiz, Nasheeds, Audio, Translations) initialize strictly
+ * lazily on first visit via `markP2FeatureVisited` in `boot-scheduler.ts`.
  */
 export function primeNonCriticalMetadata(): void {
-  deferNonCriticalStartup(() => {
-    try {
-      // 1. Prime Quiz rewards & store metadata
-      import('@/lib/quiz-store').catch((err) => console.debug('Idle prime quiz-store skipped:', err));
-      import('@/lib/variable-rewards').catch((err) => console.debug('Idle prime variable-rewards skipped:', err));
-
-      // 2. Prime Nasheed library index
-      import('@/data/nasheeds.json').catch((err) => console.debug('Idle prime nasheeds skipped:', err));
-      import('@/lib/global-nasheed').catch((err) => console.debug('Idle prime global-nasheed skipped:', err));
-
-      // 3. Prime Services grid secondary metadata
-      import('@/pages/Services').catch((err) => console.debug('Idle prime Services skipped:', err));
-    } catch (err) {
-      console.debug('Idle metadata prime skipped:', err);
-    }
-  }, 3500);
+  // Intentionally empty at cold boot: P2 work runs only on first visit to each module.
 }

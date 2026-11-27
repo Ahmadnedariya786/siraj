@@ -2,6 +2,11 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { NoorDynamicLogo, getActiveLogoEdition, NOOR_LOGO_EDITIONS } from "@/components/NoorDynamicLogo";
 import { getAnimationTier } from "@/lib/device-performance";
+import {
+    BOOT_P0_COMPLETE_EVENT,
+    SPLASH_HARD_CAP_MS,
+    markSplashDismissed,
+} from "@/lib/boot-scheduler";
 
 const FIXED_STARS = [
     { id: 1, x: 18, y: 22, size: 2, delay: 0 },
@@ -99,6 +104,7 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
         hasTriggeredCompletionRef.current = true;
         setIsMounted(false);
         forceReleaseSplashScrollLock();
+        markSplashDismissed();
         try {
             onCompleteRef.current();
         } catch (e) {
@@ -106,19 +112,29 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
         }
     }, []);
 
-    // Strict failsafe timer: forces splash dismissal at 550ms regardless of parent re-renders
+    // P0 completion + strict 1.2s hard cap failsafe: fades as soon as P0 finishes (max 1.2s)
     useEffect(() => {
         forceReleaseSplashScrollLock();
 
+        const onP0Ready = () => {
+            setIsFading(true);
+            setProgress(100);
+            setTimeout(() => {
+                triggerComplete();
+            }, shouldAnimate ? 120 : 20);
+        };
+        window.addEventListener(BOOT_P0_COMPLETE_EVENT, onP0Ready, { once: true });
+
         const failsafeTimer = setTimeout(() => {
             triggerComplete();
-        }, 550);
+        }, SPLASH_HARD_CAP_MS);
 
         return () => {
+            window.removeEventListener(BOOT_P0_COMPLETE_EVENT, onP0Ready);
             clearTimeout(failsafeTimer);
             forceReleaseSplashScrollLock();
         };
-    }, [triggerComplete]);
+    }, [shouldAnimate, triggerComplete]);
 
     useEffect(() => {
         // Lock scroll while splash is active

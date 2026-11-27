@@ -7,6 +7,7 @@ import { adhanService, type AdhanConfig } from '@/lib/adhan-service';
 import { nativeAdhan } from '@/lib/native-adhan';
 import { Capacitor } from '@capacitor/core';
 import { getFallbackLocationByTimezone, LOCATION_STORAGE_KEY } from '@/lib/location-config';
+import { yieldToMainThread } from '@/lib/boot-scheduler';
 import {
   PRAYER_ALARM_CONTROL_EVENT,
   PRAYER_ALARM_STATE_EVENT,
@@ -443,8 +444,11 @@ export const GlobalPrayerAlarm = () => {
   }, [stopCurrentAdhan]);
 
   useEffect(() => {
+    let cancelled = false;
     if (localStorage.getItem(STORAGE_KEY) === 'true' && adhanService.getAdhanConfig().enabled) {
-      startChecking();
+      yieldToMainThread(true, 600).then(() => {
+        if (!cancelled) startChecking();
+      });
     }
 
     const handleStorageChange = (event: StorageEvent) => {
@@ -499,6 +503,7 @@ export const GlobalPrayerAlarm = () => {
     window.addEventListener(PRAYER_ALARM_CONTROL_EVENT, handleControl as EventListener);
 
     return () => {
+      cancelled = true;
       stopChecking();
       emitPlaybackState(false, null);
       window.removeEventListener('storage', handleStorageChange);

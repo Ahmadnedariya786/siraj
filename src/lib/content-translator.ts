@@ -471,6 +471,12 @@ export async function translateHadithContent(
   const cleanCol = (opts.collection || 'generic').toLowerCase().trim();
   const cleanNum = String(opts.hadithNumber || fastHash(cleanEn)).trim();
   const cacheId = `hadith:${cleanCol}:${cleanNum}:${opts.targetLang}`;
+  try {
+    const { markP2FeatureVisited } = await import('@/lib/boot-scheduler');
+    markP2FeatureVisited('translations');
+  } catch (err) {
+    console.debug('[ContentTranslator] P2 mark skipped:', err);
+  }
 
   const cached = await getBookTranslationFromCache(cacheId);
   if (cached?.text) {
@@ -589,6 +595,14 @@ async function translateSourceParagraphViaApi(
  */
 export async function streamBookTranslation(opts: StreamBookOptions): Promise<void> {
   const { module, itemId, title, englishParagraphs, targetLang, signal, onUpdate } = opts;
+  if (targetLang !== 'en') {
+    try {
+      const { markP2FeatureVisited } = await import('@/lib/boot-scheduler');
+      markP2FeatureVisited('translations');
+    } catch (err) {
+      console.debug('[ContentTranslator] P2 mark skipped:', err);
+    }
+  }
   const cleanParas = englishParagraphs
     .map((p) => formatIslamicProse(p, 'en'))
     .filter(Boolean);

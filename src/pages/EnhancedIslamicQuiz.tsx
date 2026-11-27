@@ -53,6 +53,7 @@ import { feedbackSystem } from '@/lib/feedback-system';
 import { pushNotificationSystem } from '@/lib/push-notifications';
 import { timeEventsSystem } from '@/lib/time-events';
 import { AchievementDisplay } from '@/components/AchievementDisplay';
+import { markP2FeatureVisited } from '@/lib/boot-scheduler';
 import { QuizStore } from '@/components/quiz/QuizStore';
 import { GameModeSelector, GameMode } from '@/components/quiz/GameModeSelector';
 import { ComboDisplay, useCombo } from '@/components/quiz/ComboDisplay';
@@ -153,6 +154,7 @@ export default function EnhancedIslamicQuiz() {
   const finishQuizRef = useRef<() => void>(() => {});
 
   useEffect(() => {
+    markP2FeatureVisited('quiz');
     setStats(quizManager.getStats());
     setPowerUps(quizManager.getPowerUps());
     loadStoreInventory();
