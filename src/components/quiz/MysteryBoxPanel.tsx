@@ -397,16 +397,17 @@ export function MysteryBoxPanel({ onClose }: MysteryBoxPanelProps) {
           <CardContent className="p-3.5 space-y-2">
             <Button
               data-testid="open-daily-free-box"
-              className="w-full font-semibold"
+              className="w-full font-semibold disabled:opacity-95 border"
               style={
                 canClaimFreeBox
                   ? {
                       backgroundColor: 'var(--accent)',
                       color: 'var(--on-accent)',
+                      borderColor: 'var(--accent)',
                     }
                   : {
                       backgroundColor: 'var(--surface-2)',
-                      color: 'var(--text-secondary)',
+                      color: 'var(--text-primary)',
                       borderColor: 'var(--border)',
                     }
               }
@@ -505,7 +506,7 @@ export function MysteryBoxPanel({ onClose }: MysteryBoxPanelProps) {
         {selectedBox && selectedBox !== 'daily_free_box' && !results && (
           <Button
             size="lg"
-            className="w-full font-semibold"
+            className="w-full font-semibold disabled:opacity-95 border"
             onClick={() => handleOpen()}
             disabled={isOpening || !canAffordSelected}
             style={
@@ -513,10 +514,11 @@ export function MysteryBoxPanel({ onClose }: MysteryBoxPanelProps) {
                 ? {
                     backgroundColor: 'var(--accent)',
                     color: 'var(--on-accent)',
+                    borderColor: 'var(--accent)',
                   }
                 : {
                     backgroundColor: 'var(--surface-2)',
-                    color: 'var(--text-secondary)',
+                    color: 'var(--text-primary)',
                     borderColor: 'var(--border)',
                   }
             }

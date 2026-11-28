@@ -14,17 +14,15 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed left-4 right-4 z-[110] flex max-h-screen w-auto max-w-[328px] mx-auto flex-col-reverse p-0 sm:max-w-[380px] box-border",
+      "fixed left-4 right-4 z-[110] flex max-h-screen max-w-[328px] mx-auto flex-col-reverse p-0 box-border",
       className,
     )}
     style={{
       top: 'calc(var(--safe-top, 34px) + 58px)',
-      left: '16px',
-      right: '16px',
+      width: 'calc(100vw - 32px)',
+      maxWidth: '328px',
       marginLeft: 'auto',
       marginRight: 'auto',
-      width: 'auto',
-      maxWidth: 'min(328px, calc(100vw - 32px))',
       boxSizing: 'border-box',
     }}
     {...props}
@@ -33,7 +31,7 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-2xl transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
+  "group pointer-events-auto relative flex w-full max-w-full box-border items-center justify-between space-x-3 overflow-hidden rounded-2xl border p-4 shadow-2xl transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full",
   {
     variants: {
       variant: {

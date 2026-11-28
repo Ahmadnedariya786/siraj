@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Flame, MonitorPlay, Radio, Target, Trash2, TrendingUp, Trophy } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Clock, Flame, MonitorPlay, Radio, Target, Trash2, TrendingUp, Trophy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -344,6 +345,8 @@ export default function RadioStats() {
   const [streak, setStreak] = useState<number>(0);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const mountedRef = useRef(true);
   const lastTotalMinutesRef = useRef<number>(-1);
@@ -420,14 +423,14 @@ export default function RadioStats() {
     };
   }, [loadStats]);
 
-  const handleReset = useCallback(async () => {
-    if (!confirm(strings.confirmReset)) {
-      return;
-    }
-
+  const handleResetConfirm = useCallback(async () => {
+    setIsResetting(true);
     try {
       await resetRadioStats();
+      setStreak(0);
+      setStats([]);
       await loadStats(false);
+      setShowResetConfirm(false);
       toast({
         title: strings.resetTitle,
         description: strings.resetDesc,
@@ -439,8 +442,10 @@ export default function RadioStats() {
         description: strings.resetError,
         variant: 'destructive',
       });
+    } finally {
+      setIsResetting(false);
     }
-  }, [loadStats, strings.confirmReset, strings.resetDesc, strings.resetError, strings.resetTitle, toast]);
+  }, [loadStats, strings.resetDesc, strings.resetError, strings.resetTitle, toast]);
 
   const summary = useMemo(() => computeNormalizedMediaSummary(stats), [stats]);
   const unlockedCount = useMemo(
@@ -628,7 +633,8 @@ export default function RadioStats() {
         <div className="pt-1">
           <Button
             variant="destructive"
-            onClick={handleReset}
+            data-testid="media-stats-reset-btn"
+            onClick={() => setShowResetConfirm(true)}
             className={`w-full rounded-2xl ${isUrdu ? 'font-urdu' : ''}`}
           >
             <Trash2 className="w-4 h-4 me-2" />
@@ -636,6 +642,95 @@ export default function RadioStats() {
           </Button>
         </div>
       </div>
+
+      {/* Themed Portal Reset Confirmation Modal (opaque backdrop) */}
+      {showResetConfirm && typeof document !== 'undefined' && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-state="open"
+          aria-labelledby="reset-stats-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isResetting) setShowResetConfirm(false);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            backgroundColor: 'rgba(0, 0, 0, 0.72)',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[330px] rounded-2xl border p-5 space-y-4 shadow-2xl"
+            style={{
+              backgroundColor: 'var(--surface-2)',
+              borderColor: 'var(--border)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2.5">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border"
+                  style={{
+                    backgroundColor: 'var(--surface)',
+                    borderColor: 'var(--danger)',
+                    color: 'var(--danger)',
+                  }}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 id="reset-stats-modal-title" className="text-sm font-bold text-[var(--text-primary)]">
+                    {strings.reset}
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+                    {strings.confirmReset}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                disabled={isResetting}
+                onClick={() => setShowResetConfirm(false)}
+                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: 'var(--surface)', color: 'var(--text-secondary)' }}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 text-xs"
+                disabled={isResetting}
+                onClick={() => setShowResetConfirm(false)}
+              >
+                {langKey === 'ur' ? 'منسوخ' : langKey === 'gu' ? 'રદ કરો' : 'Cancel'}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="media-stats-confirm-reset"
+                className="flex-1 text-xs font-bold"
+                disabled={isResetting}
+                onClick={handleResetConfirm}
+              >
+                {isResetting ? '...' : strings.resetTitle}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

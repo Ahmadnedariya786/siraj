@@ -1603,8 +1603,8 @@ export async function runDeepSystemHealthScan(): Promise<DeepHealthScanReport> {
     }
     const longTaskCount = trace.longTasksFirst5s.length;
     const ttiOk = trace.ttiMs !== null && trace.ttiMs <= TARGET_COLD_TTI_MS;
-    const splashOk = trace.splashDismissMs === null || trace.splashDismissMs <= SPLASH_HARD_CAP_MS + 100;
-    const alarmOk = trace.alarmArmedAtMs === null || trace.alarmArmedAtMs <= 5000;
+    const splashOk = trace.splashDismissMs === null || trace.splashDismissMs <= SPLASH_HARD_CAP_MS;
+    const alarmOk = trace.alarmArmedAtMs !== null && trace.alarmArmedAtMs <= 5000;
     const bootPass = ttiOk && longTaskCount === 0 && splashOk && alarmOk;
     const alarmSummary =
       trace.alarmArmedAtMs !== null

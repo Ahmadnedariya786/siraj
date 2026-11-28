@@ -792,10 +792,10 @@ function PremiumDashboardInner({
 
         {/* ── Top Bar ── */}
         <div className="flex items-center justify-between pt-4 gap-2">
-          {/* Location pill */}
+          {/* Location pill (min-w guarantees city label never squeezes to 1 letter) */}
           <button
             onClick={onLocationClick}
-            className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full transition-all active:scale-95 border min-w-0 flex-1 max-w-[210px]"
+            className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full transition-all active:scale-95 border min-w-[120px] flex-1 max-w-[235px]"
             style={{ background: 'var(--accent-soft)', borderColor: 'var(--border)' }}
           >
             <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
@@ -805,22 +805,8 @@ function PremiumDashboardInner({
             <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
           </button>
 
-          {/* Right actions: P1 slow-sync chip (if >3s) + Qibla bearing pill + Notification bell */}
+          {/* Right actions: Qibla bearing pill + Notification bell */}
           <div className="flex items-center gap-2 shrink-0">
-            {slowSyncing && (
-              <span
-                data-testid="syncing-alarms-chip"
-                className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold whitespace-nowrap shrink-0"
-                style={{
-                  background: 'var(--surface-2)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--accent-text)',
-                }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[var(--accent)]" />
-                Syncing alarms...
-              </span>
-            )}
             {qiblaBearing !== null && (
               <button
                 type="button"
@@ -853,6 +839,24 @@ function PremiumDashboardInner({
             </button>
           </div>
         </div>
+
+        {/* Non-displacing P1 slow-sync status chip below Top Bar (never squeezes city pill) */}
+        {slowSyncing && (
+          <div className="flex justify-end -mt-1">
+            <span
+              data-testid="syncing-alarms-chip"
+              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap shrink-0"
+              style={{
+                background: 'var(--surface-2)',
+                borderColor: 'var(--border)',
+                color: 'var(--accent-text)',
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[var(--accent)]" />
+              Syncing alarms...
+            </span>
+          </div>
+        )}
 
         {/* ── Update Available Banner ── */}
         <UpdateBanner />

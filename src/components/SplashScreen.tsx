@@ -123,6 +123,7 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
             if (hasTriggeredCompletionRef.current) return;
             setIsFading(true);
             setProgress(100);
+            markSplashDismissed();
 
             const elInitial = document.getElementById('initial-splash');
             if (elInitial) {
@@ -143,21 +144,26 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
             if (fadeOutTimer !== null) clearTimeout(fadeOutTimer);
             fadeOutTimer = setTimeout(() => {
                 triggerComplete();
-            }, shouldAnimate ? 200 : 20);
+            }, shouldAnimate ? 150 : 20);
         };
 
         window.addEventListener(BOOT_P0_COMPLETE_EVENT, beginFadeAndDismiss, { once: true });
 
         const failsafeTimer = setTimeout(() => {
             beginFadeAndDismiss();
-        }, SPLASH_HARD_CAP_MS);
+        }, Math.max(200, SPLASH_HARD_CAP_MS - 220));
+
+        const hardDeadlineTimer = setTimeout(() => {
+            triggerComplete();
+        }, Math.max(300, SPLASH_HARD_CAP_MS - 40));
 
         if (!hasPrePaintSplash && !shouldAnimate) {
             const fastTimer = setTimeout(() => {
                 beginFadeAndDismiss();
-            }, 80);
+            }, 60);
             return () => {
                 clearTimeout(fastTimer);
+                clearTimeout(hardDeadlineTimer);
                 if (fadeOutTimer !== null) clearTimeout(fadeOutTimer);
                 window.removeEventListener(BOOT_P0_COMPLETE_EVENT, beginFadeAndDismiss);
                 clearTimeout(failsafeTimer);
@@ -166,6 +172,7 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
         }
 
         return () => {
+            clearTimeout(hardDeadlineTimer);
             if (fadeOutTimer !== null) clearTimeout(fadeOutTimer);
             window.removeEventListener(BOOT_P0_COMPLETE_EVENT, beginFadeAndDismiss);
             clearTimeout(failsafeTimer);

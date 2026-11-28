@@ -50,9 +50,27 @@ const OVERPASS_MIRRORS = [
 export const STORAGE_FAVOURITES = 'noor_favourite_mosques';
 export const STORAGE_PRIMARY_MASJID = 'noor_primary_masjid';
 export const STORAGE_CUSTOM_MOSQUES = 'noor_custom_mosques';
+export const STORAGE_MOSQUES_CACHE_V1 = 'siraj_mosques_cache_v1';
 const STORAGE_JAMAAT_PREFIX = 'noor_mosque_jamaat_';
 const STORAGE_CACHE_PREFIX = 'noor_mosques_cache_';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const MOSQUE_PROVIDER_TIMEOUT_MS = 5000;
+
+export interface NearbyMosquesMeta {
+  fromCache: boolean;
+  timedOut: boolean;
+  providerLabel: string;
+}
+
+let lastMosquesFetchMeta: NearbyMosquesMeta = {
+  fromCache: false,
+  timedOut: false,
+  providerLabel: 'OPENSTREETMAP (OVERPASS) + PHOTON',
+};
+
+export function getLastNearbyMosquesMeta(): NearbyMosquesMeta {
+  return { ...lastMosquesFetchMeta };
+}
 
 /**
  * Calculates Haversine distance in meters between two lat/lon points.
@@ -377,18 +395,17 @@ async function fetchPhotonMosques(
   lon: number,
   query: string = 'masjid',
   limit: number = 30
-): Promise<MosqueItem[]> {
+): Promise<{ items: MosqueItem[]; timedOut: boolean }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MOSQUE_PROVIDER_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4500);
-
     const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&limit=${limit}`;
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
 
-    if (!res.ok) return [];
+    if (!res.ok) return { items: [], timedOut: false };
     const data = await res.json();
-    if (!data || !Array.isArray(data.features)) return [];
+    if (!data || !Array.isArray(data.features)) return { items: [], timedOut: false };
 
     const favSet = new Set(getFavouriteMosqueIds());
     const primary = getPrimaryMasjid();
@@ -443,44 +460,55 @@ async function fetchPhotonMosques(
       });
     }
 
-    return results;
-  } catch {
-    return [];
+    return { items: results, timedOut: false };
+  } catch (err) {
+    clearTimeout(timer);
+    const timedOut = (err as { name?: string })?.name === 'AbortError';
+    return { items: [], timedOut };
   }
 }
 
 /**
- * Race all Overpass mirrors in parallel using Promise.any (<6.5s).
+ * Race all Overpass mirrors in parallel using Promise.any with 5000ms AbortController timeout.
  */
 async function raceOverpassMirrors(
   lat: number,
   lon: number,
   radiusMeters: number
-): Promise<MosqueItem[]> {
+): Promise<{ items: MosqueItem[]; timedOut: boolean }> {
   const query = `[out:json][timeout:5];(nwr["amenity"="place_of_worship"]["religion"="muslim"](around:${radiusMeters},${lat},${lon});nwr["building"="mosque"](around:${radiusMeters},${lat},${lon});nwr["name"~"Masjid|Mosque|Jama|Juma|Jamiya|Madina|Aqsa|Ibrahim|Eidgah|Idgah|مسجد",i](around:${radiusMeters},${lat},${lon}););out center 40;`;
   const body = 'data=' + encodeURIComponent(query);
 
-  const fetchSingleMirror = async (mirror: string): Promise<any> => {
+  interface OverpassElement {
+    id: number | string;
+    lat?: number;
+    lon?: number;
+    center?: { lat: number; lon: number };
+    tags?: Record<string, string>;
+  }
+
+  const fetchSingleMirror = async (mirror: string): Promise<{ elements: OverpassElement[] }> => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4500);
-
-    const res = await fetch(mirror, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-
-    if (!res.ok) throw new Error(`Mirror ${mirror} HTTP ${res.status}`);
-    const json = await res.json();
-    if (!json || !Array.isArray(json.elements)) throw new Error('Invalid Overpass JSON');
-    return json;
+    const timer = setTimeout(() => controller.abort(), MOSQUE_PROVIDER_TIMEOUT_MS);
+    try {
+      const res = await fetch(mirror, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`Mirror ${mirror} HTTP ${res.status}`);
+      const json = await res.json();
+      if (!json || !Array.isArray(json.elements)) throw new Error('Invalid Overpass JSON');
+      return json;
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   try {
     const rawData = await Promise.any(OVERPASS_MIRRORS.map((m) => fetchSingleMirror(m)));
-    if (!rawData || !Array.isArray(rawData.elements)) return [];
+    if (!rawData || !Array.isArray(rawData.elements)) return { items: [], timedOut: false };
 
     const favSet = new Set(getFavouriteMosqueIds());
     const primary = getPrimaryMasjid();
@@ -493,7 +521,7 @@ async function raceOverpassMirrors(
       if (typeof mLat !== 'number' || typeof mLon !== 'number') continue;
 
       const tags = el.tags || {};
-      const name = tags.name || tags['name:en'] || tags['name:ur'] || tags['name:hi'] || 'Masjid';
+      const name = tags.name || tags['name:en'] || tags['name:ur'] || 'Masjid';
       const nativeName = tags['name:ar'] || tags['name:ur'] || undefined;
 
       const street = tags['addr:street'] || '';
@@ -523,9 +551,13 @@ async function raceOverpassMirrors(
       });
     }
 
-    return mosques;
-  } catch {
-    return [];
+    return { items: mosques, timedOut: false };
+  } catch (err) {
+    const aggErrors = (err as { errors?: unknown[] })?.errors;
+    const timedOut =
+      (err as { name?: string })?.name === 'AbortError' ||
+      (Array.isArray(aggErrors) && aggErrors.some((e) => (e as { name?: string })?.name === 'AbortError'));
+    return { items: [], timedOut };
   }
 }
 
@@ -590,45 +622,68 @@ function deduplicateAndSort(mosques: MosqueItem[], maxRadiusMeters?: number): Mo
   return result;
 }
 
+function getCacheLocationKey(lat: number, lon: number, radiusMeters: number): string {
+  return `${lat.toFixed(2)}_${lon.toFixed(2)}_${radiusMeters}`;
+}
+
 /**
- * Get cached mosques from localStorage if within 24h TTL.
+ * Get cached mosques from localStorage (`siraj_mosques_cache_v1` with legacy key fallback).
  */
-function getCachedMosques(lat: number, lon: number, radiusMeters: number): MosqueItem[] | null {
+export function getCachedMosques(
+  lat: number,
+  lon: number,
+  radiusMeters: number,
+  allowExpired = false
+): MosqueItem[] | null {
   try {
-    const key = `${STORAGE_CACHE_PREFIX}${lat.toFixed(2)}_${lon.toFixed(2)}_${radiusMeters}`;
-    const raw = localStorage.getItem(key);
+    const locKey = getCacheLocationKey(lat, lon, radiusMeters);
+    const v1Raw = localStorage.getItem(STORAGE_MOSQUES_CACHE_V1);
+    if (v1Raw) {
+      const store = JSON.parse(v1Raw) as Record<string, { timestamp: number; items: MosqueItem[] }>;
+      const entry = store?.[locKey];
+      if (entry && Array.isArray(entry.items) && (allowExpired || Date.now() - entry.timestamp < CACHE_TTL_MS)) {
+        return deduplicateAndSort(entry.items);
+      }
+    }
+
+    const legacyKey = `${STORAGE_CACHE_PREFIX}${locKey}`;
+    const raw = localStorage.getItem(legacyKey);
     if (!raw) return null;
     const { timestamp, items } = JSON.parse(raw);
-    if (Date.now() - timestamp < CACHE_TTL_MS && Array.isArray(items)) {
+    if ((allowExpired || Date.now() - timestamp < CACHE_TTL_MS) && Array.isArray(items)) {
       return deduplicateAndSort(items);
     }
-  } catch {
-    // Storage fallback
+  } catch (err) {
+    console.warn('[MosqueService] Cache read fallback:', err);
   }
   return null;
 }
 
 /**
- * Save mosques to localStorage with 24h timestamp.
+ * Save mosques to `siraj_mosques_cache_v1` per location in localStorage.
  */
 function setCachedMosques(lat: number, lon: number, radiusMeters: number, items: MosqueItem[]): void {
   try {
-    const key = `${STORAGE_CACHE_PREFIX}${lat.toFixed(2)}_${lon.toFixed(2)}_${radiusMeters}`;
-    localStorage.setItem(
-      key,
-      JSON.stringify({
-        timestamp: Date.now(),
-        items,
-      })
-    );
-  } catch {
-    // Storage quota fallback
+    const locKey = getCacheLocationKey(lat, lon, radiusMeters);
+    const existingRaw = localStorage.getItem(STORAGE_MOSQUES_CACHE_V1);
+    const store = existingRaw ? (JSON.parse(existingRaw) as Record<string, { timestamp: number; items: MosqueItem[] }>) : {};
+    store[locKey] = { timestamp: Date.now(), items };
+    const entries = Object.entries(store);
+    if (entries.length > 10) {
+      entries.sort((a, b) => (b[1]?.timestamp || 0) - (a[1]?.timestamp || 0));
+      localStorage.setItem(STORAGE_MOSQUES_CACHE_V1, JSON.stringify(Object.fromEntries(entries.slice(0, 10))));
+    } else {
+      localStorage.setItem(STORAGE_MOSQUES_CACHE_V1, JSON.stringify(store));
+    }
+  } catch (err) {
+    console.warn('[MosqueService] Cache save fallback:', err);
   }
 }
 
 /**
  * Fetch nearby mosques within radius (in meters).
- * Runs Photon + Overpass mirror race + Local Custom/Favourites in parallel (<3s).
+ * Enforces strict 5000ms timeout per provider & overall scan, falling back immediately
+ * to `siraj_mosques_cache_v1` + user custom mosques on network error or timeout.
  */
 export async function fetchNearbyMosques(
   lat: number,
@@ -636,15 +691,18 @@ export async function fetchNearbyMosques(
   radiusMeters: number = 5000,
   forceRefresh = false
 ): Promise<MosqueItem[]> {
-  // 1. Check local 24h cache first
   if (!forceRefresh) {
-    const cached = getCachedMosques(lat, lon, radiusMeters);
+    const cached = getCachedMosques(lat, lon, radiusMeters, false);
     if (cached && cached.length > 0) {
+      lastMosquesFetchMeta = {
+        fromCache: true,
+        timedOut: false,
+        providerLabel: 'OPENSTREETMAP (OVERPASS) + PHOTON',
+      };
       return cached;
     }
   }
 
-  // 2. Always prepare user's custom & primary mosques
   const customMosques = getCustomMosques().map((m) => {
     const dist = calculateHaversineDistanceMeters(lat, lon, m.latitude, m.longitude);
     return {
@@ -657,46 +715,77 @@ export async function fetchNearbyMosques(
     };
   });
 
-  // 3. Parallel multi-source fetch
-  const [photonMasjids, photonMosques, overpassMosques] = await Promise.allSettled([
+  let hardTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  let globalTimedOut = false;
+
+  const networkRace = Promise.allSettled([
     fetchPhotonMosques(lat, lon, 'masjid', 30),
     fetchPhotonMosques(lat, lon, 'mosque', 30),
     raceOverpassMirrors(lat, lon, Math.max(radiusMeters, 5000)),
   ]);
 
+  const timeoutGuard = new Promise<'TIMEOUT'>((resolve) => {
+    hardTimeoutHandle = setTimeout(() => {
+      globalTimedOut = true;
+      resolve('TIMEOUT');
+    }, MOSQUE_PROVIDER_TIMEOUT_MS);
+  });
+
+  const outcome = await Promise.race([networkRace, timeoutGuard]);
+  if (hardTimeoutHandle !== null) clearTimeout(hardTimeoutHandle);
+
   const pool: MosqueItem[] = [...customMosques];
+  let anyProviderTimedOut = globalTimedOut;
 
-  if (photonMasjids.status === 'fulfilled') {
-    pool.push(...photonMasjids.value);
-  }
-  if (photonMosques.status === 'fulfilled') {
-    pool.push(...photonMosques.value);
-  }
-  if (overpassMosques.status === 'fulfilled') {
-    pool.push(...overpassMosques.value);
+  if (outcome !== 'TIMEOUT') {
+    const [photonMasjids, photonMosques, overpassMosques] = outcome;
+    if (photonMasjids.status === 'fulfilled') {
+      pool.push(...photonMasjids.value.items);
+      if (photonMasjids.value.timedOut) anyProviderTimedOut = true;
+    }
+    if (photonMosques.status === 'fulfilled') {
+      pool.push(...photonMosques.value.items);
+      if (photonMosques.value.timedOut) anyProviderTimedOut = true;
+    }
+    if (overpassMosques.status === 'fulfilled') {
+      pool.push(...overpassMosques.value.items);
+      if (overpassMosques.value.timedOut) anyProviderTimedOut = true;
+    }
   }
 
-  // 4. Radius filter with auto-expansion if < 3 mosques
   let candidateRadius = radiusMeters;
   let deduplicated = deduplicateAndSort(pool, candidateRadius);
 
   if (deduplicated.length < 3 && candidateRadius < 15000) {
-    // Auto-expand to 15km so rural users always find mosques
     candidateRadius = 15000;
     deduplicated = deduplicateAndSort(pool, candidateRadius);
   }
 
-  if (deduplicated.length > 0) {
+  if (deduplicated.length > 0 && outcome !== 'TIMEOUT') {
     setCachedMosques(lat, lon, radiusMeters, deduplicated);
+    lastMosquesFetchMeta = {
+      fromCache: false,
+      timedOut: false,
+      providerLabel: 'OPENSTREETMAP (OVERPASS) + PHOTON',
+    };
     return deduplicated;
   }
 
-  // If online query yielded 0, return expired cache if any
-  const expired = getCachedMosques(lat, lon, radiusMeters);
-  if (expired && expired.length > 0) {
-    return expired;
+  const cachedFallback = getCachedMosques(lat, lon, radiusMeters, true);
+  if (cachedFallback && cachedFallback.length > 0) {
+    lastMosquesFetchMeta = {
+      fromCache: true,
+      timedOut: anyProviderTimedOut,
+      providerLabel: 'OPENSTREETMAP (OVERPASS) + PHOTON',
+    };
+    return cachedFallback;
   }
 
+  lastMosquesFetchMeta = {
+    fromCache: false,
+    timedOut: anyProviderTimedOut,
+    providerLabel: 'OPENSTREETMAP (OVERPASS) + PHOTON',
+  };
   return deduplicateAndSort(customMosques);
 }
 
@@ -790,24 +879,24 @@ export async function searchMosquesOnline(
     };
   }).filter((m) => m.name.toLowerCase().includes(cleanQ.toLowerCase()) || m.address.toLowerCase().includes(cleanQ.toLowerCase()));
 
-  // 2. Parallel Online Queries: Photon + Bounded Nominatim
-  const [q1, q2, nom] = await Promise.allSettled([
-    fetchPhotonMosques(lat, lon, `${cleanQ} masjid`, 25),
-    fetchPhotonMosques(lat, lon, cleanQ, 25),
-    fetchNominatimMosques(lat, lon, cleanQ, 10),
-  ]);
+    // 2. Parallel Online Queries: Photon + Bounded Nominatim
+    const [q1, q2, nom] = await Promise.allSettled([
+      fetchPhotonMosques(lat, lon, `${cleanQ} masjid`, 25),
+      fetchPhotonMosques(lat, lon, cleanQ, 25),
+      fetchNominatimMosques(lat, lon, cleanQ, 10),
+    ]);
 
-  const pool: MosqueItem[] = [...custom];
-  if (q1.status === 'fulfilled') pool.push(...q1.value);
-  if (q2.status === 'fulfilled') pool.push(...q2.value);
-  if (nom.status === 'fulfilled') pool.push(...nom.value);
+    const pool: MosqueItem[] = [...custom];
+    if (q1.status === 'fulfilled') pool.push(...q1.value.items);
+    if (q2.status === 'fulfilled') pool.push(...q2.value.items);
+    if (nom.status === 'fulfilled') pool.push(...nom.value);
 
-  // 3. Strict 50 km cap across all online results
-  const capped = pool.filter((m) => m.isCustom || m.distanceMeters <= 50000);
+    // 3. Strict 50 km cap across all online results
+    const capped = pool.filter((m) => m.isCustom || m.distanceMeters <= 50000);
 
-  // Return deduplicated results sorted by proximity
-  return deduplicateAndSort(capped);
-}
+    // Return deduplicated results sorted by proximity
+    return deduplicateAndSort(capped);
+  }
 
 /**
  * Open external navigation to mosque via Google Maps.
@@ -818,9 +907,19 @@ export function openGoogleMapsDirections(lat: number, lon: number): void {
 }
 
 /**
- * Open nearby mosque search in Google Maps.
+ * Open nearby mosque search in Google Maps (prefers geo: URI on Android, HTTPS web fallback).
  */
 export function openGoogleMapsSearchNearby(lat: number, lon: number): void {
-  const url = `https://www.google.com/maps/search/mosque/@${lat},${lon},15z`;
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const geoUrl = `geo:${lat},${lon}?q=mosque`;
+  const webUrl = `https://www.google.com/maps/search/mosque/@${lat},${lon},15z`;
+  try {
+    const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+    if (isAndroid) {
+      window.location.href = geoUrl;
+      return;
+    }
+  } catch (err) {
+    console.debug('[MosqueService] geo URI fallback:', err);
+  }
+  window.open(webUrl, '_blank', 'noopener,noreferrer');
 }

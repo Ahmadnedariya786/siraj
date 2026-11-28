@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocationState } from "@/lib/location-state";
 import {
   fetchNearbyMosques,
+  getLastNearbyMosquesMeta,
   searchMosquesOnline,
   getCurrentStreetLocation,
   getPrimaryMasjid,
@@ -720,6 +721,9 @@ function MosqueFinderContent() {
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [streetCoords, setStreetCoords] = useState<StreetLocationResult | null>(null);
   const [gpsStatus, setGpsStatus] = useState<string>("");
+  const [scanElapsedSec, setScanElapsedSec] = useState<number>(0);
+  const [showingSavedFallback, setShowingSavedFallback] = useState<boolean>(false);
+  const [scanTimedOut, setScanTimedOut] = useState<boolean>(false);
 
   const lat = location.latitude;
   const lon = location.longitude;
@@ -800,10 +804,25 @@ function MosqueFinderContent() {
     };
   }, []);
 
+  // Elapsed scan timer (capped cleanly at 5s)
+  useEffect(() => {
+    if (!isLoading) {
+      setScanElapsedSec(0);
+      return;
+    }
+    setScanElapsedSec(1);
+    const id = setInterval(() => {
+      setScanElapsedSec((prev) => Math.min(5, prev + 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isLoading]);
+
   // Instant mount fetch (<16ms) with stored coordinates. Fresh GPS only when requested.
   const loadMosques = useCallback(
     async (force = false, userRefresh = false) => {
       setIsLoading(true);
+      setScanTimedOut(false);
+      setShowingSavedFallback(false);
       try {
         let activeLat = lat;
         let activeLon = lon;
@@ -842,10 +861,14 @@ function MosqueFinderContent() {
         } else {
           setAutoExpandedFromRadius(null);
         }
+        const meta = getLastNearbyMosquesMeta();
+        setShowingSavedFallback(meta.fromCache && results.length > 0);
+        setScanTimedOut(meta.timedOut);
         setMosques(results);
         setPrimaryMasjidState(getPrimaryMasjid());
       } catch (err) {
         console.warn("[MosqueFinder] Failed to fetch nearby mosques:", err);
+        setScanTimedOut(true);
       } finally {
         setIsLoading(false);
       }
@@ -973,7 +996,7 @@ function MosqueFinderContent() {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-text)] block">
-                  100% Free • OPENSTREETMAP & PHOTON (KOMOOT)
+                  100% Free • OPENSTREETMAP (OVERPASS) + PHOTON
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-lg font-extrabold text-[var(--text-primary)] truncate">
@@ -1311,17 +1334,40 @@ function MosqueFinderContent() {
             </Card>
           )}
 
-          {/* Loading Indicator */}
+          {/* Loading Indicator (strict 5s cap + elapsed timer) */}
           {isLoading && (
             <div className="py-10 text-center space-y-3">
               <RefreshCw className="w-6 h-6 mx-auto animate-spin text-[var(--accent)]" />
               <p className="text-xs text-[var(--text-secondary)] font-medium">
-                Scanning OPENSTREETMAP & PHOTON (KOMOOT) servers within {radiusMeters / 1000} km...
+                Scanning... {Math.max(1, scanElapsedSec)}s • OPENSTREETMAP (OVERPASS) + PHOTON ({radiusMeters / 1000} km)
               </p>
             </div>
           )}
 
-          {/* Zero Results / Offline Fallback */}
+          {/* Cached Results Banner */}
+          {!isLoading && showingSavedFallback && displayedMosques.length > 0 && (
+            <div
+              className="p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs"
+              style={{
+                background: "var(--surface-2)",
+                borderColor: scanTimedOut ? "var(--accent)" : "var(--border)",
+                color: "var(--text-primary)",
+              }}
+            >
+              <span className="font-medium text-[var(--text-secondary)]">
+                Showing saved results
+              </span>
+              <button
+                type="button"
+                onClick={() => loadMosques(true, false)}
+                className="font-bold text-[var(--accent-text)] hover:underline cursor-pointer shrink-0"
+              >
+                Refresh
+              </button>
+            </div>
+          )}
+
+          {/* Zero Results / Timeout / Offline Fallback */}
           {!isLoading && displayedMosques.length === 0 && (
             <Card
               className="p-6 rounded-2xl border text-center space-y-4"
@@ -1330,25 +1376,46 @@ function MosqueFinderContent() {
               <Building className="w-10 h-10 mx-auto text-[var(--text-secondary)] opacity-60" />
               <div className="space-y-1.5">
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                  {searchFilter ? "No Mosques Matching Search" : "No Mosques Found in Radius"}
+                  {scanTimedOut
+                    ? "Map Servers Timed Out (5s)"
+                    : searchFilter
+                    ? "No Mosques Matching Search"
+                    : "No Mosques Found in Radius"}
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto leading-relaxed">
-                  OpenStreetMap tags may be sparse in this locality or you may be offline. You can tap &quot;+ Add&quot; above to add your local masjid manually or search directly in Google Maps.
+                  {scanTimedOut
+                    ? "Live OpenStreetMap Overpass & Photon servers did not respond within 5 seconds. Retry scan, add a local masjid, or open Google Maps."
+                    : 'OpenStreetMap tags may be sparse in this locality or you may be offline. Tap "Add Local Masjid" or search directly in Google Maps.'}
                 </p>
               </div>
 
               <div className="flex flex-col gap-2">
                 <Button
                   type="button"
-                  onClick={() => setIsAddModalOpen(true)}
+                  onClick={() => loadMosques(true, false)}
                   className="w-full text-xs font-bold h-10 rounded-xl gap-1.5 cursor-pointer"
                   style={{
-                    background: "linear-gradient(135deg, var(--accent), var(--accent-2))",
+                    background: "var(--accent)",
                     color: "var(--on-accent)",
                   }}
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>{searchFilter ? `+ Add "${searchFilter}" as Local Masjid` : "+ Add Your Local Masjid"}</span>
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Retry Scan</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="w-full text-xs font-bold h-10 rounded-xl gap-1.5 cursor-pointer"
+                  style={{
+                    borderColor: "var(--border)",
+                    background: "var(--surface-2)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <Plus className="w-4 h-4 text-[var(--accent)]" />
+                  <span>{searchFilter ? `Add "${searchFilter}"` : "Add Local Masjid"}</span>
                 </Button>
 
                 {activeLat !== null && activeLon !== null && (

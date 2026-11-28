@@ -328,3 +328,21 @@ export async function getCurrentStreak(): Promise<number> {
   const userAchievements = await loadUserAchievements();
   return userAchievements.consecutiveDays;
 }
+
+/**
+ * Reset all unlocked achievements & consecutive streak days cleanly.
+ */
+export async function resetRadioAchievements(): Promise<void> {
+  const empty: UserAchievements = {
+    unlocked: [],
+    streakDays: 0,
+    lastListenDate: null,
+    consecutiveDays: 0,
+  };
+  await saveUserAchievements(empty);
+  try {
+    localStorage.removeItem(USER_ACHIEVEMENTS_KEY);
+  } catch (err) {
+    console.warn('[RadioAchievements] localStorage clear skipped:', err);
+  }
+}

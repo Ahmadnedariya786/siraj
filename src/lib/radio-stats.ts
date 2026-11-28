@@ -36,25 +36,28 @@ export const MEDIA_STATS_UPDATED_EVENT = 'siraj:media-stats-updated';
 
 const STATS_KEY = 'radio-listening-stats';
 
-// Default empty stats
-const DEFAULT_STATS: RadioStatsData = {
+const createDefaultStats = (): RadioStatsData => ({
   stations: {},
   totalListeningTime: 0,
-};
+});
 
 /**
- * Load stats from storage
+ * Load stats from storage (returns a fresh object copy so defaults are never mutated)
  */
 export async function loadRadioStats(): Promise<RadioStatsData> {
   try {
     const { value } = await Preferences.get({ key: STATS_KEY });
     if (value) {
-      return JSON.parse(value);
+      const parsed = JSON.parse(value) as Partial<RadioStatsData>;
+      return {
+        stations: parsed?.stations && typeof parsed.stations === 'object' ? { ...parsed.stations } : {},
+        totalListeningTime: typeof parsed?.totalListeningTime === 'number' ? parsed.totalListeningTime : 0,
+      };
     }
   } catch (error) {
     console.error('Failed to load radio stats:', error);
   }
-  return DEFAULT_STATS;
+  return createDefaultStats();
 }
 
 /**
@@ -147,10 +150,20 @@ export async function getTotalListeningTime(): Promise<number> {
 }
 
 /**
- * Reset all stats
+ * Reset all stats, current streak, and achievements atomically
  */
 export async function resetRadioStats(): Promise<void> {
-  await saveRadioStats(DEFAULT_STATS);
+  await saveRadioStats(createDefaultStats());
+  try {
+    await Preferences.remove({ key: STATS_KEY });
+  } catch (err) {
+    console.warn('Preferences.remove stats fallback:', err);
+  }
+  const { resetRadioAchievements } = await import('./radio-achievements');
+  await resetRadioAchievements();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(MEDIA_STATS_UPDATED_EVENT));
+  }
 }
 
 /**

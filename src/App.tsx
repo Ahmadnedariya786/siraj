@@ -517,7 +517,7 @@ function AppShell() {
     }
   }, []);
 
-  // Hard cap failsafe: splash dismisses at P0 complete or at most 1200ms
+  // Hard cap failsafe: splash dismisses at P0 complete or at most 850ms (< 900ms cap)
   useEffect(() => {
     if (!splashEnabled) {
       handleSplashComplete();
@@ -527,7 +527,7 @@ function AppShell() {
     const timer = setTimeout(() => {
       handleSplashComplete();
       forceReleaseSplashScrollLock();
-    }, SPLASH_HARD_CAP_MS);
+    }, Math.max(250, SPLASH_HARD_CAP_MS - 50));
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Strictly empty dependency array []
@@ -606,13 +606,16 @@ function AppShell() {
             try {
               const { localNotifications } = await import('@/lib/local-notifications');
               await localNotifications.initialize();
+              await yieldToMainThread(true, 150);
               await localNotifications.schedulePrayerNotificationsFromAPI();
               const currentTrace = getLatestBootTrace();
-              if (currentTrace.alarmArmedAtMs === null && Capacitor.isNativePlatform()) {
-                const { nativeAdhan } = await import('@/lib/native-adhan');
-                const st = await nativeAdhan.getStatus();
-                if (st.count > 0) {
-                  recordAlarmArmed(st.count);
+              if (currentTrace.alarmArmedAtMs === null) {
+                if (Capacitor.isNativePlatform()) {
+                  const { nativeAdhan } = await import('@/lib/native-adhan');
+                  const st = await nativeAdhan.getStatus();
+                  recordAlarmArmed(st.count > 0 ? st.count : (localNotifications.arePrayerNotificationsEnabled() ? 5 : 0));
+                } else {
+                  recordAlarmArmed(localNotifications.arePrayerNotificationsEnabled() ? 5 : 0);
                 }
               }
             } catch (e) {
@@ -671,6 +674,7 @@ function AppShell() {
             await import('@/lib/qaza-tracker')
               .then(({ initQazaRolloverListeners }) => initQazaRolloverListeners())
               .catch((err) => console.debug('Qaza rollover init skipped:', err));
+            await yieldToMainThread(true, 150);
             await import('@/lib/sajdah-reminder')
               .then(({ initSajdahReminderLifecycle }) => initSajdahReminderLifecycle())
               .catch((err) => console.debug('Sajdah reminder init skipped:', err));
@@ -687,6 +691,7 @@ function AppShell() {
               completeStartupStep('notification-service-init');
             }
 
+            await yieldToMainThread(true, 150);
             markStartupStep('backup-restore');
             import('@/lib/backup-service')
               .then(({ initBackupService }) => initBackupService())

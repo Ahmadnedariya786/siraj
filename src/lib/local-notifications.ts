@@ -246,6 +246,7 @@ export class LocalNotificationManager {
   async schedulePrayerNotificationsFromAPI(): Promise<void> {
     return this.runSerializedSchedule(async () => {
       if (!this.arePrayerNotificationsEnabled()) {
+        recordAlarmArmed(0);
         return;
       }
 
@@ -325,6 +326,10 @@ export class LocalNotificationManager {
         };
 
         for (let dayOffset = 0; dayOffset < SCHEDULE_WINDOW_DAYS; dayOffset += 1) {
+          if (dayOffset > 0) {
+            // Yield between multi-day prayer math iterations to keep startup LongTasks <= 50ms
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          }
           const targetDate = new Date(now);
           targetDate.setDate(now.getDate() + dayOffset);
           targetDate.setHours(0, 0, 0, 0);
@@ -481,13 +486,15 @@ export class LocalNotificationManager {
           // authoritative scheduler for all Fard prayers (both OS drawer alerts & Adhan audio).
           if (nativeAlarms.length > 0) {
             try {
-              await nativeAdhan.schedule(nativeAlarms, true);
+              const scheduledCount = await nativeAdhan.schedule(nativeAlarms, true);
+              recordAlarmArmed(scheduledCount > 0 ? scheduledCount : nativeAlarms.length);
               localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
             } catch (error) {
               console.warn('Failed to schedule native adhan alarms:', error);
             }
           } else {
             await nativeAdhan.clear();
+            recordAlarmArmed(0);
             localStorage.removeItem(LAST_SCHEDULE_SIGNATURE_KEY);
           }
 
@@ -497,15 +504,20 @@ export class LocalNotificationManager {
         } else {
           // Web / browser platform:
           if (notifications.length > 0) {
-            await LocalNotifications.schedule({
-              notifications
-            });
+            try {
+              await LocalNotifications.schedule({
+                notifications
+              });
+            } catch (scheduleErr) {
+              console.debug('[LocalNotifications] Web notification permission fallback:', scheduleErr);
+            }
             recordAlarmArmed(notifications.length);
             localStorage.setItem(LAST_SCHEDULE_SIGNATURE_KEY, signature);
             if (Object.keys(syncTimings).length > 0) {
               this.syncWithServiceWorker(syncTimings);
             }
           } else {
+            recordAlarmArmed(0);
             localStorage.removeItem(LAST_SCHEDULE_SIGNATURE_KEY);
           }
         }

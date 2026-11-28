@@ -342,8 +342,8 @@ export const NamesDetailModal: React.FC<NamesDetailModalProps> = memo(({
 
         {/* Body Content */}
         <div className="p-5 space-y-4">
-          {/* Transliteration & Localized Meaning */}
-          <div className="text-center space-y-1.5">
+          {/* Transliteration & Localized Meaning (stacked cleanly in flex-col gap-1) */}
+          <div className="flex flex-col items-center text-center gap-1">
             <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--accent-text)' }}>
               <span className={isUrdu ? 'font-urdu tracking-normal text-xs' : ''}>
                 {ui.attributeLabel}
@@ -353,7 +353,7 @@ export const NamesDetailModal: React.FC<NamesDetailModalProps> = memo(({
 
             <h3
               dir="ltr"
-              className="text-2xl font-bold font-serif"
+              className="text-2xl font-bold font-serif leading-tight"
               style={{ color: 'var(--text-primary)' }}
             >
               {selectedName.transliteration}

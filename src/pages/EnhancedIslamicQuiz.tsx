@@ -809,7 +809,7 @@ export default function EnhancedIslamicQuiz() {
           onBack={quizComplete ? () => setGameMode('menu') : handleGameplayBack}
         />
 
-        <div className="max-w-lg mx-auto px-3 pt-2.5 pb-[calc(var(--player-inset,0px)+88px)] space-y-2.5">
+        <div className="max-w-lg mx-auto px-3 pt-2.5 pb-[calc(148px+env(safe-area-inset-bottom,0px)+var(--player-inset,0px))] space-y-2.5">
           {!quizComplete ? (
             <>
               {/* Compact Gameplay HUD */}
@@ -1047,11 +1047,11 @@ export default function EnhancedIslamicQuiz() {
                 </div>
               )}
 
-              {/* Sticky Bottom Action Bar above Mini-Player */}
+              {/* Sticky Bottom Action Bar cleanly above BottomDock + Mini-Player */}
               {gameState.showResult && (
                 <div
                   className="sticky z-30 pt-1.5"
-                  style={{ bottom: 'calc(var(--player-inset, 0px) + 8px)' }}
+                  style={{ bottom: 'calc(72px + env(safe-area-inset-bottom, 0px) + var(--player-inset, 0px))' }}
                 >
                   <Button
                     data-testid="quiz-next-btn"

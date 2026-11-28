@@ -23,6 +23,29 @@ const formatTime = (time: number): string => {
 
 const RECITER_STORAGE_KEY = 'mp3quran-selected-reciter';
 
+const isBenignAbortError = (err: unknown): boolean => {
+    if (!err || typeof err !== 'object') return false;
+    const maybe = err as { name?: string; message?: string };
+    const msg = typeof maybe.message === 'string' ? maybe.message.toLowerCase() : '';
+    return (
+        maybe.name === 'AbortError' ||
+        msg.includes('interrupted by a call to pause') ||
+        msg.includes('the play() request was interrupted')
+    );
+};
+
+const getReciterMonogram = (name?: string): string => {
+    const cleaned = (name || 'Q')
+        .replace(/\(.*?\)/g, '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    if (cleaned.length >= 2) {
+        return `${cleaned[0][0]}${cleaned[1][0]}`.toUpperCase();
+    }
+    return (cleaned[0] || 'Q').slice(0, 2).toUpperCase();
+};
+
 export function GlobalQuranPlayer() {
     const audioRef = useRef<HTMLAudioElement>(null);
     const location = useLocation();
@@ -125,7 +148,9 @@ export function GlobalQuranPlayer() {
                 audio.load();
                 if (isPlaying) {
                     audio.play().catch(e => {
-                        console.error("Play failed", e);
+                        if (!isBenignAbortError(e)) {
+                            console.warn("Play skipped:", e);
+                        }
                     });
                 }
             }
@@ -150,7 +175,10 @@ export function GlobalQuranPlayer() {
             if (isRadioPlaying) updateRadioState({ isPlaying: false });
 
             audio.play().catch(e => {
-                console.error("Play request failed", e);
+                if (isBenignAbortError(e)) {
+                    return;
+                }
+                console.warn("Play request skipped:", e);
                 updateState({ isPlaying: false });
             });
         } else if (!isPlaying && !audio.paused) {
@@ -276,9 +304,22 @@ export function GlobalQuranPlayer() {
                         </div>
 
                         <div className="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer" onClick={() => setIsExpanded(true)}>
-                            {/* Rotating Vinyl Icon */}
-                            <div className={`w-10 h-10 rounded-full bg-[var(--accent-soft)] flex items-center justify-center shrink-0 border border-[var(--border)] ${isPlaying ? 'animate-spin-slow' : ''}`}>
-                                <Play className="w-4 h-4 text-[var(--accent)] fill-current" />
+                            {/* Left Thumbnail: Reciter Monogram & Wave Indicator (zero duplicate Play glyph) */}
+                            <div
+                                className="w-10 h-10 rounded-full bg-[var(--accent-soft)] flex flex-col items-center justify-center shrink-0 border border-[var(--border)] select-none"
+                                aria-hidden="true"
+                            >
+                                {isPlaying ? (
+                                    <span className="flex items-end gap-[2px] h-3.5 text-[var(--accent)]">
+                                        <span className="w-[2.5px] h-2 rounded-full bg-current animate-pulse" />
+                                        <span className="w-[2.5px] h-3.5 rounded-full bg-current animate-pulse" style={{ animationDelay: '120ms' }} />
+                                        <span className="w-[2.5px] h-2.5 rounded-full bg-current animate-pulse" style={{ animationDelay: '240ms' }} />
+                                    </span>
+                                ) : (
+                                    <span className="text-[11px] font-black tracking-tight text-[var(--accent-text)]">
+                                        {getReciterMonogram(reciter?.name)}
+                                    </span>
+                                )}
                             </div>
 
                             <div className="min-w-0 pr-2">

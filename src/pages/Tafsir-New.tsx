@@ -39,14 +39,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -83,7 +75,11 @@ interface TafsirData {
   text: string;
   arabic?: string;
   translation?: string;
+  translationEn?: string;
+  translationUr?: string;
 }
+
+type TafsirLangFilter = 'All' | 'EN' | 'UR' | 'AR';
 
 interface SurahTafsir {
   surah: number;
@@ -138,11 +134,47 @@ const Tafsir = () => {
   const { animationEnabled } = useSettings();
 
   const [isAuthorDropdownOpen, setIsAuthorDropdownOpen] = useState(false);
+  const [tafsirLangFilter, setTafsirLangFilter] = useState<TafsirLangFilter>('All');
+  const [ayahTransLang, setAyahTransLang] = useState<'en' | 'ur'>('en');
+  const [noteDraft, setNoteDraft] = useState('');
+  const [visualViewportHeight, setVisualViewportHeight] = useState<number | null>(null);
   const authorCardRef = useRef<HTMLDivElement>(null);
 
   const currentEdition = useMemo(() => {
     return TAFSIR_EDITIONS.find((e) => e.id === selectedEdition) || TAFSIR_EDITIONS[0];
   }, [selectedEdition]);
+
+  const filteredEditions = useMemo(() => {
+    if (tafsirLangFilter === 'All') return TAFSIR_EDITIONS;
+    const target =
+      tafsirLangFilter === 'EN' ? 'English' : tafsirLangFilter === 'UR' ? 'Urdu' : 'Arabic';
+    return TAFSIR_EDITIONS.filter((e) => e.language === target);
+  }, [tafsirLangFilter]);
+
+  useEffect(() => {
+    if (currentEdition?.language === 'Urdu') {
+      setAyahTransLang('ur');
+    } else if (currentEdition?.language === 'English') {
+      setAyahTransLang('en');
+    }
+  }, [currentEdition?.language]);
+
+  useEffect(() => {
+    if (!showNotesEditor || typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    const updateViewport = () => {
+      setVisualViewportHeight(vv ? vv.height : window.innerHeight);
+    };
+    updateViewport();
+    vv?.addEventListener('resize', updateViewport);
+    vv?.addEventListener('scroll', updateViewport);
+    window.addEventListener('resize', updateViewport);
+    return () => {
+      vv?.removeEventListener('resize', updateViewport);
+      vv?.removeEventListener('scroll', updateViewport);
+      window.removeEventListener('resize', updateViewport);
+    };
+  }, [showNotesEditor]);
 
   useEffect(() => {
     if (!isAuthorDropdownOpen) return;
@@ -218,10 +250,11 @@ const Tafsir = () => {
     }
   };
 
-  const handleSurahSelect = async (surah: Surah) => {
+  const handleSurahSelect = async (surah: Surah, editionOverride?: string) => {
+    const activeEditionId = editionOverride || selectedEdition;
     setSelectedSurah(surah);
     setTafsirLoading(true);
-    setLoadingFromOffline(OFFLINE_EDITIONS.includes(selectedEdition));
+    setLoadingFromOffline(OFFLINE_EDITIONS.includes(activeEditionId));
 
     // Add to history
     const historyEntry = {
@@ -242,8 +275,8 @@ const Tafsir = () => {
     });
 
     try {
-      // Check cache first
-      const cacheKey = `tafsir-surah-${selectedEdition}-${surah.number}`;
+      // Check v2 cache first (includes both EN & UR ayah translations)
+      const cacheKey = `tafsir-surah-v2-${activeEditionId}-${surah.number}`;
       const cached = localStorage.getItem(cacheKey);
 
       if (cached) {
@@ -253,11 +286,10 @@ const Tafsir = () => {
         return;
       }
 
-      // 1. Fetch complete Tafsir for the surah in ONE request (much faster)
-      // 2. Fetch Arabic text & Translation for complete context (UX)
+      // Fetch Tafsir + Arabic + English + Urdu Ayah translations in parallel
       const [tafsirData, quranData] = await Promise.all([
-        fetchSurahTafsir(surah.number, selectedEdition),
-        fetch(`https://api.alquran.cloud/v1/surah/${surah.number}/editions/quran-uthmani,en.sahih`).then(res => res.json())
+        fetchSurahTafsir(surah.number, activeEditionId),
+        fetch(`https://api.alquran.cloud/v1/surah/${surah.number}/editions/quran-uthmani,en.sahih,ur.jalandhry`).then(res => res.json())
       ]);
 
       if (!tafsirData || !quranData.data) {
@@ -265,11 +297,12 @@ const Tafsir = () => {
       }
 
       const arabicEdition = quranData.data[0];
-      const translationEdition = quranData.data[1];
+      const englishEdition = quranData.data[1];
+      const urduEdition = quranData.data[2];
 
-      // Merge Tafsir with Arabic and Translation for a "Premium" reading experience
       const arabicByAyah = new Map<number, string>();
-      const translationByAyah = new Map<number, string>();
+      const englishByAyah = new Map<number, string>();
+      const urduByAyah = new Map<number, string>();
 
       if (Array.isArray(arabicEdition?.ayahs)) {
         arabicEdition.ayahs.forEach((a: any, idx: number) => {
@@ -280,21 +313,34 @@ const Tafsir = () => {
         });
       }
 
-      if (Array.isArray(translationEdition?.ayahs)) {
-        translationEdition.ayahs.forEach((a: any, idx: number) => {
+      if (Array.isArray(englishEdition?.ayahs)) {
+        englishEdition.ayahs.forEach((a: any, idx: number) => {
           const n = Number(a?.numberInSurah ?? a?.number ?? idx + 1);
           if (Number.isFinite(n) && typeof a?.text === "string") {
-            translationByAyah.set(n, a.text);
+            englishByAyah.set(n, a.text);
+          }
+        });
+      }
+
+      if (Array.isArray(urduEdition?.ayahs)) {
+        urduEdition.ayahs.forEach((a: any, idx: number) => {
+          const n = Number(a?.numberInSurah ?? a?.number ?? idx + 1);
+          if (Number.isFinite(n) && typeof a?.text === "string") {
+            urduByAyah.set(n, a.text);
           }
         });
       }
 
       const mergedTafsirs: TafsirData[] = tafsirData.map((t, idx) => {
         const ayahNumber = Number(t.ayah ?? idx + 1);
+        const enText = englishByAyah.get(ayahNumber);
+        const urText = urduByAyah.get(ayahNumber);
         return {
           ...t,
           arabic: arabicByAyah.get(ayahNumber),
-          translation: translationByAyah.get(ayahNumber),
+          translation: enText,
+          translationEn: enText,
+          translationUr: urText,
         };
       });
 
@@ -307,7 +353,7 @@ const Tafsir = () => {
 
       setCurrentSurahTafsir(surahTafsir);
 
-      // Cache the result
+      // Cache the result under v2 key
       try {
         localStorage.setItem(cacheKey, JSON.stringify(surahTafsir));
       } catch (error) {
@@ -360,6 +406,7 @@ const Tafsir = () => {
 
   const handleNote = (surah: number, ayah: number) => {
     setCurrentAyahForNote({ surah, ayah });
+    setNoteDraft(personalNotes[`${surah}:${ayah}`] || "");
     setShowNotesEditor(true);
   };
 
@@ -509,10 +556,32 @@ const Tafsir = () => {
                     borderColor: 'var(--border)',
                   }}
                 >
-                  {/* Row 1: translate icon + Select Tafsir Author label */}
-                  <div className="flex items-center gap-2 font-bold" style={{ color: 'var(--text-primary)' }}>
-                    <Languages className="w-5 h-5 shrink-0" style={{ color: 'var(--accent)' }} />
-                    <span className="text-sm font-bold tracking-tight">{t('selectTafsirAuthor')}</span>
+                  {/* Row 1: translate icon + Select Tafsir Author label + Compact Language Filter Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 font-bold" style={{ color: 'var(--text-primary)' }}>
+                      <Languages className="w-5 h-5 shrink-0" style={{ color: 'var(--accent)' }} />
+                      <span className="text-sm font-bold tracking-tight">{t('selectTafsirAuthor')}</span>
+                    </div>
+                    <div className="flex items-center gap-1" role="group" aria-label="Filter tafsir by language">
+                      {(['All', 'EN', 'UR', 'AR'] as TafsirLangFilter[]).map((langKey) => {
+                        const active = tafsirLangFilter === langKey;
+                        return (
+                          <button
+                            key={langKey}
+                            type="button"
+                            onClick={() => setTafsirLangFilter(langKey)}
+                            className="px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer"
+                            style={
+                              active
+                                ? { background: 'var(--accent)', color: 'var(--on-accent)', borderColor: 'var(--accent)' }
+                                : { background: 'var(--surface-2)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }
+                            }
+                          >
+                            {langKey}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* Row 2: full-width select button (single line, ellipsis, chevron at right) */}
@@ -545,7 +614,7 @@ const Tafsir = () => {
                           borderColor: 'var(--border)',
                         }}
                       >
-                        {TAFSIR_EDITIONS.map((edition) => {
+                        {filteredEditions.map((edition) => {
                           const isSelected = edition.id === selectedEdition;
                           return (
                             <button
@@ -554,7 +623,7 @@ const Tafsir = () => {
                               onClick={() => {
                                 setSelectedEdition(edition.id);
                                 setIsAuthorDropdownOpen(false);
-                                if (selectedSurah) handleSurahSelect(selectedSurah);
+                                if (selectedSurah) handleSurahSelect(selectedSurah, edition.id);
                               }}
                               className={cn(
                                 "w-full text-left p-3 rounded-xl transition-colors flex flex-col gap-1.5",
@@ -889,12 +958,12 @@ const Tafsir = () => {
                         color: 'var(--text-primary)',
                       }}
                     >
-                      {TAFSIR_EDITIONS.map((edition) => (
+                      {filteredEditions.map((edition) => (
                         <DropdownMenuItem
                           key={edition.id}
                           onClick={() => {
                             setSelectedEdition(edition.id);
-                            if (selectedSurah) handleSurahSelect(selectedSurah);
+                            if (selectedSurah) handleSurahSelect(selectedSurah, edition.id);
                           }}
                           className="flex items-center justify-between py-2.5 px-3 rounded-xl cursor-pointer"
                           style={selectedEdition === edition.id ? {
@@ -937,6 +1006,37 @@ const Tafsir = () => {
                       value={searchTafsirQuery}
                       onChange={(e) => setSearchTafsirQuery(e.target.value)}
                     />
+                  </div>
+                </div>
+
+                {/* Synced Tafsir + Ayah Language Chip & Manual Toggle */}
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+                  <span
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full border"
+                    style={{
+                      background: 'var(--surface-2)',
+                      borderColor: 'var(--border)',
+                      color: 'var(--accent-text)',
+                    }}
+                  >
+                    Tafsir: {currentEdition?.language || 'English'} • Ayah: {ayahTransLang === 'ur' ? 'Urdu' : 'English'}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {(['en', 'ur'] as const).map((langOpt) => (
+                      <button
+                        key={langOpt}
+                        type="button"
+                        onClick={() => setAyahTransLang(langOpt)}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer"
+                        style={
+                          ayahTransLang === langOpt
+                            ? { background: 'var(--accent)', color: 'var(--on-accent)', borderColor: 'var(--accent)' }
+                            : { background: 'var(--surface-2)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }
+                        }
+                      >
+                        {langOpt === 'en' ? 'EN Ayah' : 'اردو آیت'}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -1029,17 +1129,26 @@ const Tafsir = () => {
                                 >
                                   {tafsir.arabic}
                                 </p>
-                                {tafsir.translation && (
+                                {(ayahTransLang === 'ur' ? (tafsir.translationUr || tafsir.translation) : (tafsir.translationEn || tafsir.translation)) && (
                                   <>
                                     <ManuscriptDivider />
                                     <p
-                                      className="text-base md:text-lg italic leading-relaxed pl-4 py-1.5"
+                                      dir={ayahTransLang === 'ur' ? 'rtl' : 'ltr'}
+                                      className={cn(
+                                        'text-base md:text-lg leading-relaxed py-1.5',
+                                        ayahTransLang === 'ur'
+                                          ? 'font-urdu text-right pr-4 leading-[2.1]'
+                                          : 'italic pl-4'
+                                      )}
                                       style={{
                                         color: 'var(--text-secondary)',
-                                        borderLeft: '3px solid var(--accent)',
+                                        borderLeft: ayahTransLang === 'ur' ? undefined : '3px solid var(--accent)',
+                                        borderRight: ayahTransLang === 'ur' ? '3px solid var(--accent)' : undefined,
                                       }}
                                     >
-                                      {tafsir.translation}
+                                      {ayahTransLang === 'ur'
+                                        ? (tafsir.translationUr || tafsir.translation)
+                                        : (tafsir.translationEn || tafsir.translation)}
                                     </p>
                                   </>
                                 )}
@@ -1159,28 +1268,79 @@ const Tafsir = () => {
             </div>
           )}
 
-          {/* Note Editor Dialog */}
-          <Dialog open={showNotesEditor} onOpenChange={setShowNotesEditor}>
-            <DialogContent className="sm:max-w-[425px] rounded-[2rem]" style={{ background: 'var(--bg-elev)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)', color: 'var(--accent-text)' }}>
-                    <Edit3 className="w-5 h-5" />
+          {/* Portal Keyboard-Safe Ayah Note Modal */}
+          {showNotesEditor && typeof document !== 'undefined' && createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              data-state="open"
+              aria-labelledby="ayah-note-modal-title"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setShowNotesEditor(false);
+              }}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9999,
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'center',
+                paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))',
+                paddingLeft: '16px',
+                paddingRight: '16px',
+                paddingBottom: '16px',
+                backgroundColor: 'rgba(0, 0, 0, 0.72)',
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-[344px] max-h-[75dvh] overflow-y-auto rounded-[24px] border p-4 space-y-3 shadow-2xl"
+                style={{
+                  backgroundColor: 'var(--bg-elev)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-primary)',
+                  maxHeight: visualViewportHeight
+                    ? `${Math.max(240, Math.min(visualViewportHeight - 32, window.innerHeight * 0.75))}px`
+                    : '75dvh',
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: 'var(--accent-soft)', color: 'var(--accent-text)' }}
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </div>
+                    <h3 id="ayah-note-modal-title" className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                      Ayah Note
+                    </h3>
                   </div>
-                  Ayah Note
-                </DialogTitle>
-              </DialogHeader>
-              <div className="py-4 space-y-4">
-                <div className="p-3 rounded-xl border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-                  <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>Source Verse</p>
-                  <p className="text-sm font-medium line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    onClick={() => setShowNotesEditor(false)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-2.5 rounded-xl border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    Source Verse
+                  </p>
+                  <p className="text-xs font-medium line-clamp-2" style={{ color: 'var(--text-primary)' }}>
                     {currentAyahForNote && currentSurahTafsir?.tafsirs.find(t => t.ayah === currentAyahForNote.ayah)?.text}
                   </p>
                 </div>
+
                 <Textarea
                   placeholder="Reflect on this ayah..."
-                  defaultValue={currentAyahForNote ? personalNotes[`${currentAyahForNote.surah}:${currentAyahForNote.ayah}`] || "" : ""}
-                  className="min-h-[150px] rounded-2xl text-base"
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  className="min-h-[110px] rounded-xl text-sm"
                   style={{
                     background: 'var(--surface-2)',
                     borderColor: 'var(--border)',
@@ -1188,32 +1348,33 @@ const Tafsir = () => {
                   }}
                   autoFocus
                 />
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowNotesEditor(false)}
+                    className="rounded-xl text-xs h-9"
+                    style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => saveNote(noteDraft)}
+                    className="rounded-xl font-bold text-xs h-9"
+                    style={{
+                      background: 'var(--accent)',
+                      color: 'var(--on-accent)',
+                    }}
+                  >
+                    Save Reflection
+                  </Button>
+                </div>
               </div>
-              <DialogFooter>
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowNotesEditor(false)}
-                  className="rounded-xl"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
-                    if (textarea) saveNote(textarea.value);
-                  }}
-                  className="rounded-xl font-bold"
-                  style={{
-                    background: 'var(--accent)',
-                    color: 'var(--on-accent)',
-                  }}
-                >
-                  Save Reflection
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            </div>,
+            document.body
+          )}
 
           {/* Tafsir Settings Modal (Replaces transparent dropdown to prevent bleed-through) */}
           {isSettingsOpen && typeof document !== 'undefined' && createPortal(
@@ -1302,13 +1463,13 @@ const Tafsir = () => {
                       {t('tafsirEdition')}
                     </p>
                     <div className="space-y-2">
-                      {TAFSIR_EDITIONS.map((edition) => (
+                      {filteredEditions.map((edition) => (
                         <button
                           key={edition.id}
                           type="button"
                           onClick={() => {
                             setSelectedEdition(edition.id);
-                            if (selectedSurah) handleSurahSelect(selectedSurah);
+                            if (selectedSurah) handleSurahSelect(selectedSurah, edition.id);
                             setIsSettingsOpen(false);
                           }}
                           className="w-full flex items-center justify-between rounded-2xl p-3 border text-left transition-all"

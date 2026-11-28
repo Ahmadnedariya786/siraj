@@ -39,12 +39,27 @@ export const SUPPORTED_CURRENCIES: CurrencyConfig[] = [
   { code: 'OMR', symbol: 'ر.ع', name: 'Omani Rial', flag: '🇴🇲', baselineGoldPerGram: 34.10, baselineSilverPerGram: 0.42 },
 ];
 
-export const GOLD_KARAT_MULTIPLIERS: Record<number, { label: string; multiplier: number }> = {
-  24: { label: '24K (99.9% Pure)', multiplier: 1.0 },
-  22: { label: '22K (91.6% Standard)', multiplier: 22 / 24 },
-  21: { label: '21K (87.5% Arab)', multiplier: 21 / 24 },
-  18: { label: '18K (75.0% Jewelry)', multiplier: 18 / 24 },
+export const GOLD_KARAT_MULTIPLIERS: Record<
+  number,
+  { label: string; multiplier: number; purityPct: number }
+> = {
+  24: { label: '24K (99.9% Pure)', multiplier: 0.999, purityPct: 99.9 },
+  22: { label: '22K (91.6% Standard)', multiplier: 0.916, purityPct: 91.6 },
+  21: { label: '21K (87.5% Arab)', multiplier: 0.875, purityPct: 87.5 },
+  18: { label: '18K (75.0% Jewelry)', multiplier: 0.75, purityPct: 75.0 },
 };
+
+export function getGoldPurityPercentage(karat: number): number {
+  const entry = GOLD_KARAT_MULTIPLIERS[karat] || GOLD_KARAT_MULTIPLIERS[24];
+  const raw = typeof entry.purityPct === 'number' ? entry.purityPct : entry.multiplier * 100;
+  return Number.isFinite(raw) ? raw : 99.9;
+}
+
+export function calculatePureGoldEquivalentGrams(grams: number, karat: number): number {
+  if (!Number.isFinite(grams) || grams <= 0) return 0;
+  const entry = GOLD_KARAT_MULTIPLIERS[karat] || GOLD_KARAT_MULTIPLIERS[24];
+  return grams * entry.multiplier;
+}
 
 export interface LiveMetalRates {
   currency: string;

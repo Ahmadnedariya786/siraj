@@ -128,22 +128,70 @@ export function getNavbarVariantForTheme(themeId?: string | null): NavbarVariant
   return resolveActiveNavbarVariant(themeId as ThemeId);
 }
 
+const SERVICES_TOOL_PREFIXES = [
+  '/services',
+  '/radio',
+  '/quran-radio',
+  '/media-stats',
+  '/radio-stats',
+  '/nasheeds',
+  '/live',
+  '/tasbeeh',
+  '/duas',
+  '/calendar',
+  '/ebooks',
+  '/qaza',
+  '/ramadan',
+  '/zakat',
+  '/names-of-allah',
+  '/quiz',
+  '/prayer-stats',
+  '/habit-tracker',
+  '/islamic-remedies',
+  '/remedy-favorites',
+  '/eid-checklist',
+  '/fitrana-calculator',
+  '/mosques',
+  '/nearby-mosques',
+  '/hadith',
+  '/seerah',
+  '/qisas',
+  '/tafsir',
+  '/sunnah-checklist',
+  '/noor-cycle',
+];
+
+function matchesPathPrefix(currentPath: string, prefix: string): boolean {
+  return currentPath === prefix || currentPath.startsWith(`${prefix}/`);
+}
+
 /**
  * Robust active-route matcher supporting root aliases (/ and /dashboard),
- * Quran subroutes, and settings/profile subroutes.
+ * Quran subroutes (excluding /quran-radio), Services tools (/radio, /media-stats, etc.),
+ * and settings/profile subroutes.
  */
 export function isNavItemActive(currentPath: string, targetPath: string, exact?: boolean): boolean {
+  const cleanPath = (currentPath || '/').split('?')[0].split('#')[0];
+
   if (targetPath === '/') {
-    return currentPath === '/' || currentPath === '/dashboard';
+    return cleanPath === '/' || cleanPath === '/dashboard';
   }
   if (targetPath === '/quran') {
-    return currentPath.startsWith('/quran');
+    return (
+      cleanPath === '/quran' ||
+      cleanPath.startsWith('/quran/') ||
+      cleanPath === '/quran-progress' ||
+      cleanPath === '/quran-audio'
+    );
+  }
+  if (targetPath === '/services') {
+    return SERVICES_TOOL_PREFIXES.some((prefix) => matchesPathPrefix(cleanPath, prefix));
   }
   if (targetPath === '/profile') {
-    return currentPath.startsWith('/profile') || currentPath.startsWith('/settings');
+    return matchesPathPrefix(cleanPath, '/profile') || matchesPathPrefix(cleanPath, '/settings');
   }
   if (exact) {
-    return currentPath === targetPath;
+    return cleanPath === targetPath;
   }
-  return currentPath.startsWith(targetPath);
+  return matchesPathPrefix(cleanPath, targetPath);
 }

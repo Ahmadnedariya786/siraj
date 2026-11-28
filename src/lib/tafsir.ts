@@ -96,54 +96,40 @@ function normalizeSurahTafsir(raw: unknown, surah: number): TafsirResponse[] {
     return entries.sort((a, b) => a.ayah - b.ayah);
 }
 
-// Available Tafsir editions from spa5k API
+// Curated authentic Tafsir editions strictly scoped to English, Arabic, Urdu (+ Gujarati)
+// Excludes unrelated Russian, Kurdish, and Bengali editions
 export const TAFSIR_EDITIONS: TafsirEdition[] = [
     // English Tafsirs
-    { id: "en-tafisr-ibn-kathir", name: "Tafsir Ibn Kathir (abridged)", language: "English", author: "Hafiz Ibn Kathir" },
-    { id: "en-tafsir-maarif-ul-quran", name: "Maarif-ul-Quran", language: "English", author: "Mufti Muhammad Shafi" },
-    { id: "en-al-jalalayn", name: "Al-Jalalayn", language: "English", author: "Al-Jalalayn" },
+    { id: "en-tafisr-ibn-kathir", name: "Tafsir Ibn Kathir (Abridged)", language: "English", author: "Hafiz Ibn Kathir" },
+    { id: "en-tafsir-maarif-ul-quran", name: "Ma'arif-ul-Quran", language: "English", author: "Mufti Muhammad Shafi" },
+    { id: "en-al-jalalayn", name: "Tafsir Al-Jalalayn", language: "English", author: "Al-Jalalayn" },
     { id: "en-al-mukhtasar", name: "Al-Mukhtasar", language: "English", author: "Tafsir Center" },
     { id: "en-al-qushairi-tafsir", name: "Al Qushairi Tafsir", language: "English", author: "Al Qushairi" },
     { id: "en-kashani-tafsir", name: "Kashani Tafsir", language: "English", author: "Kashani" },
     { id: "en-tafsir-al-tustari", name: "Tafsir al-Tustari", language: "English", author: "Tafsir al-Tustari" },
     { id: "en-asbab-al-nuzul-by-al-wahidi", name: "Asbab Al-Nuzul by Al-Wahidi", language: "English", author: "Al-Wahidi" },
-    { id: "en-tafsir-ibn-abbas", name: "Tanwîr al-Miqbâs min Tafsîr Ibn 'Abbâs", language: "English", author: "Ibn 'Abbâs" },
+    { id: "en-tafsir-ibn-abbas", name: "Tanwir al-Miqbas min Tafsir Ibn 'Abbas", language: "English", author: "Ibn 'Abbas" },
     { id: "en-kashf-al-asrar-tafsir", name: "Kashf Al-Asrar Tafsir", language: "English", author: "Kashf Al-Asrar" },
     { id: "en-tazkirul-quran", name: "Tazkirul Quran", language: "English", author: "Maulana Wahid Uddin Khan" },
-    
+
     // Arabic Tafsirs
-    { id: "ar-tafsir-muyassar", name: "Tafsir Muyassar", language: "Arabic", author: "الميسر" },
+    { id: "ar-tafsir-muyassar", name: "Tafsir Al-Muyassar", language: "Arabic", author: "الميسر" },
     { id: "ar-tafsir-al-jalalayn", name: "Tafsir Al-Jalalayn", language: "Arabic", author: "الجلالين" },
-    { id: "ar-tafseer-al-saddi", name: "Tafseer Al Saddi", language: "Arabic", author: "السعدي" },
+    { id: "ar-tafseer-al-saddi", name: "Tafsir As-Sa'di", language: "Arabic", author: "السعدي" },
     { id: "ar-tafsir-al-mukhtasar", name: "Al-Mukhtasar", language: "Arabic", author: "المختصر في التفسير" },
     { id: "ar-tafsir-ibn-kathir", name: "Tafsir Ibn Kathir", language: "Arabic", author: "Hafiz Ibn Kathir" },
-    { id: "ar-tafsir-al-baghawi", name: "Tafseer Al-Baghawi", language: "Arabic", author: "Baghawy" },
-    { id: "ar-tafseer-tanwir-al-miqbas", name: "Tafseer Tanwir al-Miqbas", language: "Arabic", author: "Tanweer" },
-    { id: "ar-tafsir-al-wasit", name: "Tafsir Al Wasit", language: "Arabic", author: "Waseet" },
+    { id: "ar-tafsir-al-baghawi", name: "Tafsir Al-Baghawi", language: "Arabic", author: "Baghawy" },
+    { id: "ar-tafseer-tanwir-al-miqbas", name: "Tafsir Tanwir al-Miqbas", language: "Arabic", author: "Tanweer" },
+    { id: "ar-tafsir-al-wasit", name: "Tafsir Al-Wasit", language: "Arabic", author: "Waseet" },
     { id: "ar-tafsir-al-tabari", name: "Tafsir al-Tabari", language: "Arabic", author: "Tabari" },
-    { id: "ar-tafseer-al-qurtubi", name: "Tafseer Al Qurtubi", language: "Arabic", author: "Qurtubi" },
-    
+    { id: "ar-tafseer-al-qurtubi", name: "Tafsir Al-Qurtubi", language: "Arabic", author: "Qurtubi" },
+
     // Urdu Tafsirs
     { id: "ur-tafseer-ibn-e-kaseer", name: "Tafsir Ibn Kathir (Urdu)", language: "Urdu", author: "Hafiz Ibn Kathir" },
-    { id: "ur-tafsir-bayan-ul-quran", name: "Tafsir Bayan ul Quran", language: "Urdu", author: "Dr. Israr Ahmad" },
+    { id: "ur-tafsir-bayan-ul-quran", name: "Tafsir Bayan-ul-Quran", language: "Urdu", author: "Dr. Israr Ahmad" },
     { id: "ur-tafsir-fe-zalal-al-quran", name: "Fi Zilal al-Quran (Urdu)", language: "Urdu", author: "Sayyid Qutb" },
     { id: "ur-al-mukhtasar", name: "Al-Mukhtasar (Urdu)", language: "Urdu", author: "Concise Urdu Commentary" },
-    { id: "ur-tazkirul-quran", name: "Tazkirul Quran", language: "Urdu", author: "Maulana Wahid Uddin Khan" },
-    
-    // Bengali Tafsirs
-    { id: "bn-tafsir-abu-bakr-zakaria", name: "Tafsir Abu Bakr Zakaria", language: "Bengali", author: "King Fahd Quran Printing Complex" },
-    { id: "bn-tafisr-fathul-majid", name: "Tafsir Fathul Majid", language: "Bengali", author: "AbdulRahman Bin Hasan Al-Alshaikh" },
-    { id: "bn-tafseer-ibn-e-kaseer", name: "Tafseer ibn Kathir", language: "Bengali", author: "Tawheed Publication" },
-    { id: "bn-tafsir-ahsanul-bayaan", name: "Tafsir Ahsanul Bayaan", language: "Bengali", author: "Bayaan Foundation" },
-
-    // Gujarati Commentary
-    { id: "guj-rabila", name: "Tafsir Rabila (Gujarati)", language: "Gujarati", author: "Rabila Al-Umari" },
-    
-    // Russian Tafsirs
-    { id: "ru-tafseer-al-saddi", name: "Tafseer Al Saddi", language: "Russian", author: "Saddi" },
-    
-    // Kurdish Tafsirs
-    { id: "kurd-tafsir-rebar", name: "Rebar Kurdish Tafsir", language: "Kurdish", author: "Rebar Kurdish" }
+    { id: "ur-tazkirul-quran", name: "Tazkirul Quran (Urdu)", language: "Urdu", author: "Maulana Wahid Uddin Khan" }
 ];
 
 const BASE_URL = "https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir";

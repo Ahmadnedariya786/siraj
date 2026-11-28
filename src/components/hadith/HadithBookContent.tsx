@@ -592,8 +592,8 @@ export function HadithBookContent() {
               <div className="flex-1 min-w-0">
                 <h1
                   dir="auto"
-                  style={{ unicodeBidi: 'plaintext', fontSize: '22px' }}
-                  className={`font-bold text-[var(--text-primary)] line-clamp-2 leading-snug ${contentLang === 'ur' ? 'font-urdu' : ''}`}
+                  style={{ unicodeBidi: 'plaintext' }}
+                  className={`text-base sm:text-lg font-bold text-[var(--text-primary)] line-clamp-2 leading-snug ${contentLang === 'ur' ? 'font-urdu' : ''}`}
                 >
                   <MixedBidiTitle latin={translatedBookName || (bookInfo?.name ?? sanitizeHadithBookTitle(book, undefined, 0))} />
                 </h1>

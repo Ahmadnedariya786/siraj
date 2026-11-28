@@ -2552,7 +2552,7 @@ export default function ZakatCalculator({ isEmbedded = false, onBack }: ZakatCal
                         {info.label}
                       </div>
                       <div className="text-[10px] text-[var(--text-secondary)] font-medium">
-                        Standard multiplier: {(info.factor * 100).toFixed(1)}% pure gold content
+                        Standard multiplier: {Number(info.purityPct ?? info.multiplier * 100).toFixed(1)}% pure gold content
                       </div>
                     </div>
                     {isSelected ? (
