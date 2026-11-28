@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { type ClockStyleId, type ClockProps } from '@/types/clock';
 import { DigitalBoldClock } from './DigitalBoldClock';
 import { MosqueLedClock } from './MosqueLedClock';
@@ -11,7 +11,7 @@ export interface ClockRendererProps extends ClockProps {
   styleId: ClockStyleId;
 }
 
-export const ClockRenderer: React.FC<ClockRendererProps> = ({ styleId, ...clockProps }) => {
+export const ClockRenderer: React.FC<ClockRendererProps> = memo(({ styleId, ...clockProps }) => {
   const sanitizedHijriDate = (clockProps.hijriDate || '')
     .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
     .replace(/al-ola/gi, 'al-ūlā')
@@ -35,6 +35,8 @@ export const ClockRenderer: React.FC<ClockRendererProps> = ({ styleId, ...clockP
     default:
       return <DigitalBoldClock {...props} />;
   }
-};
+});
+
+ClockRenderer.displayName = 'ClockRenderer';
 
 export default ClockRenderer;

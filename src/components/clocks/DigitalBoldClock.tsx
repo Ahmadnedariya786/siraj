@@ -1,12 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { type ClockProps } from '@/types/clock';
 import { cn } from '@/lib/utils';
-import { getPrayerDisplayName } from '@/lib/prayer-utils';
 import { useLanguage } from '@/contexts/LanguageContext-new';
-import { getLocalizedPrayerName, formatLocalizedCountdown } from '@/lib/home-prayer-i18n';
-import { useClockSecondTick } from './useClockSecondTick';
+import {
+  useClockMinuteTick,
+  useDirectSecondTextRef,
+  DigitalBoldCountdownPill,
+} from './ClockMinuteParts';
 
-export const DigitalBoldClock: React.FC<ClockProps> = ({
+export const DigitalBoldClock: React.FC<ClockProps> = memo(({
   now,
   timeFormat,
   hijriDate,
@@ -14,32 +16,18 @@ export const DigitalBoldClock: React.FC<ClockProps> = ({
   isStaticPreview = false,
 }) => {
   const { language } = useLanguage();
-  const liveNow = useClockSecondTick(isStaticPreview, now);
+  const minuteTimestamp = useClockMinuteTick(isStaticPreview, now);
+  const { secondRef, initialText: initialSecondText } = useDirectSecondTextRef(isStaticPreview, now, ':');
+  const minuteDate = useMemo(() => new Date(minuteTimestamp), [minuteTimestamp]);
   const is12 = timeFormat === '12h';
-  const hours = liveNow.getHours();
-  const minutes = liveNow.getMinutes();
-  const seconds = liveNow.getSeconds();
+  const hours = minuteDate.getHours();
+  const minutes = minuteDate.getMinutes();
 
   const displayHours = is12
     ? String(hours % 12 || 12).padStart(2, '0')
     : String(hours).padStart(2, '0');
   const displayMinutes = String(minutes).padStart(2, '0');
-  const displaySeconds = String(seconds).padStart(2, '0');
   const ampm = hours >= 12 ? 'PM' : 'AM';
-
-  // Live countdown string for mini status pill with minute resolution
-  const minuteTimestamp = Math.floor(liveNow.getTime() / 60000) * 60000;
-  const countdownText = useMemo(() => {
-    if (isStaticPreview) return formatLocalizedCountdown(2 * 3600 * 1000 + 22 * 60 * 1000, language);
-    if (!nextPrayer?.targetTime) return '';
-    const diff = nextPrayer.targetTime.getTime() - minuteTimestamp;
-    return formatLocalizedCountdown(diff, language);
-  }, [minuteTimestamp, nextPrayer?.targetTime, isStaticPreview, language]);
-
-  const prayerName = useMemo(() => {
-    const raw = getPrayerDisplayName(nextPrayer?.name, nextPrayer?.targetTime || new Date(minuteTimestamp)) || 'Next';
-    return getLocalizedPrayerName(raw, language);
-  }, [nextPrayer?.name, nextPrayer?.targetTime, minuteTimestamp, language]);
 
   // Normalized progress (0 to 1)
   const prayerProgress = useMemo(() => {
@@ -140,8 +128,9 @@ export const DigitalBoldClock: React.FC<ClockProps> = ({
               transform: isStaticPreview ? 'translateY(-2px)' : 'translateY(-4px)',
             }}
           >
-            {/* Top: :02 Live Ticking Seconds */}
+            {/* Top: :02 Live Ticking Seconds (direct DOM ref, zero React re-renders) */}
             <span
+              ref={secondRef}
               className="font-bold tabular-nums leading-none select-none"
               style={{
                 color: 'var(--accent-text)',
@@ -151,7 +140,7 @@ export const DigitalBoldClock: React.FC<ClockProps> = ({
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
-              :{displaySeconds}
+              {initialSecondText}
             </span>
 
             {/* Bottom: AM/PM Pill (Only in 12h mode) */}
@@ -230,38 +219,14 @@ export const DigitalBoldClock: React.FC<ClockProps> = ({
             </span>
           </div>
 
-          {/* Next Prayer Countdown Pill */}
-          <div
-            className="inline-flex items-center justify-center font-semibold shrink-0 select-none border"
-            style={{
-              gap: isStaticPreview ? '4px' : '6px',
-              padding: isStaticPreview ? '2px 8px' : '4px 12px',
-              borderRadius: '999px',
-              background: 'var(--surface-2)',
-              borderColor: 'var(--border)',
-              color: 'var(--accent-text)',
-              fontSize: isStaticPreview ? '0.65rem' : '0.78rem',
-              whiteSpace: 'nowrap',
-              lineHeight: 1.2,
-            }}
-          >
-            <span
-              className="rounded-full inline-block shrink-0"
-              style={{
-                width: isStaticPreview ? '5px' : '6px',
-                height: isStaticPreview ? '5px' : '6px',
-                background: 'var(--accent)',
-              }}
-            />
-            <span className={cn(isStaticPreview ? "whitespace-nowrap" : "line-clamp-2 leading-tight break-words")}>
-              {prayerName}
-            </span>
-            {countdownText && (
-              <span className="font-mono text-[var(--text-secondary)] font-normal ml-0.5">
-                • {countdownText}
-              </span>
-            )}
-          </div>
+          {/* Next Prayer Countdown Pill (isolated minute-level memoized component) */}
+          <DigitalBoldCountdownPill
+            nextPrayerName={nextPrayer?.name}
+            targetTime={nextPrayer?.targetTime}
+            language={language}
+            isStaticPreview={isStaticPreview}
+            externalNow={now}
+          />
 
           {/* Sleek Subtle Progress Bar */}
           {!isStaticPreview && prayerProgress > 0 && (
@@ -282,6 +247,8 @@ export const DigitalBoldClock: React.FC<ClockProps> = ({
       </div>
     </div>
   );
-};
+});
+
+DigitalBoldClock.displayName = 'DigitalBoldClock';
 
 export default DigitalBoldClock;

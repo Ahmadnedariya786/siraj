@@ -32,6 +32,16 @@ import {
   scheduleP3NetworkIdle,
   SPLASH_HARD_CAP_MS,
   markSplashDismissed,
+  markBootOrchestratorStarted,
+  getLatestBootTrace,
+  recordAlarmArmed,
+  yieldToMainThread,
+  P1_SW_ALARMS_DELAY_MS,
+  P1_WIDGET_SYNC_DELAY_MS,
+  P1_EVENTS_PRAYER_DELAY_MS,
+  P3_NETWORK_IDLE_DELAY_MS,
+  WIDGET_SYNC_FRESHNESS_MS,
+  WIDGET_SYNC_META_KEY,
 } from "@/lib/boot-scheduler";
 import { initHomeLastStateSyncListeners } from "@/lib/home-last-state";
 
@@ -551,175 +561,218 @@ function AppShell() {
     }
   }, []);
 
+  const bootStartedRef = useRef(false);
+
   useEffect(() => {
     markStartupStep('app-shell-mount');
     completeStartupStep('app-shell-mount');
 
     let notificationManagerStop: (() => void) | null = null;
+    let widgetAutoUpdateTimer: ReturnType<typeof setInterval> | null = null;
 
-    // P1 — Idle-chunked critical background tasks (alarms arm FIRST, yielded cleanly so UI stays 100% interactive)
-    runP1IdleChunks([
-      {
-        name: 'p1-native-alarms-init',
-        run: async () => {
-          try {
-            const { localNotifications } = await import('@/lib/local-notifications');
-            await localNotifications.initialize();
-            await localNotifications.schedulePrayerNotificationsFromAPI();
-          } catch (e) {
-            console.warn('Startup: localNotifications alarm init failed', e);
-          }
+    if (!bootStartedRef.current && markBootOrchestratorStarted()) {
+      bootStartedRef.current = true;
 
-          import('@/lib/islamic-calendar-service')
-            .then(async ({ islamicCalendarService }) => {
+      // P1 — Staggered sequential idle-chunked boot slices (<=30ms per slice, zero Home pointer-events block)
+      runP1IdleChunks([
+        {
+          name: 'p1-sw-and-alarms',
+          delayMs: P1_SW_ALARMS_DELAY_MS, // t + 350ms
+          run: async () => {
+            markStartupStep('service-worker-init');
+            try {
+              if (Capacitor.isNativePlatform()) {
+                if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+                  navigator.serviceWorker.getRegistrations()
+                    .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+                    .catch((err) => console.debug('SW unregister skipped:', err));
+                }
+                if (typeof window !== 'undefined' && 'caches' in window) {
+                  caches.keys()
+                    .then((keys) => Promise.all(keys.filter((k) => /workbox|precache|vite-pwa/i.test(k)).map((k) => caches.delete(k))))
+                    .catch((err) => console.debug('Cache cleanup skipped:', err));
+                }
+              } else if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.serviceWorker.controller) {
+                import('@/lib/service-worker-registration')
+                  .then(({ serviceWorkerManager }) => serviceWorkerManager.register())
+                  .catch((err) => console.warn('Service worker registration failed:', err));
+              }
+            } finally {
+              completeStartupStep('service-worker-init');
+            }
+
+            await yieldToMainThread(true, 200);
+
+            try {
+              const { localNotifications } = await import('@/lib/local-notifications');
+              await localNotifications.initialize();
+              await localNotifications.schedulePrayerNotificationsFromAPI();
+              const currentTrace = getLatestBootTrace();
+              if (currentTrace.alarmArmedAtMs === null && Capacitor.isNativePlatform()) {
+                const { nativeAdhan } = await import('@/lib/native-adhan');
+                const st = await nativeAdhan.getStatus();
+                if (st.count > 0) {
+                  recordAlarmArmed(st.count);
+                }
+              }
+            } catch (e) {
+              console.warn('Startup: localNotifications alarm init failed', e);
+            }
+          },
+        },
+        {
+          name: 'p1-widget-sync',
+          delayMs: P1_WIDGET_SYNC_DELAY_MS, // t + 900ms
+          run: async () => {
+            markStartupStep('widget-auto-update-init');
+            try {
+              const savedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
+              if (savedLocation) {
+                const parsed = JSON.parse(savedLocation);
+                if (parsed && typeof parsed === 'object' && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+                  const { latitude, longitude, locationName } = parsed;
+                  const widgetSig = `${latitude.toFixed(3)}|${longitude.toFixed(3)}|${locationName || ''}|${new Date().toDateString()}`;
+                  let isFresh = false;
+                  try {
+                    const metaRaw = localStorage.getItem(WIDGET_SYNC_META_KEY);
+                    if (metaRaw) {
+                      const meta = JSON.parse(metaRaw) as { sig?: string; syncedAt?: number };
+                      if (meta?.sig === widgetSig && typeof meta.syncedAt === 'number' && (Date.now() - meta.syncedAt) < WIDGET_SYNC_FRESHNESS_MS) {
+                        isFresh = true;
+                      }
+                    }
+                  } catch (metaErr) {
+                    console.debug('[BootScheduler] Widget freshness check fallback:', metaErr);
+                  }
+
+                  const { WidgetService } = await import('@/lib/widget-service');
+                  if (!isFresh) {
+                    try {
+                      await WidgetService.updateWidget(latitude, longitude, locationName);
+                      localStorage.setItem(WIDGET_SYNC_META_KEY, JSON.stringify({ sig: widgetSig, syncedAt: Date.now() }));
+                    } catch (e) {
+                      console.warn('Failed to sync widget payload', e);
+                    }
+                  }
+                  widgetAutoUpdateTimer = setInterval(() => {
+                    WidgetService.updateWidget(latitude, longitude, locationName).catch((err) => {
+                      console.debug('[WidgetService] Periodic update skipped:', err);
+                    });
+                  }, 30 * 60 * 1000);
+                }
+              }
+            } catch (err) {
+              console.warn('Startup: widget auto-update failed', err);
+            } finally {
+              completeStartupStep('widget-auto-update-init');
+            }
+
+            await yieldToMainThread(true, 200);
+            await import('@/lib/qaza-tracker')
+              .then(({ initQazaRolloverListeners }) => initQazaRolloverListeners())
+              .catch((err) => console.debug('Qaza rollover init skipped:', err));
+            await import('@/lib/sajdah-reminder')
+              .then(({ initSajdahReminderLifecycle }) => initSajdahReminderLifecycle())
+              .catch((err) => console.debug('Sajdah reminder init skipped:', err));
+
+            await yieldToMainThread(true, 200);
+            markStartupStep('notification-service-init');
+            try {
+              const { notificationManager } = await import('@/lib/notification-manager');
+              notificationManager.start();
+              notificationManagerStop = () => notificationManager.stop();
+            } catch (e) {
+              console.warn('Startup: notificationManager.start failed', e);
+            } finally {
+              completeStartupStep('notification-service-init');
+            }
+
+            markStartupStep('backup-restore');
+            import('@/lib/backup-service')
+              .then(({ initBackupService }) => initBackupService())
+              .catch((e) => console.warn('Startup: initBackupService failed', e))
+              .finally(() => completeStartupStep('backup-restore'));
+
+            markStartupStep('onboarding-permissions-init');
+            if (Capacitor.isNativePlatform()) {
+              import('@/lib/onboarding-permissions')
+                .then(({ healPermissionOnboardingFlags, runFirstLaunchPermissionOnboarding }) => {
+                  healPermissionOnboardingFlags().catch((err) => console.debug('Heal onboarding skipped:', err));
+                  return runFirstLaunchPermissionOnboarding();
+                })
+                .catch((err) => console.warn('Startup permission onboarding error:', err))
+                .finally(() => completeStartupStep('onboarding-permissions-init'));
+            } else {
+              completeStartupStep('onboarding-permissions-init');
+            }
+          },
+        },
+        {
+          name: 'p1-events-and-stale-prayer',
+          delayMs: P1_EVENTS_PRAYER_DELAY_MS, // t + 1500ms
+          run: async () => {
+            try {
+              const { islamicCalendarService } = await import('@/lib/islamic-calendar-service');
               const info = await islamicCalendarService.getIslamicCalendarInfo();
               if (info.hijriMonth !== 9) {
                 const { RamadanNotifications } = await import('@/lib/ramadan-notifications');
-                const instance = RamadanNotifications.getInstance();
-                await instance.clearRamadanNotifications();
+                await RamadanNotifications.getInstance().clearRamadanNotifications();
               }
-            })
-            .catch((e) => console.warn('Failed to safety clear Ramadan notifications', e));
+            } catch (e) {
+              console.warn('Failed to safety clear Ramadan notifications', e);
+            }
 
-          markStartupStep('islamic-events-init');
-          import('@/lib/islamic-events-service')
-            .then(({ islamicEventsService }) => islamicEventsService.scheduleUpcomingEvents())
-            .catch((error) => {
+            await yieldToMainThread(true, 200);
+
+            markStartupStep('islamic-events-init');
+            try {
+              const { islamicEventsService } = await import('@/lib/islamic-events-service');
+              await islamicEventsService.scheduleUpcomingEvents();
+            } catch (error) {
               console.warn('Failed to schedule Islamic events:', error);
-            })
-            .finally(() => {
+            } finally {
               completeStartupStep('islamic-events-init');
-            });
-        },
-      },
-      {
-        name: 'p1-prayer-qaza-sajdah',
-        run: async () => {
-          await import('@/lib/qaza-tracker')
-            .then(({ initQazaRolloverListeners }) => initQazaRolloverListeners())
-            .catch((err) => console.debug('Qaza rollover init skipped:', err));
-          await import('@/lib/sajdah-reminder')
-            .then(({ initSajdahReminderLifecycle }) => initSajdahReminderLifecycle())
-            .catch((err) => console.debug('Sajdah reminder init skipped:', err));
-          markStartupStep('notification-service-init');
-          try {
-            const { notificationManager } = await import('@/lib/notification-manager');
-            notificationManager.start();
-            notificationManagerStop = () => notificationManager.stop();
-          } catch (e) {
-            console.warn('Startup: notificationManager.start failed', e);
-          } finally {
-            completeStartupStep('notification-service-init');
-          }
-        },
-      },
-      {
-        name: 'p1-widgets-backup-events',
-        run: async () => {
-          markStartupStep('backup-restore');
-          import('@/lib/backup-service')
-            .then(({ initBackupService }) => initBackupService())
-            .catch((e) => {
-              console.warn('Startup: initBackupService failed', e);
-            })
-            .finally(() => {
-              completeStartupStep('backup-restore');
-            });
+            }
 
-          markStartupStep('widget-auto-update-init');
-          try {
+            // Stale prayer cache check: trigger refresh if cached Home state date is from a previous day
+            try {
+              const { readHomeLastStateSync } = await import('@/lib/home-last-state');
+              const snap = readHomeLastStateSync();
+              const d = new Date();
+              const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              if (!snap || snap.dateKey !== todayKey) {
+                window.dispatchEvent(new CustomEvent('noor:stale-prayer-refresh'));
+              }
+            } catch (staleErr) {
+              console.debug('[BootScheduler] Stale prayer check skipped:', staleErr);
+            }
+          },
+        },
+      ]);
+
+      // P3 — Network-idle prefetch (OTA update check + greeting warm-up + bullion + nearby mosques, strictly >= 2200ms)
+      scheduleP3NetworkIdle([
+        {
+          name: 'p3-bullion-rates-prefetch',
+          run: async () => {
+            const { fetchLiveMetalRates } = await import('@/lib/zakat-market-api');
+            await fetchLiveMetalRates();
+          },
+        },
+        {
+          name: 'p3-nearby-mosques-prefetch',
+          run: async () => {
             const savedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
-            if (savedLocation) {
-              const parsed = JSON.parse(savedLocation);
-              if (parsed && typeof parsed === 'object' && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
-                const { latitude, longitude, locationName } = parsed;
-                const { WidgetService } = await import('@/lib/widget-service');
-                try {
-                  WidgetService.startAutoUpdate(latitude, longitude, locationName);
-                } catch (e) {
-                  console.warn('Failed to start widget auto-update', e);
-                }
-              }
+            if (!savedLocation) return;
+            const parsed = JSON.parse(savedLocation);
+            if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+              const { fetchNearbyMosques } = await import('@/lib/mosque-service');
+              await fetchNearbyMosques(parsed.latitude, parsed.longitude);
             }
-          } catch (err) {
-            console.warn('Startup: widget auto-update failed', err);
-          } finally {
-            completeStartupStep('widget-auto-update-init');
-          }
-
-          markStartupStep('service-worker-init');
-          try {
-            if (Capacitor.isNativePlatform()) {
-              if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations()
-                  .then((regs) => Promise.all(regs.map((r) => r.unregister())))
-                  .catch((err) => console.debug('SW unregister skipped:', err));
-              }
-              if (typeof window !== 'undefined' && 'caches' in window) {
-                caches.keys()
-                  .then((keys) => Promise.all(keys.filter((k) => /workbox|precache|vite-pwa/i.test(k)).map((k) => caches.delete(k))))
-                  .catch((err) => console.debug('Cache cleanup skipped:', err));
-              }
-              completeStartupStep('service-worker-init');
-            } else if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.serviceWorker.controller) {
-              import('@/lib/service-worker-registration')
-                .then(({ serviceWorkerManager }) => serviceWorkerManager.register())
-                .catch((err) => {
-                  console.warn('Service worker registration failed:', err);
-                })
-                .finally(() => {
-                  completeStartupStep('service-worker-init');
-                });
-            } else {
-              completeStartupStep('service-worker-init');
-            }
-          } catch (e) {
-            completeStartupStep('service-worker-init');
-            console.warn('Startup: serviceWorkerManager failed', e);
-          }
-
-          markStartupStep('onboarding-permissions-init');
-          if (Capacitor.isNativePlatform()) {
-            import('@/lib/onboarding-permissions')
-              .then(({ healPermissionOnboardingFlags, runFirstLaunchPermissionOnboarding }) => {
-                healPermissionOnboardingFlags().catch((err) => console.debug('Heal onboarding skipped:', err));
-                return runFirstLaunchPermissionOnboarding();
-              })
-              .catch((err) => {
-                console.warn('Startup permission onboarding error:', err);
-              })
-              .finally(() => {
-                completeStartupStep('onboarding-permissions-init');
-              });
-          } else {
-            completeStartupStep('onboarding-permissions-init');
-          }
+          },
         },
-      },
-    ]);
-
-    // P3 — Network-idle prefetch (OTA handled via BOOT_P3_READY_EVENT + bullion + nearby mosques)
-    scheduleP3NetworkIdle([
-      {
-        name: 'p3-bullion-rates-prefetch',
-        run: async () => {
-          const { fetchLiveMetalRates } = await import('@/lib/zakat-market-api');
-          await fetchLiveMetalRates();
-        },
-      },
-      {
-        name: 'p3-nearby-mosques-prefetch',
-        run: async () => {
-          const savedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
-          if (!savedLocation) return;
-          const parsed = JSON.parse(savedLocation);
-          if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
-            const { fetchNearbyMosques } = await import('@/lib/mosque-service');
-            await fetchNearbyMosques(parsed.latitude, parsed.longitude);
-          }
-        },
-      },
-    ], 2600);
+      ], P3_NETWORK_IDLE_DELAY_MS);
+    }
 
     // ── Defensive Resume Handler (idempotent, guarded) ──
     const handleResume = () => {
@@ -800,6 +853,9 @@ function AppShell() {
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
+      if (widgetAutoUpdateTimer !== null) {
+        clearInterval(widgetAutoUpdateTimer);
+      }
       try {
         notificationManagerStop?.();
       } catch (e) {

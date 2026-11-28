@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { type ClockProps } from '@/types/clock';
 import { cn } from '@/lib/utils';
-import { getPrayerDisplayName } from '@/lib/prayer-utils';
-import { useClockSecondTick } from './useClockSecondTick';
+import { useAnalogClockHands } from './useAnalogClockHands';
+import { PrayerArcCountdownPill } from './ClockMinuteParts';
 
 function parseTimeTo12hAngle(timeStr?: string, dateObj?: Date | null): number {
   if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
@@ -42,21 +42,17 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 }
 
-export const PrayerArcClock: React.FC<ClockProps> = ({
+export const PrayerArcClock: React.FC<ClockProps> = memo(({
   now,
   hijriDate,
   nextPrayer,
   previousPrayer,
   isStaticPreview = false,
 }) => {
-  const liveNow = useClockSecondTick(isStaticPreview, now);
-  const hours = liveNow.getHours();
-  const minutes = liveNow.getMinutes();
-  const seconds = liveNow.getSeconds();
-
-  const hourAngle = ((hours % 12) + minutes / 60 + (isStaticPreview ? 0 : seconds / 3600)) * 30;
-  const minuteAngle = (minutes + (isStaticPreview ? 0 : seconds / 60)) * 6;
-  const secondAngle = seconds * 6;
+  const { hourHandRef, minuteHandRef, secondHandRef, initialAngles } = useAnalogClockHands({
+    isStaticPreview,
+    externalNow: now,
+  });
 
   const center = 120;
   const arcRadius = 70;
@@ -99,22 +95,6 @@ export const PrayerArcClock: React.FC<ClockProps> = ({
   // Badge positions at arc start and end
   const startBadge = useMemo(() => polarToCartesian(center, center, arcRadius, startAngle), [center, arcRadius, startAngle]);
   const endBadge = useMemo(() => polarToCartesian(center, center, arcRadius, endAngle), [center, arcRadius, endAngle]);
-
-  // Countdown string with minute resolution
-  const minuteTimestamp = Math.floor(liveNow.getTime() / 60000) * 60000;
-  const countdownText = useMemo(() => {
-    if (isStaticPreview) return 'In 1h 45m';
-    if (!nextPrayer.targetTime) return 'Approaching';
-    const diff = nextPrayer.targetTime.getTime() - minuteTimestamp;
-    if (diff <= 0) return 'Due now';
-    const h = Math.floor(diff / (1000 * 60 * 60));
-    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return h > 0 ? `In ${h}h ${m}m` : `In ${m}m`;
-  }, [minuteTimestamp, nextPrayer.targetTime, isStaticPreview]);
-
-  const prayerDisplayName = useMemo(() => {
-    return getPrayerDisplayName(nextPrayer.name, nextPrayer.targetTime || new Date(minuteTimestamp)) || 'Next';
-  }, [nextPrayer.name, nextPrayer.targetTime, minuteTimestamp]);
 
   // 60 Chapter Ring ticks
   const chapterTicks = useMemo(() => {
@@ -291,10 +271,11 @@ export const PrayerArcClock: React.FC<ClockProps> = ({
           <g id="prayer-arc-hands">
             {/* Tapered Hour Hand */}
             <g
+              ref={hourHandRef}
               style={{
-                transform: `rotate(${hourAngle}deg)`,
+                transform: `rotate(${initialAngles.hourAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.2s cubic-bezier(0.4, 2, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               <line
@@ -328,10 +309,11 @@ export const PrayerArcClock: React.FC<ClockProps> = ({
 
             {/* Tapered Minute Hand */}
             <g
+              ref={minuteHandRef}
               style={{
-                transform: `rotate(${minuteAngle}deg)`,
+                transform: `rotate(${initialAngles.minuteAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.15s cubic-bezier(0.4, 2, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               <line
@@ -366,9 +348,11 @@ export const PrayerArcClock: React.FC<ClockProps> = ({
             {/* Sweeping Thin Second Hand */}
             {!isStaticPreview && (
               <g
+                ref={secondHandRef}
                 style={{
-                  transform: `rotate(${secondAngle}deg)`,
+                  transform: `rotate(${initialAngles.secondAngle}deg)`,
                   transformOrigin: `${center}px ${center}px`,
+                  willChange: 'transform',
                 }}
               >
                 <line
@@ -418,36 +402,12 @@ export const PrayerArcClock: React.FC<ClockProps> = ({
 
       {/* ── Integrated Prayer Status Pill & Hijri Date (100% Unobstructed Dial Sweep) ── */}
       <div className="flex flex-col items-center justify-center gap-1.5 mt-2.5 select-none">
-        <div
-          className="inline-flex items-center justify-center font-semibold shrink-0 select-none border"
-          style={{
-            gap: isStaticPreview ? '4px' : '6px',
-            padding: isStaticPreview ? '2px 8px' : '3px 12px',
-            borderRadius: '999px',
-            background: 'var(--surface-2)',
-            borderColor: 'var(--border)',
-            color: 'var(--accent-text)',
-            fontSize: isStaticPreview ? '0.62rem' : '0.76rem',
-            whiteSpace: 'nowrap',
-            lineHeight: 1.2,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}
-        >
-          <span
-            className="rounded-full inline-block shrink-0"
-            style={{
-              width: '6px',
-              height: '6px',
-              background: 'var(--accent)',
-            }}
-          />
-          <span className="font-bold tracking-wider">{prayerDisplayName.toUpperCase()}</span>
-          {countdownText && (
-            <span className="font-mono text-[var(--text-secondary)] font-normal ml-0.5">
-              • {countdownText}
-            </span>
-          )}
-        </div>
+        <PrayerArcCountdownPill
+          nextPrayerName={nextPrayer.name}
+          targetTime={nextPrayer.targetTime}
+          isStaticPreview={isStaticPreview}
+          externalNow={now}
+        />
 
         {!isStaticPreview && (
           <div className="flex items-center justify-center gap-2 select-none">
@@ -472,6 +432,8 @@ export const PrayerArcClock: React.FC<ClockProps> = ({
       </div>
     </div>
   );
-};
+});
+
+PrayerArcClock.displayName = 'PrayerArcClock';
 
 export default PrayerArcClock;

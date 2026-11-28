@@ -173,7 +173,7 @@ async function runTests() {
   // 1. Static architecture & regression invariants
   const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.ok(indexHtml.includes('window.__NOOR_BOOT_T0 ='), 'index.html must record __NOOR_BOOT_T0');
-  assert.ok(indexHtml.includes('1200'), 'index.html must enforce 1200ms splash hard cap');
+  assert.ok(indexHtml.includes('900'), 'index.html must enforce 900ms splash hard cap');
   assert.ok(indexHtml.includes('noor:boot-p0-complete'), 'index.html failsafe must listen for noor:boot-p0-complete');
   assert.ok(indexHtml.includes('media="print"'), 'Google Fonts <link> must be non-blocking media="print" on initial paint');
   assert.ok(!indexHtml.includes('onload='), 'index.html must comply with CSP script-src-attr none (no inline onload)');
@@ -225,7 +225,7 @@ async function runTests() {
   const bootMod = await bundleTs('src/lib/boot-scheduler.ts', customReq);
   const diagMod = await bundleTs('src/lib/diagnostics-engine.ts', customReq);
 
-  assert.strictEqual(bootMod.SPLASH_HARD_CAP_MS, 1200, 'SPLASH_HARD_CAP_MS must be 1200');
+  assert.strictEqual(bootMod.SPLASH_HARD_CAP_MS, 900, 'SPLASH_HARD_CAP_MS must be 900');
   assert.strictEqual(bootMod.P1_SLOW_SYNC_THRESHOLD_MS, 3000, 'P1 slow sync chip threshold must be 3000ms');
 
   // Save a rich Home snapshot & test P0 synchronous read

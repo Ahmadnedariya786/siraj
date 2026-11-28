@@ -27,21 +27,71 @@
           }
         }
         var savedTheme = localStorage.getItem('noor-theme') || localStorage.getItem('noor_theme') || localStorage.getItem('theme') || 'oxford-gold';
-        var valid = ['oxford-gold', 'kiswah-noir', 'istanbul-sapphire', 'imperial-violet', 'burgundy-velvet', 'desert-scroll', 'madinah-emerald', 'persian-indigo'];
-        var bgMap = {
-          'oxford-gold': '#060911',
-          'kiswah-noir': '#060608',
-          'istanbul-sapphire': '#050912',
-          'imperial-violet': '#0B0514',
-          'burgundy-velvet': '#0B0B0B',
-          'desert-scroll': '#100806',
-          'madinah-emerald': '#040D09',
-          'persian-indigo': '#0B0724'
+        var THEME_PALETTES = {
+          'oxford-gold': {
+            id: 'oxford-gold', bg: '#02081F', elev: '#030D30', surface: '#04123F', border: 'rgba(254, 196, 11, 0.30)',
+            accent: '#FEC40B', accent2: '#E5A500', text: '#FFE066', soft: 'rgba(254, 196, 11, 0.16)', glow: 'rgba(254, 196, 11, 0.34)'
+          },
+          'haramain-noir': {
+            id: 'kiswah-noir', bg: '#080911', elev: '#0D0E1A', surface: '#131424', border: 'rgba(16, 232, 194, 0.28)',
+            accent: '#10E8C2', accent2: '#0891B2', text: '#72FFEA', soft: 'rgba(16, 232, 194, 0.15)', glow: 'rgba(16, 232, 194, 0.32)'
+          },
+          'kiswah-noir': {
+            id: 'kiswah-noir', bg: '#080911', elev: '#0D0E1A', surface: '#131424', border: 'rgba(16, 232, 194, 0.28)',
+            accent: '#10E8C2', accent2: '#0891B2', text: '#72FFEA', soft: 'rgba(16, 232, 194, 0.15)', glow: 'rgba(16, 232, 194, 0.32)'
+          },
+          'imperial-violet': {
+            id: 'imperial-violet', bg: '#080312', elev: '#0E0620', surface: '#15092B', border: 'rgba(192, 102, 246, 0.32)',
+            accent: '#C066F6', accent2: '#A44EF0', text: '#F3D1FF', soft: 'rgba(192, 102, 246, 0.17)', glow: 'rgba(192, 102, 246, 0.34)'
+          },
+          'burgundy-velvet': {
+            id: 'burgundy-velvet', bg: '#0B0B0B', elev: '#180C0E', surface: '#241012', border: 'rgba(139, 13, 26, 0.35)',
+            accent: '#C24552', accent2: '#E0707E', text: '#D9666F', soft: 'rgba(139, 13, 26, 0.22)', glow: 'rgba(194, 69, 82, 0.35)'
+          },
+          'desert-scroll': {
+            id: 'desert-scroll', bg: '#160302', elev: '#220503', surface: '#330805', border: 'rgba(255, 99, 50, 0.32)',
+            accent: '#FF6332', accent2: '#E03E1A', text: '#FFA88A', soft: 'rgba(255, 99, 50, 0.17)', glow: 'rgba(255, 99, 50, 0.34)'
+          },
+          'royal-sapphire': {
+            id: 'istanbul-sapphire', bg: '#030B16', elev: '#061426', surface: '#0A203B', border: 'rgba(56, 189, 248, 0.32)',
+            accent: '#22D3EE', accent2: '#0284C7', text: '#7DD3FC', soft: 'rgba(34, 211, 238, 0.17)', glow: 'rgba(56, 189, 248, 0.36)'
+          },
+          'istanbul-sapphire': {
+            id: 'istanbul-sapphire', bg: '#030B16', elev: '#061426', surface: '#0A203B', border: 'rgba(56, 189, 248, 0.32)',
+            accent: '#22D3EE', accent2: '#0284C7', text: '#7DD3FC', soft: 'rgba(34, 211, 238, 0.17)', glow: 'rgba(56, 189, 248, 0.36)'
+          },
+          'madinah-emerald': {
+            id: 'madinah-emerald', bg: '#071417', elev: '#0D1E22', surface: '#152B30', border: 'rgba(184, 245, 118, 0.28)',
+            accent: '#B8F576', accent2: '#84CC16', text: '#D9FFB3', soft: 'rgba(184, 245, 118, 0.16)', glow: 'rgba(184, 245, 118, 0.30)'
+          },
+          'persian-indigo': {
+            id: 'persian-indigo', bg: '#08051A', elev: '#0E0926', surface: '#160F3A', border: 'rgba(167, 139, 250, 0.34)',
+            accent: '#9B8AFB', accent2: '#6D5AE6', text: '#E0D7FF', soft: 'rgba(155, 138, 251, 0.18)', glow: 'rgba(155, 138, 251, 0.35)'
+          }
         };
-        if (valid.indexOf(savedTheme) === -1) savedTheme = 'oxford-gold';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        document.documentElement.className = 'dark ' + savedTheme + ' splash-active';
-        document.documentElement.style.backgroundColor = bgMap[savedTheme] || '#060911';
+        var palette = THEME_PALETTES[savedTheme] || THEME_PALETTES['oxford-gold'];
+        var rootStyle = document.documentElement.style;
+        document.documentElement.setAttribute('data-theme', palette.id);
+        document.documentElement.className = 'dark ' + palette.id + ' splash-active';
+        rootStyle.backgroundColor = palette.bg;
+        rootStyle.setProperty('--bg-base', palette.bg);
+        rootStyle.setProperty('--bg-elev', palette.elev);
+        rootStyle.setProperty('--surface', palette.surface);
+        rootStyle.setProperty('--border', palette.border);
+        rootStyle.setProperty('--accent', palette.accent);
+        rootStyle.setProperty('--accent-2', palette.accent2);
+        rootStyle.setProperty('--accent-text', palette.text);
+        rootStyle.setProperty('--accent-soft', palette.soft);
+        rootStyle.setProperty('--accent-glow', palette.glow);
+        rootStyle.setProperty('--accent-primary', palette.accent);
+        rootStyle.setProperty('--accent-secondary', palette.text);
+        window.__NOOR_THEME_PALETTE = palette;
+
+        var rawEd = localStorage.getItem('siraj_selected_logo_edition') || localStorage.getItem('noor_selected_logo_edition') || localStorage.getItem('siraj_logo_manual_edition') || '0';
+        var edNum = parseInt(rawEd, 10);
+        if (isNaN(edNum) || edNum < 0 || edNum > 4) edNum = 0;
+        window.__NOOR_LOGO_EDITION = edNum;
+        document.documentElement.setAttribute('data-logo-edition', String(edNum));
 
         // Check user startup splash preference
         var splashEnabled = localStorage.getItem('splash_enabled');
@@ -72,33 +122,59 @@
           document.documentElement.setAttribute('data-animations', 'on');
         }
 
-        // Allow tap-to-dismiss on initial splash immediately
-        function dismissInitialSplash() {
+        var splashFadeStarted = false;
+        function releaseSplashLocks() {
           try {
             document.documentElement.classList.remove('splash-active');
-            document.body.classList.remove('splash-active');
+            if (document.body) {
+              document.body.classList.remove('splash-active');
+              document.body.style.overflow = '';
+              document.body.style.touchAction = '';
+            }
             document.documentElement.style.overflow = '';
-            document.body.style.overflow = '';
             document.documentElement.style.touchAction = '';
-            document.body.style.touchAction = '';
-            var el = document.getElementById('initial-splash');
-            if (el) el.remove();
-            var s = document.getElementById('static-splash');
-            if (s) s.remove();
-          } catch (e) {}
+          } catch (e) {
+            console.debug('Release splash locks skipped:', e);
+          }
         }
 
-        // Native unconditional failsafe timer: hard cap 1.2s forces removal of splash screen
-        // and releases scroll lock even if React or any external script throws or stalls.
-        setTimeout(dismissInitialSplash, 1200);
+        function dismissInitialSplash() {
+          if (splashFadeStarted) return;
+          splashFadeStarted = true;
+          releaseSplashLocks();
+          try {
+            var el = document.getElementById('initial-splash');
+            if (el) {
+              el.style.pointerEvents = 'none';
+              var bar = document.getElementById('initial-splash-bar');
+              if (bar) bar.style.width = '100%';
+              el.style.opacity = '0';
+              setTimeout(function () {
+                try { el.remove(); } catch (remErr) { console.debug('Splash remove skipped:', remErr); }
+              }, 210);
+            }
+            var s = document.getElementById('static-splash');
+            if (s) s.remove();
+          } catch (e) {
+            console.debug('Dismiss initial splash skipped:', e);
+          }
+        }
+        window.__NOOR_DISMISS_SPLASH = dismissInitialSplash;
+
+        // Hard cap 900ms unconditional failsafe: smoothly fades splash and releases pointer/scroll locks
+        setTimeout(dismissInitialSplash, 900);
         window.addEventListener('noor:boot-p0-complete', function () {
-          setTimeout(dismissInitialSplash, 160);
+          dismissInitialSplash();
         }, { once: true });
 
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', function () {
             var el = document.getElementById('initial-splash');
             if (el) el.addEventListener('click', dismissInitialSplash);
+            var metaTheme = document.querySelector('meta[name="theme-color"]');
+            if (metaTheme) metaTheme.setAttribute('content', palette.bg);
+            var metaTile = document.querySelector('meta[name="msapplication-TileColor"]');
+            if (metaTile) metaTile.setAttribute('content', palette.bg);
           });
         } else {
           var el = document.getElementById('initial-splash');
@@ -132,8 +208,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Siraj" />
   <meta name="application-name" content="Siraj" />
-  <meta name="msapplication-TileColor" content="#150D2E" />
-  <meta name="theme-color" content="#150D2E" />
+  <meta name="msapplication-TileColor" content="#02081F" />
+  <meta name="theme-color" content="#02081F" />
   <!-- Content Security Policy: Self-contained for F-Droid with Google Fonts for Arabic Typography -->
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-attr 'none'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https: blob: http://localhost; connect-src 'self' https: wss: http: blob:; media-src 'self' https: blob: http:; frame-src 'self' https: blob:; object-src 'none'; base-uri 'self'; form-action 'self';" />
@@ -197,162 +273,178 @@
    <meta name="twitter:image"
       content="/qibla.png">
 
-  <!-- Inline critical CSS and Theme Palettes for seamless first paint across all 5 themes -->
+  <!-- Inline critical CSS and Theme Palettes for seamless first paint across all 8 Royal Themes -->
   <style>
     :root {
-      --bg-base: #080B14;
-      --bg-elev: #0D1626;
-      --surface: #14213D;
-      --bg-base: #060911;
-      --bg-elev: #0A0F1C;
-      --surface: #0F1729;
-      --surface-2: #152038;
-      --border: #283A5E;
-      --accent: #DCA349;
-      --accent-2: #B87F28;
-      --accent-text: #F2C97D;
-      --on-accent: #060911;
-      --accent-soft: rgba(220, 163, 73, 0.16);
-      --accent-glow: rgba(242, 201, 125, 0.28);
-      --card-sheen: linear-gradient(135deg, rgba(220, 163, 73, 0.13) 0%, rgba(184, 127, 40, 0.04) 60%);
-      --card-sheen-line: rgba(242, 201, 125, 0.18);
+      --bg-base: #02081F;
+      --bg-elev: #030D30;
+      --surface: #04123F;
+      --surface-2: #0A1E5C;
+      --border: rgba(254, 196, 11, 0.30);
+      --accent: #FEC40B;
+      --accent-2: #E5A500;
+      --accent-text: #FFE066;
+      --on-accent: #02081F;
+      --accent-soft: rgba(254, 196, 11, 0.16);
+      --accent-glow: rgba(254, 196, 11, 0.34);
+      --accent-primary: #FEC40B;
+      --accent-secondary: #FFE066;
+      --card-sheen: rgba(254, 196, 11, 0.08);
+      --card-sheen-line: rgba(254, 196, 11, 0.24);
       --text-primary: #F8FAFC;
-      --text-secondary: #9EB0C9;
+      --text-secondary: #9EB4E0;
     }
     [data-theme="oxford-gold"], .oxford-gold {
-      --bg-base: #060911;
-      --bg-elev: #0A0F1C;
-      --surface: #0F1729;
-      --surface-2: #152038;
-      --border: #283A5E;
-      --accent: #DCA349;
-      --accent-2: #B87F28;
-      --accent-text: #F2C97D;
-      --on-accent: #060911;
-      --accent-soft: rgba(220, 163, 73, 0.16);
-      --accent-glow: rgba(242, 201, 125, 0.28);
-      --card-sheen: linear-gradient(135deg, rgba(220, 163, 73, 0.13) 0%, rgba(184, 127, 40, 0.04) 60%);
-      --card-sheen-line: rgba(242, 201, 125, 0.18);
+      --bg-base: #02081F;
+      --bg-elev: #030D30;
+      --surface: #04123F;
+      --surface-2: #0A1E5C;
+      --border: rgba(254, 196, 11, 0.30);
+      --accent: #FEC40B;
+      --accent-2: #E5A500;
+      --accent-text: #FFE066;
+      --on-accent: #02081F;
+      --accent-soft: rgba(254, 196, 11, 0.16);
+      --accent-glow: rgba(254, 196, 11, 0.34);
+      --accent-primary: #FEC40B;
+      --accent-secondary: #FFE066;
+      --card-sheen: rgba(254, 196, 11, 0.08);
+      --card-sheen-line: rgba(254, 196, 11, 0.24);
       --text-primary: #F8FAFC;
-      --text-secondary: #9EB0C9;
+      --text-secondary: #9EB4E0;
     }
-    [data-theme="kiswah-noir"], .kiswah-noir {
-      --bg-base: #060608;
-      --bg-elev: #0B0C10;
-      --surface: #12131A;
-      --surface-2: #191B24;
-      --border: #2E3346;
-      --accent: #A8B3C7;
-      --accent-2: #7E8B9F;
-      --accent-text: #DAE2F0;
-      --on-accent: #060608;
-      --accent-soft: rgba(168, 179, 199, 0.16);
-      --accent-glow: rgba(218, 226, 240, 0.28);
-      --card-sheen: linear-gradient(135deg, rgba(218, 226, 240, 0.12) 0%, rgba(126, 139, 159, 0.04) 60%);
-      --card-sheen-line: rgba(218, 226, 240, 0.18);
-      --text-primary: #F5F7FA;
-      --text-secondary: #9AA3B5;
+    [data-theme="kiswah-noir"], .kiswah-noir, [data-theme="haramain-noir"], .haramain-noir {
+      --bg-base: #080911;
+      --bg-elev: #0D0E1A;
+      --surface: #131424;
+      --surface-2: #1C1C2E;
+      --border: rgba(16, 232, 194, 0.28);
+      --accent: #10E8C2;
+      --accent-2: #0891B2;
+      --accent-text: #72FFEA;
+      --on-accent: #06080E;
+      --accent-soft: rgba(16, 232, 194, 0.15);
+      --accent-glow: rgba(16, 232, 194, 0.32);
+      --accent-primary: #10E8C2;
+      --accent-secondary: #72FFEA;
+      --card-sheen: rgba(16, 232, 194, 0.07);
+      --card-sheen-line: rgba(114, 255, 234, 0.22);
+      --text-primary: #F7F7FF;
+      --text-secondary: #A3A8C2;
     }
-    [data-theme="istanbul-sapphire"], .istanbul-sapphire {
-      --bg-base: #050912;
-      --bg-elev: #08101E;
-      --surface: #0C1629;
-      --surface-2: #12203A;
-      --border: #233D6B;
-      --accent: #6A9AF2;
-      --accent-2: #3B6FD4;
-      --accent-text: #A8C7FF;
-      --on-accent: #050912;
-      --accent-soft: rgba(91, 141, 239, 0.17);
-      --accent-glow: rgba(168, 199, 255, 0.30);
-      --card-sheen: linear-gradient(135deg, rgba(91, 141, 239, 0.14) 0%, rgba(59, 111, 212, 0.04) 60%);
-      --card-sheen-line: rgba(168, 199, 255, 0.18);
-      --text-primary: #F2F7FF;
-      --text-secondary: #9DB4D8;
+    [data-theme="istanbul-sapphire"], .istanbul-sapphire, [data-theme="royal-sapphire"], .royal-sapphire {
+      --bg-base: #030B16;
+      --bg-elev: #061426;
+      --surface: #0A203B;
+      --surface-2: #102E52;
+      --border: rgba(56, 189, 248, 0.32);
+      --accent: #22D3EE;
+      --accent-2: #0284C7;
+      --accent-text: #7DD3FC;
+      --on-accent: #031524;
+      --accent-soft: rgba(34, 211, 238, 0.17);
+      --accent-glow: rgba(56, 189, 248, 0.36);
+      --accent-primary: #22D3EE;
+      --accent-secondary: #7DD3FC;
+      --card-sheen: linear-gradient(135deg, rgba(56, 189, 248, 0.16) 0%, rgba(2, 132, 199, 0.05) 60%);
+      --card-sheen-line: rgba(125, 211, 252, 0.26);
+      --text-primary: #F0F9FF;
+      --text-secondary: #94C2E8;
     }
     [data-theme="imperial-violet"], .imperial-violet {
-      --bg-base: #0B0514;
-      --bg-elev: #11081F;
-      --surface: #180C2B;
-      --surface-2: #22123B;
-      --border: #3D2166;
-      --accent: #C582F0;
-      --accent-2: #9333EA;
-      --accent-text: #E2B6FF;
-      --on-accent: #0B0514;
-      --accent-soft: rgba(184, 101, 230, 0.17);
-      --accent-glow: rgba(226, 182, 255, 0.30);
-      --card-sheen: linear-gradient(135deg, rgba(184, 101, 230, 0.14) 0%, rgba(147, 51, 234, 0.04) 60%);
-      --card-sheen-line: rgba(226, 182, 255, 0.18);
+      --bg-base: #080312;
+      --bg-elev: #0E0620;
+      --surface: #15092B;
+      --surface-2: #1F0F3D;
+      --border: rgba(192, 102, 246, 0.32);
+      --accent: #C066F6;
+      --accent-2: #A44EF0;
+      --accent-text: #F3D1FF;
+      --on-accent: #080312;
+      --accent-soft: rgba(192, 102, 246, 0.17);
+      --accent-glow: rgba(192, 102, 246, 0.34);
+      --accent-primary: #C066F6;
+      --accent-secondary: #F3D1FF;
+      --card-sheen: linear-gradient(135deg, rgba(192, 102, 246, 0.16) 0%, rgba(139, 53, 214, 0.06) 60%);
+      --card-sheen-line: rgba(243, 209, 255, 0.25);
       --text-primary: #FAF5FF;
-      --text-secondary: #C8A8E0;
+      --text-secondary: #C8B2F0;
     }
     [data-theme="burgundy-velvet"], .burgundy-velvet {
       --bg-base: #0B0B0B;
       --bg-elev: #180C0E;
       --surface: #241012;
       --surface-2: #3A1418;
-      --border: rgba(139,13,26,0.35);
+      --border: rgba(139, 13, 26, 0.35);
       --accent: #C24552;
       --accent-2: #E0707E;
       --accent-text: #D9666F;
       --on-accent: #F5F2ED;
-      --accent-soft: rgba(139,13,26,0.22);
-      --accent-glow: rgba(194,69,82,0.35);
-      --card-sheen: rgba(224,112,126,0.05);
+      --accent-soft: rgba(139, 13, 26, 0.22);
+      --accent-glow: rgba(194, 69, 82, 0.35);
+      --accent-primary: #C24552;
+      --accent-secondary: #D9666F;
+      --card-sheen: rgba(224, 112, 126, 0.05);
+      --card-sheen-line: rgba(244, 162, 176, 0.24);
       --text-primary: #F5F2ED;
       --text-secondary: #C9BEB9;
     }
     [data-theme="desert-scroll"], .desert-scroll {
-      --bg-base: #100806;
-      --bg-elev: #170C09;
-      --surface: #21110D;
-      --surface-2: #2C1812;
-      --border: #4D2B20;
-      --accent: #E58A4E;
-      --accent-2: #C46830;
-      --accent-text: #F8BF95;
-      --on-accent: #100806;
-      --accent-soft: rgba(229, 138, 78, 0.17);
-      --accent-glow: rgba(248, 191, 149, 0.30);
-      --card-sheen: linear-gradient(135deg, rgba(229, 138, 78, 0.14) 0%, rgba(196, 104, 48, 0.04) 60%);
-      --card-sheen-line: rgba(248, 191, 149, 0.18);
-      --text-primary: #FFF6F2;
-      --text-secondary: #D4ADA0;
+      --bg-base: #160302;
+      --bg-elev: #220503;
+      --surface: #330805;
+      --surface-2: #4A0B07;
+      --border: rgba(255, 99, 50, 0.32);
+      --accent: #FF6332;
+      --accent-2: #E03E1A;
+      --accent-text: #FFA88A;
+      --on-accent: #160302;
+      --accent-soft: rgba(255, 99, 50, 0.17);
+      --accent-glow: rgba(255, 99, 50, 0.34);
+      --accent-primary: #FF6332;
+      --accent-secondary: #FFA88A;
+      --card-sheen: rgba(255, 99, 50, 0.08);
+      --card-sheen-line: rgba(255, 168, 138, 0.24);
+      --text-primary: #FFF5F0;
+      --text-secondary: #E0ADA0;
     }
     [data-theme="madinah-emerald"], .madinah-emerald {
-      --bg-base: #040D09;
-      --bg-elev: #071510;
-      --surface: #0A1F17;
-      --surface-2: #102B20;
-      --border: #1E4D3A;
-      --accent: #45B88C;
-      --accent-2: #2E946D;
-      --accent-text: #9AE6C8;
-      --on-accent: #040D09;
-      --accent-soft: rgba(69, 184, 140, 0.17);
-      --accent-glow: rgba(154, 230, 200, 0.28);
-      --card-sheen: linear-gradient(135deg, rgba(69, 184, 140, 0.14) 0%, rgba(46, 148, 109, 0.04) 60%);
-      --card-sheen-line: rgba(154, 230, 200, 0.18);
-      --text-primary: #F2FBF7;
-      --text-secondary: #9AC4B3;
+      --bg-base: #071417;
+      --bg-elev: #0D1E22;
+      --surface: #152B30;
+      --surface-2: #203D43;
+      --border: rgba(184, 245, 118, 0.28);
+      --accent: #B8F576;
+      --accent-2: #84CC16;
+      --accent-text: #D9FFB3;
+      --on-accent: #071417;
+      --accent-soft: rgba(184, 245, 118, 0.16);
+      --accent-glow: rgba(184, 245, 118, 0.30);
+      --accent-primary: #B8F576;
+      --accent-secondary: #D9FFB3;
+      --card-sheen: rgba(184, 245, 118, 0.08);
+      --card-sheen-line: rgba(217, 255, 179, 0.22);
+      --text-primary: #F4FBF7;
+      --text-secondary: #A3C6BE;
     }
     [data-theme="persian-indigo"], .persian-indigo {
-      --bg-base: #0B0724;
-      --bg-elev: #120C33;
-      --surface: #1A1242;
-      --surface-2: #241A52;
-      --border: rgba(247, 247, 255, 0.22);
-      --accent: #F7F7FF;
-      --accent-2: #B8C4FF;
-      --accent-text: #E4E4FF;
-      --on-accent: #27187D;
-      --accent-soft: rgba(247, 247, 255, 0.14);
-      --accent-glow: rgba(184, 196, 255, 0.30);
-      --card-sheen: linear-gradient(135deg, rgba(247, 247, 255, 0.12) 0%, rgba(184, 196, 255, 0.04) 60%);
-      --card-sheen-line: rgba(247, 247, 255, 0.16);
+      --bg-base: #08051A;
+      --bg-elev: #0E0926;
+      --surface: #160F3A;
+      --surface-2: #27187D;
+      --border: rgba(167, 139, 250, 0.34);
+      --accent: #9B8AFB;
+      --accent-2: #6D5AE6;
+      --accent-text: #E0D7FF;
+      --on-accent: #08051A;
+      --accent-soft: rgba(155, 138, 251, 0.18);
+      --accent-glow: rgba(155, 138, 251, 0.35);
+      --accent-primary: #9B8AFB;
+      --accent-secondary: #E0D7FF;
+      --card-sheen: rgba(155, 138, 251, 0.08);
+      --card-sheen-line: rgba(247, 247, 255, 0.24);
       --text-primary: #F7F7FF;
-      --text-secondary: #A9A6D9;
+      --text-secondary: #B8B2E6;
     }
 
     html, body {
@@ -394,10 +486,15 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: var(--bg-base, #060911);
+      background-color: var(--bg-base, #02081F);
+      background-image: radial-gradient(circle at 50% 38%, var(--accent-soft, rgba(254, 196, 11, 0.16)) 0%, var(--bg-elev, #030D30) 45%, var(--bg-base, #02081F) 100%);
+      color: var(--text-primary, #F8FAFC);
       overflow: hidden;
       z-index: 2147483647;
       pointer-events: all;
+      opacity: 1;
+      transition: opacity 200ms ease-out;
+      will-change: opacity;
     }
 
     @keyframes pulseStar {
@@ -460,18 +557,98 @@
   </style>
 </head>
 
-<body class="splash-active" style="background:var(--bg-base,#060911);">
-  <!-- Instant theme-matched first-paint shell in #root (zero blank screen gap before JS parses) -->
-  <div id="root">
-    <div id="boot-pre-paint-mark" style="min-height:100dvh;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-base,#060911);color:var(--accent-text,#F2C97D);user-select:none;">
-      <svg width="56" height="56" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-        <rect x="14" y="14" width="36" height="36" rx="3" stroke="var(--accent,#DCA349)" stroke-width="2" />
-        <rect x="14" y="14" width="36" height="36" rx="3" stroke="var(--accent,#DCA349)" stroke-width="2" transform="rotate(45 32 32)" />
-        <circle cx="32" cy="32" r="9" stroke="var(--accent-text,#F2C97D)" stroke-width="1.8" />
-      </svg>
-      <div style="margin-top:14px;font-size:15px;font-weight:800;letter-spacing:0.24em;text-transform:uppercase;color:var(--accent-text,#F2C97D);">SIRAJ</div>
+<body class="splash-active" style="background:var(--bg-base,#02081F);">
+  <!-- Single-stage theme & logo-edition matched pre-React splash (zero cross-fade, zero color jump) -->
+  <div id="initial-splash" role="button" tabindex="0" aria-label="Skip splash screen">
+    <div id="initial-splash-inner" style="position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;user-select:none;">
+      <div id="initial-splash-emblem" style="width:104px;height:104px;display:flex;align-items:center;justify-content:center;"></div>
+      <h1 style="margin:18px 0 0 0;font-size:1.25rem;font-weight:800;letter-spacing:0.22em;color:var(--accent-text,#FFE066);text-shadow:0 0 18px var(--accent-glow,rgba(254,196,11,0.34));text-align:center;text-transform:uppercase;font-family:system-ui,-apple-system,sans-serif;">SIRAJ</h1>
+      <p id="splash-subtitle" style="margin:4px 0 0 0;font-size:0.72rem;font-weight:600;letter-spacing:0.30em;color:var(--text-secondary,#9EB4E0);text-align:center;text-transform:uppercase;font-family:system-ui,-apple-system,sans-serif;">ISLAMIC COMPANION</p>
+      <div id="initial-splash-badge" style="margin-top:10px;padding:3px 14px;border-radius:999px;font-size:0.66rem;font-weight:600;letter-spacing:0.08em;color:var(--accent-text,#FFE066);background-color:var(--accent-soft,rgba(254,196,11,0.16));border:1px solid var(--border,rgba(254,196,11,0.30));box-shadow:0 0 12px var(--accent-glow,rgba(254,196,11,0.34));display:inline-flex;align-items:center;gap:4px;"></div>
+      <div style="width:140px;height:3px;background:rgba(255,255,255,0.10);border-radius:999px;overflow:hidden;margin-top:22px;position:relative;">
+        <div id="initial-splash-bar" style="height:100%;width:35%;border-radius:999px;background:var(--accent,#FEC40B);box-shadow:0 0 10px var(--accent,#FEC40B);transition:width 180ms ease-out;"></div>
+      </div>
     </div>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:128px;pointer-events:none;background:linear-gradient(to top,var(--accent-soft,rgba(254,196,11,0.16)),transparent);"></div>
   </div>
+  <script>
+    (function () {
+      try {
+        var ed = typeof window.__NOOR_LOGO_EDITION === 'number' ? window.__NOOR_LOGO_EDITION : 0;
+        var names = ['Royal Mihrab', 'Kaaba Orbit', 'Haramain Crest', 'Mamluk Star', 'Siraj Star'];
+        var badge = document.getElementById('initial-splash-badge');
+        if (badge) {
+          badge.innerHTML = '<span>&#10022;</span><span>' + (names[ed] || names[0]) + '</span><span>&#10022;</span>';
+        }
+        var slot = document.getElementById('initial-splash-emblem');
+        if (slot) {
+          var defs = '<defs>' +
+            '<linearGradient id="sp-pri" x1="0%" y1="0%" x2="100%" y2="100%">' +
+              '<stop offset="0%" stop-color="var(--accent-text,#FFE066)"/>' +
+              '<stop offset="55%" stop-color="var(--accent,#FEC40B)"/>' +
+              '<stop offset="100%" stop-color="var(--accent-2,#E5A500)"/>' +
+            '</linearGradient>' +
+            '<linearGradient id="sp-rad" x1="0%" y1="100%" x2="100%" y2="0%">' +
+              '<stop offset="0%" stop-color="var(--accent-2,#E5A500)"/>' +
+              '<stop offset="55%" stop-color="var(--accent,#FEC40B)"/>' +
+              '<stop offset="100%" stop-color="var(--accent-text,#FFE066)"/>' +
+            '</linearGradient>' +
+            '<linearGradient id="sp-glass" x1="0%" y1="0%" x2="0%" y2="100%">' +
+              '<stop offset="0%" stop-color="var(--accent,#FEC40B)" stop-opacity="0.22"/>' +
+              '<stop offset="100%" stop-color="var(--surface,#04123F)" stop-opacity="0.9"/>' +
+            '</linearGradient>' +
+          '</defs>';
+          var bodies = [
+            // 0: Royal Mihrab
+            '<g><circle cx="100" cy="100" r="92" stroke="url(#sp-rad)" stroke-width="1.2" stroke-dasharray="2.5 4" fill="none" opacity="0.6"/>' +
+            '<rect x="36" y="36" width="128" height="128" rx="10" stroke="url(#sp-pri)" stroke-width="1.6" fill="none" opacity="0.85"/>' +
+            '<rect x="36" y="36" width="128" height="128" rx="10" transform="rotate(45 100 100)" stroke="url(#sp-pri)" stroke-width="1.6" fill="none" opacity="0.85"/>' +
+            '<path d="M 100 162 C 84 158 54 152 44 136 C 36 122 46 102 64 98 C 76 96 88 108 96 126 Z" fill="url(#sp-pri)" stroke="var(--accent-text,#FFE066)" stroke-width="1"/>' +
+            '<path d="M 100 162 C 116 158 146 152 156 136 C 164 122 154 102 136 98 C 124 96 112 108 104 126 Z" fill="url(#sp-pri)" stroke="var(--accent-text,#FFE066)" stroke-width="1"/>' +
+            '<path d="M 76 144 L 76 102 C 76 80 88 64 100 52 C 112 64 124 80 124 102 L 124 144 Z" fill="url(#sp-glass)" stroke="url(#sp-pri)" stroke-width="2.2"/>' +
+            '<path d="M 72 102 C 72 74 86 52 100 40 C 114 52 128 74 128 102 Z" fill="url(#sp-pri)" stroke="var(--accent-text,#FFE066)" stroke-width="1.4"/>' +
+            '<path d="M 94 112 C 86 112 80 118 80 126 C 80 134 87 140 96 140 C 102 140 107 136 109 131 C 102 133 94 130 91 123 C 88 116 92 113 94 112 Z" fill="var(--text-primary,#F8FAFC)"/>' +
+            '<circle cx="106" cy="118" r="3.6" fill="url(#sp-rad)"/></g>',
+            // 1: Kaaba Orbit
+            '<g><circle cx="100" cy="100" r="92" stroke="url(#sp-rad)" stroke-width="1.2" stroke-dasharray="3 4" fill="none" opacity="0.5"/>' +
+            '<g transform="rotate(-15 100 110)"><ellipse cx="100" cy="110" rx="82" ry="34" fill="none" stroke="url(#sp-pri)" stroke-width="2" stroke-dasharray="6 4" opacity="0.85"/></g>' +
+            '<polygon points="100,68 130,83 100,98 70,83" fill="#2D3748" stroke="url(#sp-pri)" stroke-width="1"/>' +
+            '<polygon points="70,83 100,98 100,138 70,123" fill="#1A202C" stroke="url(#sp-pri)" stroke-width="1"/>' +
+            '<polygon points="100,98 130,83 130,123 100,138" fill="#111827" stroke="url(#sp-pri)" stroke-width="1"/>' +
+            '<polygon points="70,91 100,106 100,111 70,96" fill="url(#sp-pri)"/><polygon points="100,106 130,91 130,96 100,111" fill="url(#sp-pri)"/>' +
+            '<circle cx="34" cy="120" r="4.5" fill="url(#sp-pri)"/><circle cx="166" cy="96" r="4" fill="url(#sp-pri)"/></g>',
+            // 2: Haramain Crest
+            '<g><circle cx="100" cy="100" r="92" stroke="url(#sp-rad)" stroke-width="1.2" stroke-dasharray="3 4" fill="none" opacity="0.5"/>' +
+            '<polygon points="46,160 52,160 51,78 47,78" fill="url(#sp-glass)" stroke="url(#sp-pri)" stroke-width="1.4"/>' +
+            '<polygon points="45,78 53,78 49,60" fill="url(#sp-pri)"/>' +
+            '<polygon points="148,160 154,160 153,78 149,78" fill="url(#sp-glass)" stroke="url(#sp-pri)" stroke-width="1.4"/>' +
+            '<polygon points="147,78 155,78 151,60" fill="url(#sp-pri)"/>' +
+            '<path d="M 66 160 L 66 122 C 66 88 100 68 100 68 C 100 68 134 88 134 122 L 134 160 Z" fill="url(#sp-glass)" stroke="url(#sp-pri)" stroke-width="2.2"/>' +
+            '<path d="M 44 148 C 44 182 156 182 156 148 C 146 172 54 172 44 148 Z" fill="url(#sp-pri)"/></g>',
+            // 3: Mamluk Star
+            '<g><circle cx="100" cy="100" r="92" stroke="url(#sp-rad)" stroke-width="1.4" fill="none" opacity="0.65"/>' +
+            '<rect x="36" y="36" width="128" height="128" rx="8" stroke="url(#sp-pri)" stroke-width="1.6" fill="none" opacity="0.8"/>' +
+            '<rect x="36" y="36" width="128" height="128" rx="8" transform="rotate(45 100 100)" stroke="url(#sp-pri)" stroke-width="1.6" fill="none" opacity="0.8"/>' +
+            '<rect x="36" y="36" width="128" height="128" rx="8" transform="rotate(22.5 100 100)" stroke="url(#sp-rad)" stroke-width="1" fill="none" opacity="0.6"/>' +
+            '<path d="M 64 146 L 64 104 C 64 78 100 58 100 58 C 100 58 136 78 136 104 L 136 146 Z" fill="url(#sp-glass)" stroke="url(#sp-pri)" stroke-width="2"/>' +
+            '<polygon points="100,76 122,87 100,98 78,87" fill="#2D3748" stroke="url(#sp-pri)" stroke-width="0.8"/>' +
+            '<polygon points="78,87 100,98 100,128 78,117" fill="#1A202C" stroke="url(#sp-pri)" stroke-width="0.8"/>' +
+            '<polygon points="100,98 122,87 122,117 100,128" fill="#111827" stroke="url(#sp-pri)" stroke-width="0.8"/></g>',
+            // 4: Siraj Star
+            '<g><circle cx="100" cy="100" r="92" stroke="url(#sp-rad)" stroke-width="1.2" stroke-dasharray="3 4" fill="none" opacity="0.5"/>' +
+            '<rect x="42" y="42" width="116" height="116" rx="8" fill="url(#sp-glass)" stroke="url(#sp-pri)" stroke-width="2"/>' +
+            '<rect x="42" y="42" width="116" height="116" rx="8" transform="rotate(45 100 100)" fill="url(#sp-glass)" stroke="url(#sp-pri)" stroke-width="2"/>' +
+            '<polygon points="86,94 114,94 108,118 92,118" fill="url(#sp-rad)" stroke="url(#sp-pri)" stroke-width="1.2"/>' +
+            '<path d="M 100 98 C 96 104 96 108 100 112 C 104 108 104 104 100 98 Z" fill="var(--text-primary,#F8FAFC)"/></g>'
+          ];
+          slot.innerHTML = '<svg width="104" height="104" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">' + defs + (bodies[ed] || bodies[0]) + '</svg>';
+        }
+      } catch (e) {
+        console.debug('Pre-paint splash render skipped:', e);
+      }
+    })();
+  </script>
+  <div id="root"></div>
 
   <!-- Permanent HTML-Level Boot Watchdog: Prevents black screen freezes if JS mount throws or halts -->
   <script>
@@ -491,11 +668,11 @@
       setTimeout(function () {
         var root = document.getElementById('root');
         var splash = document.getElementById('initial-splash');
-        var isRootEmpty = !root || root.childElementCount === 0 || root.innerHTML.trim() === '' || !!document.getElementById('boot-pre-paint-mark');
+        var isRootEmpty = !root || root.childElementCount === 0 || root.innerHTML.trim() === '';
 
         if (isRootEmpty) {
           if (splash) {
-            try { splash.remove(); } catch (e) {}
+            try { splash.remove(); } catch (e) { console.debug('Watchdog splash remove skipped:', e); }
           }
           document.documentElement.classList.remove('splash-active');
           document.body.classList.remove('splash-active');
@@ -569,7 +746,9 @@
                       names.forEach(function (n) { window.caches.delete(n); });
                     });
                   }
-                } catch (e) {}
+                } catch (e) {
+                  console.debug('Watchdog reset skipped:', e);
+                }
                 window.location.reload();
               };
             }

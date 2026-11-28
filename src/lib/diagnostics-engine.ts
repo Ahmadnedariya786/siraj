@@ -1606,15 +1606,25 @@ export async function runDeepSystemHealthScan(): Promise<DeepHealthScanReport> {
     const splashOk = trace.splashDismissMs === null || trace.splashDismissMs <= SPLASH_HARD_CAP_MS + 100;
     const alarmOk = trace.alarmArmedAtMs === null || trace.alarmArmedAtMs <= 5000;
     const bootPass = ttiOk && longTaskCount === 0 && splashOk && alarmOk;
+    const alarmSummary =
+      trace.alarmArmedAtMs !== null
+        ? `Alarms: ${trace.alarmArmedCount} @ ${trace.alarmArmedAtMs}ms`
+        : 'Alarms: pending';
+    const phaseTimeline = [
+      `P0=${trace.p0EndMs ?? '--'}ms`,
+      `P1=${trace.p1StartMs ?? '--'}->${trace.p1EndMs ?? '--'}ms`,
+      `P2=[${trace.p2Triggered.join(',') || 'lazy'}]`,
+      `P3=${trace.p3StartMs ?? '--'}->${trace.p3EndMs ?? '--'}ms`,
+    ].join(' • ');
     checks.push({
       id: 'startup-boot-trace',
       name: 'Startup',
       status: bootPass ? 'PASS' : 'WARN',
       summary:
         trace.ttiMs !== null
-          ? `Cold/Warm TTI ${trace.ttiMs}ms • P1 ${trace.p1DurationMs ?? '--'}ms • LongTasks(>50ms): ${longTaskCount}`
+          ? `Cold/Warm TTI ${trace.ttiMs}ms • P1 ${trace.p1DurationMs ?? '--'}ms • ${alarmSummary} • LongTasks(>50ms): ${longTaskCount}`
           : 'Startup trace active (awaiting interactive checkpoint)',
-      details: `mode=${trace.launchMode}, cacheHit=${trace.homeCacheHit}, fonts=${trace.fontStrategy}, splashDismiss=${trace.splashDismissMs ?? '--'}ms (cap ${SPLASH_HARD_CAP_MS}ms), alarmArmed=${trace.alarmArmedAtMs ?? '--'}ms (count=${trace.alarmArmedCount}), p2=[${trace.p2Triggered.join(',') || 'none'}], p3=${trace.p3DurationMs ?? '--'}ms, chunks=${trace.chunks.length}`,
+      details: `mode=${trace.launchMode}, cacheHit=${trace.homeCacheHit}, fonts=${trace.fontStrategy}, phases=(${phaseTimeline}), splashDismiss=${trace.splashDismissMs ?? '--'}ms (cap ${SPLASH_HARD_CAP_MS}ms), alarmArmed=${trace.alarmArmedAtMs ?? '--'}ms (count=${trace.alarmArmedCount}), p2=[${trace.p2Triggered.join(',') || 'none'}], p3=${trace.p3DurationMs ?? '--'}ms, chunks=${trace.chunks.length}`,
     });
   } catch (err) {
     checks.push({
@@ -1775,11 +1785,12 @@ export async function generateAiDiagnosticReport(existingScan?: DeepHealthScanRe
     md += `\n---\n\n## 6. STARTUP BOOT TRACE & PHASE TIMELINE (LAST ${traces.length} BOOTS)\n\n`;
     traces.forEach((tr, idx) => {
       md += `### Boot #${idx + 1} (\`${tr.traceId}\` • ${tr.launchMode.toUpperCase()} • ${tr.status})\n`;
-      md += `- **TTI (P0 Interactive):** ${tr.ttiMs ?? '--'}ms | **Home Cache Hit:** ${tr.homeCacheHit} | **Fonts:** \`${tr.fontStrategy}\`\n`;
-      md += `- **Splash Dismiss:** ${tr.splashDismissMs ?? '--'}ms | **P1 Duration:** ${tr.p1DurationMs ?? '--'}ms | **Alarms Armed:** ${tr.alarmArmedAtMs ?? '--'}ms (${tr.alarmArmedCount})\n`;
-      md += `- **P2 Lazy Features:** ${tr.p2Triggered.length ? tr.p2Triggered.join(', ') : 'none (0ms on Home)'} | **P3 Duration:** ${tr.p3DurationMs ?? '--'}ms | **LongTasks(>50ms/5s):** ${tr.longTasksFirst5s.length}\n`;
+      md += `- **P0 Interactive (TTI):** ${tr.p0EndMs ?? tr.ttiMs ?? '--'}ms | **Home Cache Hit:** ${tr.homeCacheHit} | **Fonts:** \`${tr.fontStrategy}\`\n`;
+      md += `- **Phase Timestamps:** P0 end=${tr.p0EndMs ?? '--'}ms | P1=${tr.p1StartMs ?? '--'}→${tr.p1EndMs ?? '--'}ms (${tr.p1DurationMs ?? '--'}ms) | P3=${tr.p3StartMs ?? '--'}→${tr.p3EndMs ?? '--'}ms (${tr.p3DurationMs ?? '--'}ms)\n`;
+      md += `- **Splash Dismiss:** ${tr.splashDismissMs ?? '--'}ms | **Alarms Armed:** ${tr.alarmArmedAtMs ?? '--'}ms (count=${tr.alarmArmedCount})\n`;
+      md += `- **P2 Lazy Features:** ${tr.p2Triggered.length ? tr.p2Triggered.join(', ') : 'none (0ms on Home)'} | **LongTasks(>50ms/5s):** ${tr.longTasksFirst5s.length}\n`;
       if (tr.chunks.length > 0) {
-        md += `- **Chunks:** ${tr.chunks.map((c) => `${c.phase}:${c.name}=${c.durationMs}ms`).join(', ')}\n`;
+        md += `- **Chunks:** ${tr.chunks.map((c) => `${c.phase}:${c.name}@${c.startMs}ms=${c.durationMs}ms`).join(', ')}\n`;
       }
       md += `\n`;
     });

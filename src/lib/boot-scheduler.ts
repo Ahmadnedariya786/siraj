@@ -23,10 +23,16 @@ export const BOOT_P0_COMPLETE_EVENT = 'noor:boot-p0-complete';
 export const BOOT_P1_SLOW_SYNC_EVENT = 'noor:boot-p1-slow-sync';
 export const BOOT_P3_READY_EVENT = 'noor:boot-p3-ready';
 
-export const SPLASH_HARD_CAP_MS = 1200;
+export const SPLASH_HARD_CAP_MS = 900;
 export const P1_SLOW_SYNC_THRESHOLD_MS = 3000;
 export const P1_CHUNK_BUDGET_MS = 30;
 export const TARGET_COLD_TTI_MS = 1500;
+export const P1_SW_ALARMS_DELAY_MS = 350;
+export const P1_WIDGET_SYNC_DELAY_MS = 900;
+export const P1_EVENTS_PRAYER_DELAY_MS = 1500;
+export const P3_NETWORK_IDLE_DELAY_MS = 2200;
+export const WIDGET_SYNC_FRESHNESS_MS = 15 * 60 * 1000;
+export const WIDGET_SYNC_META_KEY = 'noor_widget_sync_meta_v1';
 
 export type P2FeatureKey = 'translations' | 'nasheeds' | 'quiz' | 'audio';
 
@@ -122,14 +128,28 @@ let currentTrace: BootTraceRecord = {
 };
 
 let slowSyncActive = false;
+let bootOrchestratorStarted = false;
 let p1Started = false;
 let p1Completed = false;
+let p1CompletionResolver: (() => void) | null = null;
+let p1CompletionPromise: Promise<void> = Promise.resolve();
 let p3Scheduled = false;
 let p3ReadyFlag = false;
 let longTaskObserverInstalled = false;
+const recordedLongTaskKeys = new Set<string>();
 const p2InitializedSet = new Set<P2FeatureKey>();
 const slowSyncListeners = new Set<(slow: boolean) => void>();
 const p3ReadyListeners = new Set<() => void>();
+
+export function hasBootOrchestratorStarted(): boolean {
+  return bootOrchestratorStarted;
+}
+
+export function markBootOrchestratorStarted(): boolean {
+  if (bootOrchestratorStarted) return false;
+  bootOrchestratorStarted = true;
+  return true;
+}
 
 function persistCurrentTrace(): void {
   try {
@@ -229,6 +249,13 @@ export function subscribeP3NetworkIdle(listener: () => void): () => void {
   };
 }
 
+function pushLongTaskEntry(entry: BootLongTaskEntry): void {
+  const key = `${entry.startMs}:${entry.durationMs}`;
+  if (recordedLongTaskKeys.has(key)) return;
+  recordedLongTaskKeys.add(key);
+  currentTrace.longTasksFirst5s.push(entry);
+}
+
 function installLongTaskObserver(ttiPerfMs: number): void {
   if (longTaskObserverInstalled || typeof window === 'undefined') return;
   longTaskObserverInstalled = true;
@@ -239,7 +266,7 @@ function installLongTaskObserver(ttiPerfMs: number): void {
     if (Array.isArray(win.__NOOR_BOOT_LONG_TASKS)) {
       for (const entry of win.__NOOR_BOOT_LONG_TASKS) {
         if (entry.durationMs > 50 && entry.startMs >= ttiPerfMs && entry.startMs <= ttiPerfMs + 5000) {
-          currentTrace.longTasksFirst5s.push(entry);
+          pushLongTaskEntry(entry);
         }
       }
     }
@@ -249,10 +276,13 @@ function installLongTaskObserver(ttiPerfMs: number): void {
 
   try {
     if (typeof PerformanceObserver === 'undefined') return;
+    const supported = (PerformanceObserver as unknown as { supportedEntryTypes?: string[] }).supportedEntryTypes;
+    if (Array.isArray(supported) && !supported.includes('longtask')) return;
+
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (entry.duration > 50 && entry.startTime >= ttiPerfMs && entry.startTime <= ttiPerfMs + 5000) {
-          currentTrace.longTasksFirst5s.push({
+          pushLongTaskEntry({
             name: entry.name || 'self',
             startMs: Math.round(entry.startTime * 10) / 10,
             durationMs: Math.round(entry.duration * 10) / 10,
@@ -272,6 +302,23 @@ function installLongTaskObserver(ttiPerfMs: number): void {
   } catch (err) {
     console.debug('[BootTrace] LongTask PerformanceObserver unsupported:', err);
   }
+}
+
+function waitMs(ms: number): Promise<void> {
+  if (ms <= 0 || typeof window === 'undefined') return Promise.resolve();
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function yieldFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => resolve());
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
 }
 
 /**
@@ -335,17 +382,23 @@ export function recordAlarmArmed(count: number): void {
 
 export interface P1TaskSpec {
   name: string;
+  delayMs?: number;
   run: () => Promise<void> | void;
 }
 
 /**
- * Executes P1 initialization tasks across chunked idle slices (yielding between every slice)
- * while NEVER blocking Home pointer-events. Shows the header "Syncing alarms..." chip only
- * if P1 exceeds 3000ms.
+ * Executes P1 initialization tasks sequentially across staggered idle slices
+ * (rAF + setTimeout/requestIdleCallback, <=30ms per slice) while NEVER blocking Home pointer-events.
+ * Shows the header "Syncing alarms..." chip only if P1 exceeds 3000ms.
  */
 export async function runP1IdleChunks(tasks: P1TaskSpec[]): Promise<void> {
   if (p1Started) return;
   p1Started = true;
+  bootOrchestratorStarted = true;
+  p1Completed = false;
+  p1CompletionPromise = new Promise<void>((resolve) => {
+    p1CompletionResolver = resolve;
+  });
   currentTrace.p1StartMs = elapsedSinceBootMs();
   persistCurrentTrace();
 
@@ -360,7 +413,14 @@ export async function runP1IdleChunks(tasks: P1TaskSpec[]): Promise<void> {
 
   try {
     for (const task of tasks) {
-      await yieldToMainThread(true, 600);
+      if (typeof task.delayMs === 'number' && task.delayMs > 0) {
+        const remaining = task.delayMs - elapsedSinceBootMs();
+        if (remaining > 0) {
+          await waitMs(remaining);
+        }
+      }
+      await yieldFrame();
+      await yieldToMainThread(true, 350);
       const t0 = nowMs();
       const startSinceBoot = elapsedSinceBootMs();
       let ok = true;
@@ -382,6 +442,8 @@ export async function runP1IdleChunks(tasks: P1TaskSpec[]): Promise<void> {
     }
   } finally {
     p1Completed = true;
+    p1CompletionResolver?.();
+    p1CompletionResolver = null;
     if (slowTimer !== null) clearTimeout(slowTimer);
     setSlowSyncState(false);
     currentTrace.p1EndMs = elapsedSinceBootMs();
@@ -416,14 +478,17 @@ export function markP2FeatureVisited(feature: P2FeatureKey, initFn?: () => void 
 }
 
 /**
- * P3 — Network-idle background prefetch (OTA update check, bullion rates, mosques prefetch).
- * Runs strictly AFTER interactive + P1 and skips network hits when offline.
+ * P3 — Network-idle background prefetch (OTA update check, greeting warm-up, bullion rates, mosques prefetch).
+ * Runs strictly AFTER interactive + P1 (>= 2200ms, never in first 2s) and skips network hits when offline.
  */
-export function scheduleP3NetworkIdle(tasks: P1TaskSpec[], delayMs = 2600): void {
+export function scheduleP3NetworkIdle(tasks: P1TaskSpec[], delayMs = P3_NETWORK_IDLE_DELAY_MS): void {
   if (p3Scheduled || typeof window === 'undefined') return;
   p3Scheduled = true;
+  const effectiveDelayMs = Math.max(P3_NETWORK_IDLE_DELAY_MS, delayMs);
 
   setTimeout(async () => {
+    await p1CompletionPromise;
+    await yieldFrame();
     await yieldToMainThread(true, 1500);
     currentTrace.p3StartMs = elapsedSinceBootMs();
     p3ReadyFlag = true;
@@ -448,6 +513,7 @@ export function scheduleP3NetworkIdle(tasks: P1TaskSpec[], delayMs = 2600): void
         });
         continue;
       }
+      await yieldFrame();
       await yieldToMainThread(true, 1500);
       const t0 = nowMs();
       const startSinceBoot = elapsedSinceBootMs();
@@ -475,18 +541,22 @@ export function scheduleP3NetworkIdle(tasks: P1TaskSpec[], delayMs = 2600): void
     currentTrace.status = 'settled';
     persistCurrentTrace();
     recordBootBreadcrumb('BOOT_P3', `P3 network-idle settled (${tasks.length} tasks)`);
-  }, delayMs);
+  }, effectiveDelayMs);
 }
 
 /**
  * Helper for test harness: resets scheduler state between synthetic trace runs.
  */
 export function __resetBootSchedulerForTest(launchMode: 'cold' | 'warm' = 'cold'): void {
+  bootOrchestratorStarted = false;
   p1Started = false;
   p1Completed = false;
+  p1CompletionResolver = null;
+  p1CompletionPromise = Promise.resolve();
   p3Scheduled = false;
   p3ReadyFlag = false;
   slowSyncActive = false;
+  recordedLongTaskKeys.clear();
   p2InitializedSet.clear();
   currentTrace = {
     traceId: `boot-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,

@@ -1,19 +1,24 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { type ClockProps } from '@/types/clock';
 import { cn } from '@/lib/utils';
-import { useClockSecondTick } from './useClockSecondTick';
+import { useAnalogClockHands } from './useAnalogClockHands';
+import { useClockMinuteTick } from './ClockMinuteParts';
 
-export const HourWedgeClock: React.FC<ClockProps> = ({
+export const HourWedgeClock: React.FC<ClockProps> = memo(({
   now,
   timeFormat,
   hijriDate,
   isStaticPreview = false,
 }) => {
-  const liveNow = useClockSecondTick(isStaticPreview, now);
+  const { hourHandRef, minuteHandRef, secondHandRef, initialAngles } = useAnalogClockHands({
+    isStaticPreview,
+    externalNow: now,
+  });
+  const minuteTimestamp = useClockMinuteTick(isStaticPreview, now);
+  const minuteDate = useMemo(() => new Date(minuteTimestamp), [minuteTimestamp]);
   const is12 = timeFormat === '12h';
-  const hours = liveNow.getHours();
-  const minutes = liveNow.getMinutes();
-  const seconds = liveNow.getSeconds();
+  const hours = minuteDate.getHours();
+  const minutes = minuteDate.getMinutes();
 
   // 12-hour dial geometry: 30 degrees per hour
   const hour12 = hours % 12;
@@ -23,11 +28,6 @@ export const HourWedgeClock: React.FC<ClockProps> = ({
   const wedgeLabel = is12
     ? String(hour12 === 0 ? 12 : hour12)
     : String(hours).padStart(2, '0');
-
-  // Smooth hand rotation angles (0 at 12 o'clock)
-  const hourAngle = (hour12 + minutes / 60 + (isStaticPreview ? 0 : seconds / 3600)) * 30;
-  const minuteAngle = (minutes + (isStaticPreview ? 0 : seconds / 60)) * 6;
-  const secondAngle = seconds * 6;
 
   // Dial geometry in 240x240 viewBox
   const center = 120;
@@ -42,8 +42,8 @@ export const HourWedgeClock: React.FC<ClockProps> = ({
   const arcY2 = center - wedgeRadius * 0.9659;
   const fullWedgePath = `M ${center} ${center} L ${arcX1.toFixed(2)} ${arcY1.toFixed(2)} A ${wedgeRadius} ${wedgeRadius} 0 0 1 ${arcX2.toFixed(2)} ${arcY2.toFixed(2)} Z`;
 
-  // Progressive wedge: fraction of the current hour elapsed (0 to 1)
-  const minuteFraction = Math.min(1, Math.max(0, (minutes + (isStaticPreview ? 0 : seconds / 60)) / 60));
+  // Progressive wedge: fraction of the current hour elapsed (0 to 1, minute-resolution)
+  const minuteFraction = Math.min(1, Math.max(0, minutes / 60));
   const splitAngle = -15 + minuteFraction * 30;
 
   const elapsedWedgePath = useMemo(() => {
@@ -254,10 +254,11 @@ export const HourWedgeClock: React.FC<ClockProps> = ({
           >
             {/* Hour Hand: Distinct multi-stroke rounded bar in var(--text-primary) with dark casing */}
             <g
+              ref={hourHandRef}
               style={{
-                transform: `rotate(${hourAngle}deg)`,
+                transform: `rotate(${initialAngles.hourAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.2s cubic-bezier(0.4, 2, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               {/* Outer dark casing so hour hand remains starkly delineated even when resting directly on top of the bright accent wedge */}
@@ -294,10 +295,11 @@ export const HourWedgeClock: React.FC<ClockProps> = ({
 
             {/* Minute Hand: Longer medium bar in var(--text-primary) with a var(--accent) tip dot */}
             <g
+              ref={minuteHandRef}
               style={{
-                transform: `rotate(${minuteAngle}deg)`,
+                transform: `rotate(${initialAngles.minuteAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.15s cubic-bezier(0.4, 2, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               <line
@@ -341,9 +343,11 @@ export const HourWedgeClock: React.FC<ClockProps> = ({
             {/* Second Hand: 1px var(--accent), omitted in static preview */}
             {!isStaticPreview && (
               <g
+                ref={secondHandRef}
                 style={{
-                  transform: `rotate(${secondAngle}deg)`,
+                  transform: `rotate(${initialAngles.secondAngle}deg)`,
                   transformOrigin: `${center}px ${center}px`,
+                  willChange: 'transform',
                 }}
               >
                 <line
@@ -430,6 +434,8 @@ export const HourWedgeClock: React.FC<ClockProps> = ({
       )}
     </div>
   );
-};
+});
+
+HourWedgeClock.displayName = 'HourWedgeClock';
 
 export default HourWedgeClock;

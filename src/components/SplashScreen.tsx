@@ -73,8 +73,11 @@ interface SplashScreenProps {
 }
 
 export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: SplashScreenProps) {
-    const [progress, setProgress] = useState(15);
+    const [progress, setProgress] = useState(35);
     const [isFading, setIsFading] = useState(false);
+    const [hasPrePaintSplash] = useState<boolean>(() =>
+        typeof document !== 'undefined' && Boolean(document.getElementById('initial-splash'))
+    );
     const [isMounted, setIsMounted] = useState(true);
     const hasTriggeredCompletionRef = useRef(false);
     const onCompleteRef = useRef(onComplete);
@@ -112,109 +115,65 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
         }
     }, []);
 
-    // P0 completion + strict 1.2s hard cap failsafe: fades as soon as P0 finishes (max 1.2s)
+    // Single-stage GPU opacity fade (200ms) on P0 completion, hard cap <= 900ms, never blocks pointer-events post-fade
     useEffect(() => {
-        forceReleaseSplashScrollLock();
+        let fadeOutTimer: ReturnType<typeof setTimeout> | null = null;
 
-        const onP0Ready = () => {
+        const beginFadeAndDismiss = () => {
+            if (hasTriggeredCompletionRef.current) return;
             setIsFading(true);
             setProgress(100);
-            setTimeout(() => {
+
+            const elInitial = document.getElementById('initial-splash');
+            if (elInitial) {
+                elInitial.style.pointerEvents = 'none';
+                const bar = document.getElementById('initial-splash-bar');
+                if (bar) bar.style.width = '100%';
+                elInitial.style.opacity = '0';
+            }
+
+            // Release scroll lock immediately once fade begins so Home is interactive
+            document.documentElement.classList.remove('splash-active');
+            document.body.classList.remove('splash-active');
+            document.documentElement.style.overflow = '';
+            document.body.style.overflow = '';
+            document.documentElement.style.touchAction = '';
+            document.body.style.touchAction = '';
+
+            if (fadeOutTimer !== null) clearTimeout(fadeOutTimer);
+            fadeOutTimer = setTimeout(() => {
                 triggerComplete();
-            }, shouldAnimate ? 120 : 20);
+            }, shouldAnimate ? 200 : 20);
         };
-        window.addEventListener(BOOT_P0_COMPLETE_EVENT, onP0Ready, { once: true });
+
+        window.addEventListener(BOOT_P0_COMPLETE_EVENT, beginFadeAndDismiss, { once: true });
 
         const failsafeTimer = setTimeout(() => {
-            triggerComplete();
+            beginFadeAndDismiss();
         }, SPLASH_HARD_CAP_MS);
 
-        return () => {
-            window.removeEventListener(BOOT_P0_COMPLETE_EVENT, onP0Ready);
-            clearTimeout(failsafeTimer);
-            forceReleaseSplashScrollLock();
-        };
-    }, [shouldAnimate, triggerComplete]);
-
-    useEffect(() => {
-        // Lock scroll while splash is active
-        document.documentElement.classList.add("splash-active");
-        document.body.classList.add("splash-active");
-
-        // Immediately hide and remove #initial-splash synchronously the moment SplashScreen mounts
-        try {
-            const elInitial = document.getElementById("initial-splash");
-            if (elInitial) {
-                elInitial.style.display = "none";
-                elInitial.remove();
-            }
-            const elStatic = document.getElementById("static-splash");
-            if (elStatic) {
-                elStatic.style.display = "none";
-                elStatic.remove();
-            }
-        } catch {
-            // Ignore safely
-        }
-
-        const rafId = requestAnimationFrame(() => {
-            const elInitial = document.getElementById("initial-splash");
-            if (elInitial) {
-                elInitial.style.display = "none";
-                elInitial.remove();
-            }
-            const elStatic = document.getElementById("static-splash");
-            if (elStatic) {
-                elStatic.style.display = "none";
-                elStatic.remove();
-            }
-        });
-
-        if (!shouldAnimate) {
-            const timer = setTimeout(() => {
-                triggerComplete();
+        if (!hasPrePaintSplash && !shouldAnimate) {
+            const fastTimer = setTimeout(() => {
+                beginFadeAndDismiss();
             }, 80);
             return () => {
-                cancelAnimationFrame(rafId);
-                clearTimeout(timer);
+                clearTimeout(fastTimer);
+                if (fadeOutTimer !== null) clearTimeout(fadeOutTimer);
+                window.removeEventListener(BOOT_P0_COMPLETE_EVENT, beginFadeAndDismiss);
+                clearTimeout(failsafeTimer);
                 forceReleaseSplashScrollLock();
             };
         }
 
-        // Snappy progress reveal over ~320ms followed by crisp 140ms fade (<= 460ms total)
-        const startTime = performance.now();
-        const duration = 320;
-        let animFrameId: number;
-
-        const updateProgress = (now: number) => {
-            const elapsed = now - startTime;
-            const factor = Math.min(1, elapsed / duration);
-            // Smooth ease-out cubic curve from 15 to 100
-            const eased = 1 - Math.pow(1 - factor, 3);
-            const currentProgress = Math.round(15 + eased * 85);
-            setProgress(currentProgress);
-
-            if (factor < 1) {
-                animFrameId = requestAnimationFrame(updateProgress);
-            } else {
-                setProgress(100);
-                setIsFading(true);
-                setTimeout(() => {
-                    triggerComplete();
-                }, 140);
-            }
-        };
-
-        animFrameId = requestAnimationFrame(updateProgress);
-
         return () => {
-            cancelAnimationFrame(rafId);
-            cancelAnimationFrame(animFrameId);
+            if (fadeOutTimer !== null) clearTimeout(fadeOutTimer);
+            window.removeEventListener(BOOT_P0_COMPLETE_EVENT, beginFadeAndDismiss);
+            clearTimeout(failsafeTimer);
             forceReleaseSplashScrollLock();
         };
-    }, [shouldAnimate, triggerComplete]);
+    }, [hasPrePaintSplash, shouldAnimate, triggerComplete]);
 
-    if (!isMounted) return null;
+    if (!isMounted || hasPrePaintSplash) return null;
 
     const splashContent = (
         <div
@@ -235,11 +194,12 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
                     ? 'none'
                     : 'radial-gradient(circle at 50% 38%, var(--accent-soft) 0%, var(--bg-elev) 45%, var(--bg-base) 100%)',
                 color: 'var(--text-primary)',
+                ['--accent-primary' as string]: 'var(--accent)',
+                ['--accent-secondary' as string]: 'var(--accent-text)',
                 opacity: isFading ? 0 : 1,
-                transform: isFading ? 'scale(0.98)' : 'scale(1)',
-                transition: 'opacity 150ms ease-out, transform 150ms ease-out',
+                transition: 'opacity 200ms ease-out',
                 pointerEvents: isFading ? 'none' : 'all',
-                willChange: 'opacity, transform',
+                willChange: 'opacity',
                 cursor: 'pointer',
             }}
         >

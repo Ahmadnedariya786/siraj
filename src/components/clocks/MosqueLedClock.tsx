@@ -1,52 +1,33 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { type ClockProps } from '@/types/clock';
 import { cn } from '@/lib/utils';
-import { getPrayerDisplayName } from '@/lib/prayer-utils';
-import { useClockSecondTick } from './useClockSecondTick';
+import {
+  useClockMinuteTick,
+  useDirectSecondTextRef,
+  MosqueLedCountdownRow,
+} from './ClockMinuteParts';
 
-export const MosqueLedClock: React.FC<ClockProps> = ({
+export const MosqueLedClock: React.FC<ClockProps> = memo(({
   now,
   timeFormat,
   hijriDate,
   nextPrayer,
   isStaticPreview = false,
 }) => {
-  const liveNow = useClockSecondTick(isStaticPreview, now);
+  const minuteTimestamp = useClockMinuteTick(isStaticPreview, now);
+  const { secondRef, initialText: initialSecondText } = useDirectSecondTextRef(isStaticPreview, now, '');
+  const minuteDate = useMemo(() => new Date(minuteTimestamp), [minuteTimestamp]);
   const is12 = timeFormat === '12h';
 
   // Digits formatting
-  const hours = liveNow.getHours();
-  const minutes = liveNow.getMinutes();
-  const seconds = liveNow.getSeconds();
+  const hours = minuteDate.getHours();
+  const minutes = minuteDate.getMinutes();
 
   const displayHours = is12
     ? String(hours % 12 || 12).padStart(2, '0')
     : String(hours).padStart(2, '0');
   const displayMinutes = String(minutes).padStart(2, '0');
-  const displaySeconds = String(seconds).padStart(2, '0');
   const ampm = hours >= 12 ? 'PM' : 'AM';
-
-  // Compute live countdown string with minute resolution
-  const minuteTimestamp = Math.floor(liveNow.getTime() / 60000) * 60000;
-  const countdownText = useMemo(() => {
-    if (isStaticPreview) return 'IN 2h 15m';
-    if (!nextPrayer?.targetTime) return 'APPROACHING';
-
-    const diff = nextPrayer.targetTime.getTime() - minuteTimestamp;
-    if (diff <= 0) return 'DUE NOW';
-
-    const h = Math.floor(diff / (1000 * 60 * 60));
-    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (h > 0) {
-      return `IN ${h}h ${m}m`;
-    }
-    return `IN ${m}m`;
-  }, [minuteTimestamp, nextPrayer?.targetTime, isStaticPreview]);
-
-  const prayerName = useMemo(() => {
-    return (getPrayerDisplayName(nextPrayer?.name, nextPrayer?.targetTime || new Date(minuteTimestamp)) || 'PRAYER').toUpperCase();
-  }, [nextPrayer?.name, nextPrayer?.targetTime, minuteTimestamp]);
 
   return (
     <div
@@ -176,7 +157,7 @@ export const MosqueLedClock: React.FC<ClockProps> = ({
                 <span className={cn("inline-block", isStaticPreview ? "mx-[2px]" : "mx-0.5 sm:mx-1", !isStaticPreview && "animate-pulse")}>:</span>
                 <span>{displayMinutes}</span>
                 <span className={cn("inline-block", isStaticPreview ? "mx-[2px]" : "mx-0.5 sm:mx-1", !isStaticPreview && "animate-pulse")}>:</span>
-                <span style={{ opacity: 0.95 }}>{displaySeconds}</span>
+                <span ref={secondRef} style={{ opacity: 0.95 }}>{initialSecondText}</span>
               </div>
             </div>
 
@@ -200,57 +181,19 @@ export const MosqueLedClock: React.FC<ClockProps> = ({
             )}
           </div>
 
-          {/* ── Bottom Bar: Divider + Active Dot & Next Prayer + Live Countdown ── */}
-          <div
-            className={cn(
-              "relative z-10 w-full flex items-center justify-between font-mono font-bold",
-              isStaticPreview
-                ? "text-[0.55rem] mt-1 pt-1 tracking-tight px-0.5"
-                : "text-[10px] sm:text-xs mt-2 pt-2 tracking-wider"
-            )}
-            style={{ borderTop: '1px solid var(--border)' }}
-          >
-            {/* Active / Next Prayer with glowing dot */}
-            <div
-              className={cn(
-                "uppercase flex items-center shrink-0",
-                isStaticPreview ? "gap-0.5 text-[0.55rem]" : "gap-1.5 truncate max-w-[55%]"
-              )}
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              <span
-                className={cn(
-                  "rounded-full inline-block shrink-0",
-                  isStaticPreview ? "w-1 h-1" : "w-1.5 h-1.5"
-                )}
-                style={{
-                  background: 'var(--accent)',
-                  boxShadow: '0 0 6px var(--accent-glow)',
-                }}
-              />
-              <span className={cn(isStaticPreview ? "whitespace-nowrap" : "line-clamp-2 leading-tight break-words")}>
-                {prayerName}
-              </span>
-            </div>
-
-            {/* Live Countdown Readout */}
-            <span
-              className={cn(
-                "font-black shrink-0 text-right whitespace-nowrap",
-                isStaticPreview ? "text-[0.55rem] ml-0.5" : "ml-2"
-              )}
-              style={{
-                color: 'var(--accent-text)',
-                textShadow: isStaticPreview ? undefined : '0 0 8px var(--accent-glow)',
-              }}
-            >
-              {countdownText}
-            </span>
-          </div>
+          {/* ── Bottom Bar: Isolated minute-level memoized prayer & countdown ── */}
+          <MosqueLedCountdownRow
+            nextPrayerName={nextPrayer?.name}
+            targetTime={nextPrayer?.targetTime}
+            isStaticPreview={isStaticPreview}
+            externalNow={now}
+          />
         </div>
       </div>
     </div>
   );
-};
+});
+
+MosqueLedClock.displayName = 'MosqueLedClock';
 
 export default MosqueLedClock;

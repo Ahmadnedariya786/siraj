@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { type ClockProps } from '@/types/clock';
 import { cn } from '@/lib/utils';
-import { useClockSecondTick } from './useClockSecondTick';
+import { useAnalogClockHands } from './useAnalogClockHands';
 
 // Arabic-Indic Numerals for 12, 1, 2, ..., 11
 const ARABIC_INDIC_NUMERALS: Record<number, string> = {
@@ -19,19 +19,15 @@ const ARABIC_INDIC_NUMERALS: Record<number, string> = {
   11: '١١',
 };
 
-export const OttomanHeritageClock: React.FC<ClockProps> = ({
+export const OttomanHeritageClock: React.FC<ClockProps> = memo(({
   now,
   hijriDate,
   isStaticPreview = false,
 }) => {
-  const liveNow = useClockSecondTick(isStaticPreview, now);
-  const hours = liveNow.getHours();
-  const minutes = liveNow.getMinutes();
-  const seconds = liveNow.getSeconds();
-
-  const hourAngle = ((hours % 12) + minutes / 60 + (isStaticPreview ? 0 : seconds / 3600)) * 30;
-  const minuteAngle = (minutes + (isStaticPreview ? 0 : seconds / 60)) * 6;
-  const secondAngle = seconds * 6;
+  const { hourHandRef, minuteHandRef, secondHandRef, initialAngles } = useAnalogClockHands({
+    isStaticPreview,
+    externalNow: now,
+  });
 
   const center = 120;
   const dialRadius = 108;
@@ -193,10 +189,11 @@ export const OttomanHeritageClock: React.FC<ClockProps> = ({
           <g id="ottoman-hands">
             {/* Tapered Sword Hour Hand with Luminous Spine */}
             <g
+              ref={hourHandRef}
               style={{
-                transform: `rotate(${hourAngle}deg)`,
+                transform: `rotate(${initialAngles.hourAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.2s cubic-bezier(0.4, 2.08, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               <path
@@ -215,10 +212,11 @@ export const OttomanHeritageClock: React.FC<ClockProps> = ({
 
             {/* Tapered Sword Minute Hand with Luminous Spine */}
             <g
+              ref={minuteHandRef}
               style={{
-                transform: `rotate(${minuteAngle}deg)`,
+                transform: `rotate(${initialAngles.minuteAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.15s cubic-bezier(0.4, 2.08, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               <path
@@ -238,9 +236,11 @@ export const OttomanHeritageClock: React.FC<ClockProps> = ({
             {/* Sweeping Thin Second Hand with Counterbalance Tail */}
             {!isStaticPreview && (
               <g
+                ref={secondHandRef}
                 style={{
-                  transform: `rotate(${secondAngle}deg)`,
+                  transform: `rotate(${initialAngles.secondAngle}deg)`,
                   transformOrigin: `${center}px ${center}px`,
+                  willChange: 'transform',
                 }}
               >
                 <line
@@ -310,6 +310,8 @@ export const OttomanHeritageClock: React.FC<ClockProps> = ({
       )}
     </div>
   );
-};
+});
+
+OttomanHeritageClock.displayName = 'OttomanHeritageClock';
 
 export default OttomanHeritageClock;

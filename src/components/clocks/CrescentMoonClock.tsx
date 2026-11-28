@@ -1,27 +1,30 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { type ClockProps } from '@/types/clock';
 import { getMoonPhase, getMoonSvgPath } from '@/utils/moonPhase';
 import { cn } from '@/lib/utils';
-import { useClockSecondTick } from './useClockSecondTick';
+import { useAnalogClockHands } from './useAnalogClockHands';
+import { useClockMinuteTick } from './ClockMinuteParts';
 
-export const CrescentMoonClock: React.FC<ClockProps> = ({
+export const CrescentMoonClock: React.FC<ClockProps> = memo(({
   now,
   hijriDate,
   isStaticPreview = false,
 }) => {
-  const liveNow = useClockSecondTick(isStaticPreview, now);
-  // Hand rotation calculations
-  const hours = liveNow.getHours();
-  const minutes = liveNow.getMinutes();
-  const seconds = liveNow.getSeconds();
-
-  const hourAngle = ((hours % 12) + minutes / 60 + (isStaticPreview ? 0 : seconds / 3600)) * 30;
-  const minuteAngle = (minutes + (isStaticPreview ? 0 : seconds / 60)) * 6;
-  const secondAngle = seconds * 6;
+  const { hourHandRef, minuteHandRef, secondHandRef, initialAngles } = useAnalogClockHands({
+    isStaticPreview,
+    externalNow: now,
+  });
+  const minuteTimestamp = useClockMinuteTick(isStaticPreview, now);
 
   // Real-time Moon phase computation (changes daily)
-  const dayKey = `${liveNow.getFullYear()}-${liveNow.getMonth()}-${liveNow.getDate()}`;
-  const moonInfo = useMemo(() => getMoonPhase(liveNow), [dayKey]);
+  const dayKey = useMemo(() => {
+    const d = new Date(minuteTimestamp);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }, [minuteTimestamp]);
+  const moonInfo = useMemo(() => {
+    const [y, m, day] = dayKey.split('-').map(Number);
+    return getMoonPhase(new Date(y, m, day, 12, 0, 0));
+  }, [dayKey]);
 
   // ViewBox: 240 x 240
   const center = 120;
@@ -202,10 +205,11 @@ export const CrescentMoonClock: React.FC<ClockProps> = ({
           <g id="crescent-hands">
             {/* Tapered Sword Hour Hand with Luminous Spine */}
             <g
+              ref={hourHandRef}
               style={{
-                transform: `rotate(${hourAngle}deg)`,
+                transform: `rotate(${initialAngles.hourAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.2s cubic-bezier(0.4, 2.08, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               <path
@@ -224,10 +228,11 @@ export const CrescentMoonClock: React.FC<ClockProps> = ({
 
             {/* Tapered Sword Minute Hand with Luminous Spine */}
             <g
+              ref={minuteHandRef}
               style={{
-                transform: `rotate(${minuteAngle}deg)`,
+                transform: `rotate(${initialAngles.minuteAngle}deg)`,
                 transformOrigin: `${center}px ${center}px`,
-                transition: isStaticPreview ? 'none' : 'transform 0.15s cubic-bezier(0.4, 2.08, 0.55, 0.44)',
+                willChange: 'transform',
               }}
             >
               <path
@@ -247,9 +252,11 @@ export const CrescentMoonClock: React.FC<ClockProps> = ({
             {/* Sweeping Thin Second Hand with Counterbalance Tail */}
             {!isStaticPreview && (
               <g
+                ref={secondHandRef}
                 style={{
-                  transform: `rotate(${secondAngle}deg)`,
+                  transform: `rotate(${initialAngles.secondAngle}deg)`,
                   transformOrigin: `${center}px ${center}px`,
+                  willChange: 'transform',
                 }}
               >
                 <line
@@ -325,6 +332,8 @@ export const CrescentMoonClock: React.FC<ClockProps> = ({
       )}
     </div>
   );
-};
+});
+
+CrescentMoonClock.displayName = 'CrescentMoonClock';
 
 export default CrescentMoonClock;

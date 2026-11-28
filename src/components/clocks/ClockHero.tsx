@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { useClockStyle } from '@/lib/clock-style';
@@ -25,12 +25,13 @@ interface ClockHeroProps {
 }
 
 const MakruhHeroPill: React.FC<{ activeWindow: MakruhWindowInfo }> = memo(({ activeWindow }) => {
-  const [remainingFormatted, setRemainingFormatted] = useState(() => {
+  const countdownRef = useRef<HTMLSpanElement>(null);
+  const initialFormatted = useMemo(() => {
     const now = new Date();
     const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
     const rem = Math.max(0, activeWindow.endSecondsOfDay - nowSec);
-    return formatCountdownRemaining(rem);
-  });
+    return `Ends in ${formatCountdownRemaining(rem)}`;
+  }, [activeWindow.endSecondsOfDay]);
 
   useEffect(() => {
     let timerId: ReturnType<typeof setInterval> | null = null;
@@ -39,7 +40,9 @@ const MakruhHeroPill: React.FC<{ activeWindow: MakruhWindowInfo }> = memo(({ act
       const now = new Date();
       const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
       const rem = Math.max(0, activeWindow.endSecondsOfDay - nowSec);
-      setRemainingFormatted(formatCountdownRemaining(rem));
+      if (countdownRef.current) {
+        countdownRef.current.textContent = `Ends in ${formatCountdownRemaining(rem)}`;
+      }
     };
 
     tick();
@@ -87,8 +90,8 @@ const MakruhHeroPill: React.FC<{ activeWindow: MakruhWindowInfo }> = memo(({ act
               : 'MAKRUH • Sunset'}
         </span>
       </div>
-      <span className="font-mono tabular-nums shrink-0 text-red-200 font-bold whitespace-nowrap" dir="ltr">
-        Ends in {remainingFormatted}
+      <span ref={countdownRef} className="font-mono tabular-nums shrink-0 text-red-200 font-bold whitespace-nowrap" dir="ltr">
+        {initialFormatted}
       </span>
     </div>
   );
@@ -199,34 +202,47 @@ export const ClockHero: React.FC<ClockHeroProps> = memo(({
     };
   }, [prayers, normalizedTimeFormat, boundaryKey]);
 
-  const renderNow = new Date();
+  const renderNow = useMemo(() => {
+    void boundaryKey;
+    return new Date();
+  }, [boundaryKey]);
   const currentHour = renderNow.getHours();
 
-  const nextDisplayName = getPrayerDisplayName(nextPrayer.name, nextPrayer.targetTime || renderNow);
-  const prevDisplayName = previousPrayer?.name
-    ? getPrayerDisplayName(previousPrayer.name, previousPrayer.date || renderNow)
-    : 'Previous Prayer';
+  const normalizedNext = useMemo(() => {
+    const nextDisplayName = getPrayerDisplayName(nextPrayer.name, nextPrayer.targetTime || renderNow);
+    return {
+      name: nextDisplayName || 'Next Prayer',
+      time: nextPrayer.time || '--:--',
+      progress: nextPrayer.progress > 1 ? nextPrayer.progress / 100 : (nextPrayer.progress || 0),
+      targetTime: nextPrayer.targetTime,
+    };
+  }, [nextPrayer.name, nextPrayer.time, nextPrayer.progress, nextPrayer.targetTime, renderNow]);
 
-  const normalizedNext = {
-    name: nextDisplayName || 'Next Prayer',
-    time: nextPrayer.time || '--:--',
-    progress: nextPrayer.progress > 1 ? nextPrayer.progress / 100 : (nextPrayer.progress || 0),
-    targetTime: nextPrayer.targetTime,
-  };
+  const normalizedPrev = useMemo(() => {
+    const prevDisplayName = previousPrayer?.name
+      ? getPrayerDisplayName(previousPrayer.name, previousPrayer.date || renderNow)
+      : 'Previous Prayer';
+    return {
+      name: prevDisplayName,
+      time: previousPrayer?.time || '--:--',
+      date: previousPrayer?.date,
+    };
+  }, [previousPrayer?.name, previousPrayer?.time, previousPrayer?.date, renderNow]);
 
-  const normalizedPrev = {
-    name: prevDisplayName,
-    time: previousPrayer?.time || '--:--',
-    date: previousPrayer?.date,
-  };
+  const sanitizedHijriDate = useMemo(
+    () =>
+      (hijriDate || '')
+        .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
+        .replace(/al-ola/gi, 'al-ūlā')
+        .replace(/al-ōlā/gi, 'al-ūlā')
+        .replace(/ō/g, 'ū'),
+    [hijriDate]
+  );
 
-  const sanitizedHijriDate = (hijriDate || '')
-    .replace(/[\u014d\u014c\u00f4\u00d4]/g, 'ū')
-    .replace(/al-ola/gi, 'al-ūlā')
-    .replace(/al-ōlā/gi, 'al-ūlā')
-    .replace(/ō/g, 'ū');
-
-  const makruhState = evaluateMakruhState(prayers || [], renderNow, normalizedTimeFormat);
+  const makruhState = useMemo(
+    () => evaluateMakruhState(prayers || [], renderNow, normalizedTimeFormat),
+    [prayers, renderNow, normalizedTimeFormat]
+  );
 
   return (
     <div

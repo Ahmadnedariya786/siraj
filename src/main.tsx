@@ -54,7 +54,6 @@ import './lib/i18n-new'; // Initialize offline-first i18n (EN synchronous; secon
 import { LanguageProvider } from "@/contexts/LanguageContext-new";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Capacitor } from "@capacitor/core";
 import { isLowEndDevice } from "@/lib/performance-optimizations";
 
 // 2. Mount React application root with breadcrumb tracing
@@ -73,14 +72,6 @@ try {
         </AppErrorBoundary>
       </StrictMode>
     );
-
-    // Immediately remove initial pre-React splash element to eliminate mid-splash double-logo jump
-    try {
-      document.getElementById('initial-splash')?.remove();
-      document.getElementById('static-splash')?.remove();
-    } catch {
-      // Safe fallback
-    }
   } else {
     console.error("Root element not found");
   }
@@ -111,22 +102,8 @@ try {
   console.warn("isLowEndDevice failed:", e);
 }
 
-// Service worker handling:
-// On native platforms (Capacitor), service workers MUST NEVER be used because Capacitor
-// serves all bundled assets locally from the APK with instant zero-latency offline access.
-// Stale SW precache manifests intercept newly-hashed APK module chunks when offline.
-if (Capacitor.isNativePlatform()) {
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
-      .catch((err) => console.debug('[SW] Native cleanup skipped:', err));
-  }
-  if (typeof window !== 'undefined' && 'caches' in window) {
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => /workbox|precache|vite-pwa/i.test(k)).map((k) => caches.delete(k))))
-      .catch((err) => console.debug('[SW] Cache cleanup skipped:', err));
-  }
-} else if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+// Dev-only stale Vite PWA SW cleanup (native SW cleanup runs in P1 at t + 350ms)
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   (async () => {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();

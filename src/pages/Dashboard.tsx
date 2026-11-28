@@ -696,17 +696,20 @@ export default function Dashboard() {
   };
 
 
-// Initialize / refresh prayer times: yield initial boot fetch to P1 idle when cached prayers already painted frame 1
+// Initialize / refresh prayer times: yield initial boot fetch to P1 idle (t + 1500ms) when cached prayers already painted frame 1
    useEffect(() => {
      if (!(location.latitude && location.longitude)) return;
      if (!didInitialIdlePrayerSyncRef.current && initialCached.length >= 5) {
        didInitialIdlePrayerSyncRef.current = true;
        let cancelled = false;
-       yieldToMainThread(true, 900).then(() => {
-         if (!cancelled) loadPrayerTimes();
-       });
+       const timer = setTimeout(() => {
+         yieldToMainThread(true, 400).then(() => {
+           if (!cancelled) loadPrayerTimes();
+         });
+       }, 1500);
        return () => {
          cancelled = true;
+         clearTimeout(timer);
        };
      }
      didInitialIdlePrayerSyncRef.current = true;
@@ -749,41 +752,44 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Safe street GPS auto-refresh on app boot if not locked to manual city (deferred to P1 idle)
+  // Safe street GPS auto-refresh on app boot if not locked to manual city (deferred past P1 idle)
   useEffect(() => {
     let cancelled = false;
-    yieldToMainThread(true, 1200).then(() => {
-      if (cancelled) return;
-      try {
-        const mode = localStorage.getItem('noor_location_mode');
-        if (mode === 'manual') return;
+    const timer = setTimeout(() => {
+      yieldToMainThread(true, 600).then(() => {
+        if (cancelled) return;
+        try {
+          const mode = localStorage.getItem('noor_location_mode');
+          if (mode === 'manual') return;
 
-        if (typeof navigator !== 'undefined' && navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              if (pos?.coords && Number.isFinite(pos.coords.latitude) && Number.isFinite(pos.coords.longitude)) {
-                const curLat = location.latitude;
-                const curLon = location.longitude;
-                const diffLat = Math.abs(pos.coords.latitude - curLat);
-                const diffLon = Math.abs(pos.coords.longitude - curLon);
-                // If street coordinates differ by > ~100m, refresh to exact street GPS
-                if (diffLat > 0.001 || diffLon > 0.001) {
-                  location.setLocation(pos.coords.latitude, pos.coords.longitude, location.locationName, location.timeZone);
+          if (typeof navigator !== 'undefined' && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                if (pos?.coords && Number.isFinite(pos.coords.latitude) && Number.isFinite(pos.coords.longitude)) {
+                  const curLat = location.latitude;
+                  const curLon = location.longitude;
+                  const diffLat = Math.abs(pos.coords.latitude - curLat);
+                  const diffLon = Math.abs(pos.coords.longitude - curLon);
+                  // If street coordinates differ by > ~100m, refresh to exact street GPS
+                  if (diffLat > 0.001 || diffLon > 0.001) {
+                    location.setLocation(pos.coords.latitude, pos.coords.longitude, location.locationName, location.timeZone);
+                  }
                 }
-              }
-            },
-            (err) => {
-              console.debug('[Dashboard] Passive GPS auto-refresh skipped:', err?.message || err);
-            },
-            { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
-          );
+              },
+              (err) => {
+                console.debug('[Dashboard] Passive GPS auto-refresh skipped:', err?.message || err);
+              },
+              { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
+            );
+          }
+        } catch (err) {
+          console.debug('[Dashboard] Passive GPS check skipped:', err);
         }
-      } catch (err) {
-        console.debug('[Dashboard] Passive GPS check skipped:', err);
-      }
-    });
+      });
+    }, 1800);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, []);
 

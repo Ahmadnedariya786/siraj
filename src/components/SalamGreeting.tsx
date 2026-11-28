@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { markStartupStep, completeStartupStep } from '@/lib/startup-breadcrumb';
+import { subscribeP3NetworkIdle } from '@/lib/boot-scheduler';
 
 const GREETING_ENABLED_KEY = 'greetingEnabled';
 const LEGACY_GREETING_ENABLED_KEY = 'salam-greeting-enabled';
@@ -84,16 +85,20 @@ export const SalamGreeting = ({ splashActive = false }: SalamGreetingProps) => {
         }
       };
 
-      // Native platform: play immediately once splash finishes without gesture
+      // Native platform: defer greeting audio warm-up strictly to P3 network-idle (>= 2200ms, never in first 2s)
       if (isNative) {
         if (splashActive) return;
 
-        const timer = window.setTimeout(() => {
-          playGreeting();
-        }, 80);
+        let timer: number | null = null;
+        const unsubscribeP3 = subscribeP3NetworkIdle(() => {
+          timer = window.setTimeout(() => {
+            playGreeting();
+          }, 80);
+        });
 
         return () => {
-          window.clearTimeout(timer);
+          unsubscribeP3();
+          if (timer !== null) window.clearTimeout(timer);
           if (audioRef.current) {
             try {
               audioRef.current.pause();
