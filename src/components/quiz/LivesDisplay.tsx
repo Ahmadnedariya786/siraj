@@ -1,6 +1,6 @@
 /**
  * Lives Display Component
- * Shows hearts/lives with regeneration timer
+ * Subscribed to unified useQuizEconomy store for instant XP & Lives sync
  */
 
 import { useState, useEffect } from 'react';
@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { livesSystem } from '@/lib/lives-system';
+import { useQuizEconomy } from '@/lib/quiz-economy';
 import { Heart, Clock, Plus } from 'lucide-react';
 
 interface LivesDisplayProps {
@@ -16,83 +17,79 @@ interface LivesDisplayProps {
 }
 
 export function LivesDisplay({ onRefill, showRefillButton = true }: LivesDisplayProps) {
-  const [lives, setLives] = useState(5);
-  const [maxLives, setMaxLives] = useState(5);
-  const [timeUntilNext, setTimeUntilNext] = useState('00:00');
-  const [isLow, setIsLow] = useState(false);
+  const { lives, maxLives, xp } = useQuizEconomy();
+  const [timeUntilNext, setTimeUntilNext] = useState(() => livesSystem.getTimeUntilNextLife());
 
   useEffect(() => {
-    const updateLives = () => {
-      const current = livesSystem.getCurrentLives();
-      const max = livesSystem.getMaxLives();
-      setLives(current);
-      setMaxLives(max);
+    const updateTimer = () => {
+      livesSystem.getCurrentLives();
       setTimeUntilNext(livesSystem.getTimeUntilNextLife());
-      setIsLow(current <= 2);
     };
-
-    updateLives();
-    const interval = setInterval(updateLives, 1000);
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [lives]);
+
+  const isLow = lives <= 2;
 
   const handleRefill = () => {
     const result = livesSystem.refillLivesWithXP();
     if (result.success) {
-      setLives(livesSystem.getMaxLives());
       onRefill?.();
     }
     return result;
   };
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${
-      isLow 
-        ? 'bg-red-100 dark:bg-red-900/30 border border-red-200' 
-        : 'bg-pink-100 dark:bg-pink-900/30'
-    }`}>
-      {/* Hearts */}
-      <div className="flex items-center">
+    <div
+      className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border"
+      style={{
+        backgroundColor: 'var(--surface-2)',
+        borderColor: isLow ? 'var(--danger)' : 'var(--border)',
+      }}
+    >
+      <div className="flex items-center gap-0.5">
         {Array.from({ length: maxLives }).map((_, i) => (
           <motion.div
             key={i}
-            initial={i < lives ? { scale: 1 } : { scale: 0.8 }}
-            animate={i < lives ? { scale: 1 } : { scale: 0.5, opacity: 0.3 }}
+            initial={i < lives ? { scale: 1 } : { scale: 0.85 }}
+            animate={i < lives ? { scale: 1 } : { scale: 0.75, opacity: 0.35 }}
           >
             <Heart
-              className={`w-5 h-5 ${
-                i < lives
-                  ? 'text-red-500 fill-red-500'
-                  : 'text-gray-300'
-              }`}
+              className="w-4 h-4"
+              style={{
+                color: i < lives ? 'var(--danger)' : 'var(--text-secondary)',
+                fill: i < lives ? 'var(--danger)' : 'transparent',
+              }}
             />
           </motion.div>
         ))}
       </div>
 
-      {/* Counter */}
-      <span className={`font-bold text-sm ${isLow ? 'text-red-600' : 'text-pink-600'}`}>
+      <span
+        className="font-bold text-sm"
+        style={{ color: isLow ? 'var(--danger)' : 'var(--text-primary)' }}
+      >
         {lives}/{maxLives}
       </span>
 
-      {/* Regeneration Timer or Full Status Badge */}
       {lives < maxLives ? (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
           <Clock className="w-3 h-3" />
           <span>{timeUntilNext}</span>
         </div>
       ) : (
-        <span className="text-[11px] font-bold text-[var(--accent-text)] bg-[var(--surface-2)] border border-[var(--border)] px-2.5 py-0.5 rounded-full whitespace-nowrap">
-          {lives}/{maxLives} Full • Ready to Play
+        <span className="text-[11px] font-bold text-[var(--accent-text)] bg-[var(--accent-soft)] border border-[var(--border)] px-2 py-0.5 rounded-full whitespace-nowrap">
+          Full • Ready
         </span>
       )}
 
-      {/* Refill Button */}
       {showRefillButton && lives < maxLives && (
         <Button
           size="sm"
-          variant="ghost"
-          className="h-6 px-2 text-xs"
+          variant="outline"
+          disabled={xp < 100}
+          className="h-7 px-2 text-xs ml-auto"
           onClick={handleRefill}
         >
           <Plus className="w-3 h-3 mr-1" />
@@ -103,31 +100,31 @@ export function LivesDisplay({ onRefill, showRefillButton = true }: LivesDisplay
   );
 }
 
-// Compact version for header
 export function LivesCompact() {
-  const [lives, setLives] = useState(5);
-  const [maxLives, setMaxLives] = useState(5);
-
-  useEffect(() => {
-    const updateLives = () => {
-      setLives(livesSystem.getCurrentLives());
-      setMaxLives(livesSystem.getMaxLives());
-    };
-
-    updateLives();
-    const interval = setInterval(updateLives, 30000); // Update every 30s
-    return () => clearInterval(interval);
-  }, []);
-
+  const { lives } = useQuizEconomy();
   const isLow = lives <= 2;
 
   return (
-    <Badge 
-      variant={isLow ? "destructive" : "default"}
-      className={`flex items-center gap-1 ${isLow ? 'animate-pulse' : ''}`}
+    <Badge
+      variant={isLow ? 'destructive' : 'secondary'}
+      className="flex items-center gap-1 border border-[var(--border)]"
+      style={
+        isLow
+          ? undefined
+          : {
+              backgroundColor: 'var(--surface-2)',
+              color: 'var(--text-primary)',
+            }
+      }
     >
-      <Heart className={`w-3 h-3 ${lives > 0 ? 'fill-current' : ''}`} />
-      <span className="text-xs">{lives}</span>
+      <Heart
+        className="w-3 h-3"
+        style={{
+          color: lives > 0 ? 'var(--danger)' : 'var(--text-secondary)',
+          fill: lives > 0 ? 'var(--danger)' : 'transparent',
+        }}
+      />
+      <span className="text-xs font-bold">{lives}</span>
     </Badge>
   );
 }

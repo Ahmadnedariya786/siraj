@@ -1,14 +1,11 @@
 /**
- * Lives System - Create scarcity and retention
- * Users have limited lives that regenerate over time
+ * Lives System - Scarcity and regeneration backed by quiz-economy store (`siraj_quiz_state_v1`)
  */
 
-import { quizStore } from '@/lib/quiz-store';
+import { quizEconomy, MAX_LIVES } from '@/lib/quiz-economy';
 
-const LIVES_KEY = 'quiz-lives-system';
-const MAX_LIVES = 5;
-const REGENERATION_MINUTES = 30; // 1 life every 30 minutes
-const REFILL_COST = 100; // XP cost to refill all lives
+const REGENERATION_MINUTES = 30;
+const REFILL_COST = 100;
 
 export interface LivesState {
   currentLives: number;
@@ -29,172 +26,152 @@ export class LivesSystem {
   }
 
   private getState(): LivesState {
-    const saved = localStorage.getItem(LIVES_KEY);
-    if (saved) {
-      return { ...this.getDefaultState(), ...JSON.parse(saved) };
-    }
-    return this.getDefaultState();
-  }
-
-  private getDefaultState(): LivesState {
+    const eco = quizEconomy.getState();
     return {
-      currentLives: MAX_LIVES,
-      maxLives: MAX_LIVES,
-      lastRegenerationTime: new Date().toISOString(),
-      totalLivesUsed: 0,
-      totalRefills: 0
+      currentLives: eco.lives,
+      maxLives: eco.maxLives,
+      lastRegenerationTime: eco.lastLifeRegenAt,
+      totalLivesUsed: eco.totalLivesUsed,
+      totalRefills: eco.totalRefills,
     };
   }
 
   private saveState(state: LivesState): void {
-    localStorage.setItem(LIVES_KEY, JSON.stringify(state));
+    quizEconomy.updateLives({
+      lives: state.currentLives,
+      maxLives: state.maxLives,
+      lastLifeRegenAt: state.lastRegenerationTime,
+      totalLivesUsed: state.totalLivesUsed,
+      totalRefills: state.totalRefills,
+    });
   }
 
-  // Calculate regenerated lives based on time passed
   private calculateRegeneratedLives(state: LivesState): number {
     const now = new Date();
     const lastRegen = new Date(state.lastRegenerationTime);
     const minutesPassed = (now.getTime() - lastRegen.getTime()) / (1000 * 60);
     const livesToAdd = Math.floor(minutesPassed / REGENERATION_MINUTES);
-    
-    return Math.min(livesToAdd, state.maxLives - state.currentLives);
+    return Math.max(0, Math.min(livesToAdd, state.maxLives - state.currentLives));
   }
 
-  // Get current lives (with regeneration)
   getCurrentLives(): number {
     const state = this.getState();
     const regenerated = this.calculateRegeneratedLives(state);
-    
+
     if (regenerated > 0) {
       state.currentLives = Math.min(state.currentLives + regenerated, state.maxLives);
       state.lastRegenerationTime = new Date().toISOString();
       this.saveState(state);
     }
-    
+
     return state.currentLives;
   }
 
-  // Get max lives
   getMaxLives(): number {
     return this.getState().maxLives;
   }
 
-  // Check if user has lives
   hasLives(): boolean {
     return this.getCurrentLives() > 0;
   }
 
-  // Use one life
   useLife(): boolean {
     const state = this.getState();
-    
-    // Refresh state first
     const regenerated = this.calculateRegeneratedLives(state);
     if (regenerated > 0) {
       state.currentLives = Math.min(state.currentLives + regenerated, state.maxLives);
       state.lastRegenerationTime = new Date().toISOString();
     }
-    
+
     if (state.currentLives <= 0) {
-      this.saveState(state);
       return false;
     }
-    
-    state.currentLives--;
-    state.totalLivesUsed++;
+
+    state.currentLives -= 1;
+    state.totalLivesUsed += 1;
     this.saveState(state);
-    
     return true;
   }
 
-  // Get time until next life regeneration
   getTimeUntilNextLife(): string {
     const state = this.getState();
+    if (state.currentLives >= state.maxLives) {
+      return '00:00';
+    }
     const now = new Date();
     const lastRegen = new Date(state.lastRegenerationTime);
     const minutesPassed = (now.getTime() - lastRegen.getTime()) / (1000 * 60);
     const minutesUntilNext = REGENERATION_MINUTES - (minutesPassed % REGENERATION_MINUTES);
-    
-    if (minutesUntilNext <= 0 || state.currentLives >= state.maxLives) {
-      return '00:00';
-    }
-    
+
+    if (minutesUntilNext <= 0) return '00:00';
+
     const hours = Math.floor(minutesUntilNext / 60);
     const minutes = Math.floor(minutesUntilNext % 60);
-    
-    return hours > 0 
+
+    return hours > 0
       ? `${hours}h ${minutes.toString().padStart(2, '0')}m`
       : `${minutes.toString().padStart(2, '0')}m`;
   }
 
-  // Refill all lives using XP
   refillLivesWithXP(): { success: boolean; message?: string } {
     const state = this.getState();
-    
     if (state.currentLives >= state.maxLives) {
       return { success: false, message: 'Lives already full!' };
     }
-    
-    const spent = quizStore.spendXP(REFILL_COST, 'Life Refill');
+
+    const spent = quizEconomy.spendXP(REFILL_COST, 'Life Refill');
     if (!spent) {
       return { success: false, message: `Need ${REFILL_COST} XP to refill` };
     }
-    
+
     state.currentLives = state.maxLives;
-    state.totalRefills++;
+    state.totalRefills += 1;
     this.saveState(state);
-    
     return { success: true, message: 'Lives refilled!' };
   }
 
-  // Add extra life (from rewards, gifts, etc.)
   addExtraLife(): boolean {
     const state = this.getState();
     if (state.currentLives < state.maxLives) {
-      state.currentLives++;
+      state.currentLives += 1;
       this.saveState(state);
       return true;
     }
     return false;
   }
 
-  // Get lives progress for UI (0-100)
   getLivesProgress(): number {
     return (this.getCurrentLives() / this.getMaxLives()) * 100;
   }
 
-  // Get loss aversion message based on lives
   getLossAversionMessage(): string | null {
     const lives = this.getCurrentLives();
-    
-    if (lives === 1) {
-      return '⚠️ LAST LIFE! Play carefully...';
-    } else if (lives === 2) {
-      return '2 lives remaining. Refill in ' + this.getTimeUntilNextLife();
-    } else if (lives <= MAX_LIVES * 0.5) {
-      return `${lives} lives left. Next life in ${this.getTimeUntilNextLife()}`;
-    }
-    
+    if (lives === 1) return 'Last life remaining. Play carefully!';
+    if (lives === 2) return `2 lives remaining. Next life in ${this.getTimeUntilNextLife()}`;
+    if (lives <= MAX_LIVES * 0.5) return `${lives} lives left. Next life in ${this.getTimeUntilNextLife()}`;
     return null;
   }
 
-  // Check if lives are critically low (for notifications)
   isCritical(): boolean {
     return this.getCurrentLives() <= 2;
   }
 
-  // Get stats
   getStats(): { totalUsed: number; totalRefills: number } {
     const state = this.getState();
     return {
       totalUsed: state.totalLivesUsed,
-      totalRefills: state.totalRefills
+      totalRefills: state.totalRefills,
     };
   }
 
-  // Reset all lives (for testing)
   resetLives(): void {
-    localStorage.removeItem(LIVES_KEY);
+    quizEconomy.updateLives({
+      lives: MAX_LIVES,
+      maxLives: MAX_LIVES,
+      lastLifeRegenAt: new Date().toISOString(),
+      totalLivesUsed: 0,
+      totalRefills: 0,
+    });
   }
 }
 

@@ -1,10 +1,11 @@
 /**
- * Psychological Hooks & Loss Aversion Messages
- * Creates urgency, FOMO, and retention hooks
+ * Psychological Hooks & Retention Messages
+ * Theme-token compliant styling across all 8 Royal Themes (high contrast >= 4.5:1)
  */
 
 import { quizStore } from '@/lib/quiz-store';
 import { quizManager } from '@/lib/quiz-manager';
+import { quizEconomy } from '@/lib/quiz-economy';
 import { livesSystem } from '@/lib/lives-system';
 import { timeEventsSystem } from '@/lib/time-events';
 import { mysteryBoxSystem } from '@/lib/mystery-box';
@@ -32,8 +33,6 @@ export class PsychologicalHooks {
     return PsychologicalHooks.instance;
   }
 
-  // ===== LIVES SCARCITY =====
-  
   getLivesScarcityMessage(): LossAversionMessage | null {
     const lives = livesSystem.getCurrentLives();
     const maxLives = livesSystem.getMaxLives();
@@ -42,13 +41,13 @@ export class PsychologicalHooks {
     if (lives === 1) {
       return {
         type: 'lives',
-        message: '⚠️ LAST LIFE!',
-        subMessage: 'You have 1 life remaining. Play carefully...',
+        message: 'Last Life Remaining',
+        subMessage: 'You have 1 life remaining. Play carefully!',
         urgency: 'critical',
-        icon: '💔',
-        color: 'text-red-500 bg-red-50 border-red-200',
+        icon: 'alert',
+        color: 'text-[var(--danger)] border-[var(--danger)]',
         actionText: 'Refill Now (100 XP)',
-        countdown: timeUntilNext
+        countdown: timeUntilNext,
       };
     }
 
@@ -58,9 +57,9 @@ export class PsychologicalHooks {
         message: 'Only 2 lives left',
         subMessage: `Next life in ${timeUntilNext}`,
         urgency: 'high',
-        icon: '❤️',
-        color: 'text-orange-500 bg-orange-50 border-orange-200',
-        actionText: 'Get More Lives'
+        icon: 'heart',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
+        actionText: 'Get More Lives',
       };
     }
 
@@ -70,37 +69,35 @@ export class PsychologicalHooks {
         message: `${lives} lives remaining`,
         subMessage: `Next life in ${timeUntilNext}`,
         urgency: 'medium',
-        icon: '💛',
-        color: 'text-yellow-600 bg-yellow-50 border-yellow-200'
+        icon: 'heart',
+        color: 'text-[var(--text-primary)] border-[var(--border)]',
       };
     }
 
     return null;
   }
 
-  // ===== STREAK LOSS AVERSION =====
-
   getStreakLossMessage(): LossAversionMessage | null {
     const dailyStatus = quizStore.getDailyRewardStatus();
-    
+
     if (!dailyStatus.canClaimToday && dailyStatus.currentStreak > 0) {
-      return null; // Already claimed today
+      return null;
     }
 
     const hoursLeft = this.getHoursUntilMidnight();
-    
+
     if (dailyStatus.currentStreak === 0) return null;
 
     if (hoursLeft <= 2 && dailyStatus.currentStreak > 5) {
       return {
         type: 'streak',
-        message: `🔥 ${dailyStatus.currentStreak}-Day Streak in DANGER!`,
+        message: `${dailyStatus.currentStreak}-Day Streak Expiring`,
         subMessage: `Your streak expires in ${Math.ceil(hoursLeft)} hours! Play now to save it.`,
         urgency: 'critical',
-        icon: '🔥',
-        color: 'text-red-600 bg-red-50 border-red-200 animate-pulse',
-        actionText: 'Play Now!',
-        countdown: `${Math.ceil(hoursLeft)}h left`
+        icon: 'flame',
+        color: 'text-[var(--danger)] border-[var(--danger)]',
+        actionText: 'Play Now',
+        countdown: `${Math.ceil(hoursLeft)}h left`,
       };
     }
 
@@ -108,33 +105,31 @@ export class PsychologicalHooks {
       return {
         type: 'streak',
         message: `${dailyStatus.currentStreak}-Day Streak`,
-        subMessage: `Expires in ${Math.ceil(hoursLeft)} hours. Don't lose your progress!`,
+        subMessage: `Expires in ${Math.ceil(hoursLeft)} hours. Protect your progress!`,
         urgency: 'high',
-        icon: '⏰',
-        color: 'text-orange-600 bg-orange-50 border-orange-200',
-        countdown: `${Math.ceil(hoursLeft)}h left`
+        icon: 'clock',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
+        countdown: `${Math.ceil(hoursLeft)}h left`,
       };
     }
 
     if (dailyStatus.currentStreak >= 6) {
       return {
         type: 'streak',
-        message: `${dailyStatus.currentStreak}-Day Streak! 🎉`,
+        message: `${dailyStatus.currentStreak}-Day Streak`,
         subMessage: 'One more day for the 7-day bonus reward!',
         urgency: 'medium',
-        icon: '🔥',
-        color: 'text-amber-600 bg-amber-50 border-amber-200'
+        icon: 'flame',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
       };
     }
 
     return null;
   }
 
-  // ===== DAILY REWARD EXPIRING =====
-
   getDailyRewardUrgency(): LossAversionMessage | null {
     const dailyStatus = quizStore.getDailyRewardStatus();
-    
+
     if (!dailyStatus.canClaimToday) return null;
 
     const hoursLeft = this.getHoursUntilMidnight();
@@ -143,13 +138,13 @@ export class PsychologicalHooks {
     if (hoursLeft <= 2) {
       return {
         type: 'daily_reward',
-        message: 'Daily Reward EXPIRES SOON!',
-        subMessage: `Day ${nextReward?.day || 1} reward waiting - Claim before midnight!`,
+        message: 'Daily Reward Expires Soon',
+        subMessage: `Day ${nextReward?.day || 1} reward waiting — claim before midnight!`,
         urgency: 'high',
-        icon: '🎁',
-        color: 'text-purple-600 bg-purple-50 border-purple-200 animate-pulse',
-        actionText: 'Claim Now!',
-        countdown: `${Math.ceil(hoursLeft)}h left`
+        icon: 'gift',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
+        actionText: 'Claim Now',
+        countdown: `${Math.ceil(hoursLeft)}h left`,
       };
     }
 
@@ -157,17 +152,16 @@ export class PsychologicalHooks {
       return {
         type: 'daily_reward',
         message: 'Daily Reward Waiting',
-        subMessage: `Claim your Day ${nextReward?.day || 1} rewards before they expire!`,
+        subMessage: `Claim your Day ${nextReward?.day || 1} reward today.`,
         urgency: 'medium',
-        icon: '🎁',
-        color: 'text-blue-600 bg-blue-50 border-blue-200'
+        icon: 'gift',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
+        actionText: 'Claim Reward',
       };
     }
 
     return null;
   }
-
-  // ===== EVENT FOMO =====
 
   getEventFOMOMessage(): LossAversionMessage | null {
     const event = timeEventsSystem.getActiveEvent();
@@ -179,26 +173,26 @@ export class PsychologicalHooks {
     if (hours === 0 && minutes < 30) {
       return {
         type: 'event',
-        message: `${event.title} ENDING NOW!`,
-        subMessage: `${event.multiplier}x XP ends in ${minutes}m! Don't miss out!`,
+        message: `${event.title} Ending Soon`,
+        subMessage: `${event.multiplier}x XP ends in ${minutes}m!`,
         urgency: 'critical',
-        icon: event.icon,
-        color: `text-white bg-gradient-to-r ${event.color} animate-pulse`,
-        actionText: 'Play Now!',
-        countdown: `${minutes}m left`
+        icon: 'sparkles',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
+        actionText: 'Play Now',
+        countdown: `${minutes}m left`,
       };
     }
 
     if (hours === 0 && minutes < 60) {
       return {
         type: 'event',
-        message: `${event.title} ends in 1 hour!`,
-        subMessage: `${event.multiplier}x XP active - Last chance!`,
+        message: `${event.title} Ends in 1 Hour`,
+        subMessage: `${event.multiplier}x XP active now.`,
         urgency: 'high',
-        icon: '⏰',
-        color: `text-white bg-gradient-to-r ${event.color}`,
+        icon: 'clock',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
         actionText: 'Join Event',
-        countdown: '1h left'
+        countdown: '1h left',
       };
     }
 
@@ -206,29 +200,27 @@ export class PsychologicalHooks {
       return {
         type: 'event',
         message: `${event.title} Active`,
-        subMessage: `${event.multiplier}x XP - Ends in ${hours}h ${minutes}m`,
+        subMessage: `${event.multiplier}x XP — ends in ${hours}h ${minutes}m`,
         urgency: 'medium',
-        icon: event.icon,
-        color: `text-white bg-gradient-to-r ${event.color}`,
-        countdown: `${hours}h ${minutes}m left`
+        icon: 'sparkles',
+        color: 'text-[var(--accent-text)] border-[var(--accent)]',
+        countdown: `${hours}h ${minutes}m left`,
       };
     }
 
     return {
       type: 'event',
-      message: `${event.title} Live!`,
-      subMessage: `${event.multiplier}x XP for ${hours} more hours!`,
+      message: `${event.title} Live`,
+      subMessage: `${event.multiplier}x XP for ${hours} more hours`,
       urgency: 'low',
-      icon: event.icon,
-      color: `text-white bg-gradient-to-r ${event.color}`
+      icon: 'sparkles',
+      color: 'text-[var(--accent-text)] border-[var(--accent)]',
     };
   }
 
-  // ===== MYSTERY BOX AVAILABILITY =====
-
   getMysteryBoxUrgency(): LossAversionMessage | null {
     const canClaim = mysteryBoxSystem.canClaimDailyBox();
-    
+
     if (!canClaim) {
       const timeUntil = mysteryBoxSystem.getTimeUntilNextBox();
       return {
@@ -236,23 +228,21 @@ export class PsychologicalHooks {
         message: 'Free Mystery Box Tomorrow',
         subMessage: `Next free box in ${timeUntil}`,
         urgency: 'low',
-        icon: '📦',
-        color: 'text-slate-600 bg-slate-50 border-slate-200'
+        icon: 'package',
+        color: 'text-[var(--text-primary)] border-[var(--border)]',
       };
     }
 
     return {
       type: 'mystery_box',
-      message: '🎁 Free Mystery Box Ready!',
-      subMessage: 'Open it now for random rewards - FREE!',
+      message: 'Free Mystery Box Ready!',
+      subMessage: 'Open it now for random rewards — Free today',
       urgency: 'medium',
-      icon: '🎁',
-      color: 'text-purple-600 bg-purple-50 border-purple-200 animate-pulse',
-      actionText: 'Open Box!'
+      icon: 'gift',
+      color: 'text-[var(--accent-text)] border-[var(--accent)]',
+      actionText: 'Open Box',
     };
   }
-
-  // ===== COMBINED URGENCY CHECK =====
 
   getMostUrgentMessage(): LossAversionMessage | null {
     const messages: LossAversionMessage[] = [];
@@ -272,88 +262,67 @@ export class PsychologicalHooks {
     const boxMsg = this.getMysteryBoxUrgency();
     if (boxMsg) messages.push(boxMsg);
 
-    // Sort by urgency
     const urgencyOrder = { critical: 4, high: 3, medium: 2, low: 1 };
     messages.sort((a, b) => urgencyOrder[b.urgency] - urgencyOrder[a.urgency]);
 
-    // Return the most urgent, or null if none
     return messages[0] || null;
   }
 
-  // ===== PROGRESS HOOKS =====
-
   getProgressHook(): string | null {
-    const stats = quizStore.getXPSummary();
+    const currentXP = quizEconomy.getState().xp;
     const levelProgress = quizManager.getLevelProgress();
-    
-    // Almost level up
+
     if (levelProgress.progress > 80) {
-      return `🏆 Only ${levelProgress.remaining} XP to level up! One more quiz?`;
+      return `Only ${levelProgress.remaining} XP to level up!`;
     }
 
-    // XP milestone approaching
     const milestones = [1000, 2500, 5000, 10000, 25000];
-    const nextMilestone = milestones.find(m => stats.current < m);
+    const nextMilestone = milestones.find((m) => currentXP < m);
     if (nextMilestone) {
-      const remaining = nextMilestone - stats.current;
+      const remaining = nextMilestone - currentXP;
       if (remaining <= 200) {
-        return `✨ Just ${remaining} XP to reach ${nextMilestone.toLocaleString()} total!`;
+        return `Just ${remaining} XP to reach ${nextMilestone.toLocaleString()} total!`;
       }
     }
 
     return null;
   }
 
-  // ===== FOMO MESSAGES =====
-
   getFOMOMessage(): string | null {
     const messages: string[] = [];
 
-    // Event FOMO
     const event = timeEventsSystem.getActiveEvent();
     if (event) {
-      messages.push(`🔥 ${event.multiplier}x XP event active!`);
+      messages.push(`${event.multiplier}x XP event active!`);
     }
 
-    // Streak FOMO
     const dailyStatus = quizStore.getDailyRewardStatus();
     if (dailyStatus.currentStreak > 5) {
-      messages.push(`🔥 Don't lose your ${dailyStatus.currentStreak}-day streak!`);
+      messages.push(`Protect your ${dailyStatus.currentStreak}-day streak!`);
     }
 
-    // Lives FOMO
     const lives = livesSystem.getCurrentLives();
     if (lives === livesSystem.getMaxLives()) {
-      messages.push(`❤️ Lives full! You're wasting regeneration time.`);
+      messages.push('Full lives ready — start a round!');
     }
 
-    // Mystery box FOMO
     if (mysteryBoxSystem.canClaimDailyBox()) {
-      messages.push(`🎁 Free mystery box waiting!`);
+      messages.push('Free mystery box waiting!');
     }
 
     return messages.length > 0 ? messages[0] : null;
   }
 
-  // ===== MOTIVATION MESSAGES =====
-
   getMotivationMessage(): string | null {
     const messages = [
-      "You're doing great! Keep the momentum going! 💪",
-      "Every question makes you wiser! 📚",
-      "Knowledge is power! You're getting stronger! ✨",
-      "Almost at your next milestone! Don't stop now! 🎯",
-      "Your dedication is inspiring! 🔥",
-      "One more quiz for today? You can do it! 💪",
-      "Learning Islam is the best investment! 🌟",
-      "Your streak is building - don't break the chain! 🔗"
+      'Every question deepens your Islamic knowledge.',
+      'Consistency brings barakah in learning.',
+      'Seek knowledge from the cradle to the grave.',
+      'Stay steady — your streak is growing.',
     ];
 
-    // Return random message
     return messages[Math.floor(Math.random() * messages.length)];
   }
-
-  // ===== UTILITY =====
 
   private getHoursUntilMidnight(): number {
     const now = new Date();

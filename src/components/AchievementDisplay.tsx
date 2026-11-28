@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   Trophy, 
   Star, 
   Lock, 
-  Unlock, 
-  Gift, 
   Flame, 
   Target, 
   Zap,
@@ -15,9 +12,11 @@ import {
   Shield,
   TrendingUp,
   Award,
-  CheckCircle
+  CheckCircle,
+  type LucideIcon,
 } from 'lucide-react';
 import { quizManager } from '@/lib/quiz-manager';
+import { useQuizEconomy } from '@/lib/quiz-economy';
 import { type Achievement } from '@/data/enhanced-quiz-data';
 
 interface AchievementDisplayProps {
@@ -25,12 +24,13 @@ interface AchievementDisplayProps {
 }
 
 export function AchievementDisplay({ showUnlocked = false }: AchievementDisplayProps) {
+  const { badges, xp } = useQuizEconomy();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+  const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>(showUnlocked ? 'unlocked' : 'all');
 
   useEffect(() => {
     setAchievements(quizManager.getAchievements());
-  }, []);
+  }, [badges, xp]);
 
   const filteredAchievements = achievements.filter(achievement => {
     if (filter === 'unlocked') return achievement.unlocked;
@@ -39,7 +39,7 @@ export function AchievementDisplay({ showUnlocked = false }: AchievementDisplayP
   });
 
   const getAchievementIcon = (achievement: Achievement) => {
-    const iconMap: Record<string, any> = {
+    const iconMap: Record<string, LucideIcon> = {
       '👶': Trophy,
       '💯': Star,
       '🔥': Flame,
@@ -55,11 +55,9 @@ export function AchievementDisplay({ showUnlocked = false }: AchievementDisplayP
   };
 
   const getRarityColor = (points: number) => {
-    if (points >= 500) return 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white';
-    if (points >= 300) return 'bg-gradient-to-r from-purple-400 to-pink-500 text-white';
-    if (points >= 200) return 'bg-gradient-to-r from-blue-400 to-cyan-500 text-white';
-    if (points >= 100) return 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]';
-    return 'bg-gradient-to-r from-gray-400 to-gray-500 text-white';
+    if (points >= 300) return 'bg-[var(--accent)] text-[var(--on-accent)]';
+    if (points >= 100) return 'bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--border)]';
+    return 'bg-[var(--surface-2)] text-[var(--text-primary)] border border-[var(--border)]';
   };
 
   return (

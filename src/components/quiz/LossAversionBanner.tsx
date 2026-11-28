@@ -1,6 +1,6 @@
 /**
  * Loss Aversion Banner
- * Displays urgent messages to create FOMO and retention
+ * High-contrast theme-token notification banner (8 Royal Themes compatible)
  */
 
 import { useState, useEffect } from 'react';
@@ -8,7 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { psychologicalHooks, LossAversionMessage } from '@/lib/psychological-hooks';
-import { X, AlertTriangle, Clock } from 'lucide-react';
+import { useQuizEconomy } from '@/lib/quiz-economy';
+import { QuizLucideIcon } from '@/components/quiz/QuizLucideIcon';
+import { X, Clock } from 'lucide-react';
 
 interface LossAversionBannerProps {
   onAction?: (type: string) => void;
@@ -16,6 +18,7 @@ interface LossAversionBannerProps {
 }
 
 export function LossAversionBanner({ onAction, dismissible = true }: LossAversionBannerProps) {
+  const { lives, lastFreeBoxDate, streak, xp } = useQuizEconomy();
   const [message, setMessage] = useState<LossAversionMessage | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -28,9 +31,9 @@ export function LossAversionBanner({ onAction, dismissible = true }: LossAversio
     };
 
     checkMessage();
-    const interval = setInterval(checkMessage, 60000); // Check every minute
+    const interval = setInterval(checkMessage, 60000);
     return () => clearInterval(interval);
-  }, [dismissed]);
+  }, [dismissed, lives, lastFreeBoxDate, streak, xp]);
 
   const handleDismiss = () => {
     setDismissed(true);
@@ -45,102 +48,90 @@ export function LossAversionBanner({ onAction, dismissible = true }: LossAversio
 
   if (!message || dismissed) return null;
 
-  const urgencyVariants: Record<string, any> = {
-    critical: { 
-      x: [0, -5, 5, -5, 5, 0],
-      transition: { duration: 0.5, repeat: Infinity, repeatDelay: 2 }
-    },
-    high: {
-      scale: [1, 1.02, 1],
-      transition: { duration: 2, repeat: Infinity }
-    },
-    medium: {},
-    low: {}
-  };
-
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: -50 }}
+        initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -50 }}
-        className="sticky top-0 z-50"
+        exit={{ opacity: 0, y: -12 }}
+        className="px-4 pt-2 max-w-lg mx-auto"
       >
-        <motion.div
-          animate={urgencyVariants[message.urgency]}
+        <Card
+          className="overflow-hidden border"
+          style={{
+            backgroundColor: 'var(--surface-2)',
+            borderColor: message.urgency === 'critical' ? 'var(--danger)' : 'var(--accent)',
+            color: 'var(--text-primary)',
+          }}
         >
-          <Card className={`m-2 border-2 overflow-hidden ${message.color}`}>
-            <div className="p-3 flex items-start gap-3">
-              {/* Icon */}
-              <div className="text-2xl flex-shrink-0">
-                {message.urgency === 'critical' ? (
-                  <AlertTriangle className="w-6 h-6" />
-                ) : (
-                  message.icon
-                )}
-              </div>
+          <div className="p-3 flex items-start gap-3">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{
+                backgroundColor: 'var(--accent-soft)',
+                color: message.urgency === 'critical' ? 'var(--danger)' : 'var(--accent-text)',
+              }}
+            >
+              <QuizLucideIcon id={message.icon} className="w-4 h-4" />
+            </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm">
-                  {message.message}
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-[var(--text-primary)] leading-snug">
+                {message.message}
+              </p>
+              {message.subMessage && (
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-snug">
+                  {message.subMessage}
                 </p>
-                {message.subMessage && (
-                  <p className="text-xs opacity-90 mt-0.5">
-                    {message.subMessage}
-                  </p>
-                )}
-                
-                {/* Countdown */}
-                {message.countdown && (
-                  <div className="flex items-center gap-1 mt-1 text-xs font-semibold">
-                    <Clock className="w-3 h-3" />
-                    <span>{message.countdown}</span>
-                  </div>
-                )}
+              )}
 
-                {/* Action Button */}
-                {message.actionText && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="mt-2 h-7 text-xs"
-                    onClick={handleAction}
-                  >
-                    {message.actionText}
-                  </Button>
-                )}
-              </div>
+              {message.countdown && (
+                <div className="flex items-center gap-1 mt-1 text-xs font-semibold text-[var(--accent-text)]">
+                  <Clock className="w-3 h-3" />
+                  <span>{message.countdown}</span>
+                </div>
+              )}
 
-              {/* Dismiss */}
-              {dismissible && message.urgency !== 'critical' && (
+              {message.actionText && (
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 flex-shrink-0"
-                  onClick={handleDismiss}
+                  size="sm"
+                  className="mt-2 h-7 px-3 text-xs font-semibold"
+                  style={{
+                    backgroundColor: 'var(--accent)',
+                    color: 'var(--on-accent)',
+                  }}
+                  onClick={handleAction}
                 >
-                  <X className="w-4 h-4" />
+                  {message.actionText}
                 </Button>
               )}
             </div>
-          </Card>
-        </motion.div>
+
+            {dismissible && message.urgency !== 'critical' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss banner"
+                className="h-7 w-7 shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                onClick={handleDismiss}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </Card>
       </motion.div>
     </AnimatePresence>
   );
 }
 
-// Floating notification badge for less urgent messages
 export function FloatingNotification({ onClick }: { onClick?: () => void }) {
   const [fomo, setFomo] = useState<string | null>(null);
 
   useEffect(() => {
     const check = () => {
-      const msg = psychologicalHooks.getFOMOMessage();
-      setFomo(msg);
+      setFomo(psychologicalHooks.getFOMOMessage());
     };
-
     check();
     const interval = setInterval(check, 30000);
     return () => clearInterval(interval);
@@ -152,54 +143,24 @@ export function FloatingNotification({ onClick }: { onClick?: () => void }) {
     <motion.div
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      whileHover={{ scale: 1.05 }}
+      whileHover={{ scale: 1.03 }}
       onClick={onClick}
       className="fixed bottom-20 right-4 z-40 cursor-pointer"
     >
-      <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
-        <span className="text-sm font-semibold">{fomo}</span>
+      <div
+        className="px-4 py-2 rounded-full shadow-lg flex items-center gap-2 border"
+        style={{
+          backgroundColor: 'var(--accent)',
+          color: 'var(--on-accent)',
+          borderColor: 'var(--border)',
+        }}
+      >
+        <span className="text-xs font-semibold">{fomo}</span>
       </div>
     </motion.div>
   );
 }
 
-// Motivation toast that appears periodically
 export function MotivationToast() {
-  const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    const showMotivation = () => {
-      const msg = psychologicalHooks.getMotivationMessage();
-      setMessage(msg);
-      
-      // Auto-hide after 5 seconds
-      setTimeout(() => setMessage(null), 5000);
-    };
-
-    // Show first motivation after 30 seconds
-    const initialTimeout = setTimeout(showMotivation, 30000);
-    
-    // Then show every 2 minutes
-    const interval = setInterval(showMotivation, 120000);
-
-    return () => {
-      clearTimeout(initialTimeout);
-      clearInterval(interval);
-    };
-  }, []);
-
-  if (!message) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 50 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 50 }}
-      className="fixed top-20 right-4 z-40 max-w-xs"
-    >
-      <div className="bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg">
-        <p className="text-sm">{message}</p>
-      </div>
-    </motion.div>
-  );
+  return null;
 }

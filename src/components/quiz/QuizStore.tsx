@@ -1,36 +1,32 @@
 /**
  * Quiz Store UI Component
- * Power-up store where users spend XP to buy items
+ * Power-up store backed by single-source useQuizEconomy store
+ * Features 3 clearly labeled tabs (Basic | Boosters | Premium), zero title truncation,
+ * crisp Lucide icons, and theme-token styling across all 8 Royal Themes.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { quizStore } from '@/lib/quiz-store';
-import { quizManager } from '@/lib/quiz-manager';
-import { StoreItem, StoreItemCategory } from '@/data/quiz-store-data';
-import { ALL_STORE_ITEMS } from '@/data/store-catalog';
-import { QuizStats } from '@/data/enhanced-quiz-data';
+import { useQuizEconomy } from '@/lib/quiz-economy';
+import { StoreItem } from '@/data/quiz-store-data';
+import { QuizLucideIcon } from '@/components/quiz/QuizLucideIcon';
 import {
-  Sparkles,
-  Star,
-  Lock,
+  ArrowLeft,
   Check,
-  X,
   Coins,
-  ShoppingBag,
-  TrendingUp,
-  Zap,
-  Shield,
-  Clock,
-  Package,
   Crown,
   Info,
-  AlertCircle
+  Lock,
+  Package,
+  ShoppingBag,
+  Sparkles,
+  Zap,
 } from 'lucide-react';
 import {
   Dialog,
@@ -41,6 +37,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+
+type StoreTabKey = 'basic' | 'boosters' | 'premium';
 
 interface StoreItemWithStatus extends StoreItem {
   owned: number;
@@ -53,30 +51,46 @@ interface QuizStoreProps {
 }
 
 export function QuizStore({ onClose }: QuizStoreProps) {
-  const [stats, setStats] = useState<QuizStats | null>(null);
-  const [storeItems, setStoreItems] = useState<StoreItemWithStatus[]>([]);
+  const { xp, level, levelProgress, powerups, badges, stats } = useQuizEconomy();
   const [selectedItem, setSelectedItem] = useState<StoreItemWithStatus | null>(null);
-  const [activeTab, setActiveTab] = useState<StoreItemCategory>('basic');
+  const [activeTab, setActiveTab] = useState<StoreTabKey>('basic');
   const [purchaseConfirmOpen, setPurchaseConfirmOpen] = useState(false);
   const [purchaseAnimating, setPurchaseAnimating] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadStoreData();
-  }, []);
+  // Recompute whenever unified economy state updates
+  const storeItems = useMemo<StoreItemWithStatus[]>(() => {
+    void xp;
+    void level;
+    void powerups;
+    void badges;
+    void stats.categoryMastery;
+    return quizStore.getStoreItems();
+  }, [xp, level, powerups, badges, stats.categoryMastery]);
 
-  const loadStoreData = () => {
-    const currentStats = quizManager.getStats();
-    setStats(currentStats);
-    setStoreItems(quizStore.getStoreItems());
-  };
+  const itemsByTab = useMemo<Record<StoreTabKey, StoreItemWithStatus[]>>(() => {
+    return {
+      basic: storeItems.filter(
+        (i) => i.type !== 'booster' && i.type !== 'protection' && i.category === 'basic'
+      ),
+      boosters: storeItems.filter(
+        (i) => i.type === 'booster' || i.type === 'protection'
+      ),
+      premium: storeItems.filter(
+        (i) =>
+          i.type !== 'booster' &&
+          i.type !== 'protection' &&
+          (i.category === 'premium' || i.category === 'legendary')
+      ),
+    };
+  }, [storeItems]);
 
-  const handlePurchase = async (item: StoreItemWithStatus) => {
+  const handlePurchase = (item: StoreItemWithStatus) => {
     if (!item.unlocked) {
       toast({
         title: 'Locked',
-        description: 'You don\'t meet the requirements to buy this item yet.',
-        variant: 'destructive'
+        description: "You don't meet the level requirement for this item yet.",
+        variant: 'destructive',
       });
       return;
     }
@@ -84,8 +98,8 @@ export function QuizStore({ onClose }: QuizStoreProps) {
     if (!item.canAfford) {
       toast({
         title: 'Not Enough XP',
-        description: `You need ${item.cost - (stats?.xp || 0)} more XP to buy this.`,
-        variant: 'destructive'
+        description: `Need ${item.cost - xp} XP more to buy ${item.name}.`,
+        variant: 'destructive',
       });
       return;
     }
@@ -93,8 +107,8 @@ export function QuizStore({ onClose }: QuizStoreProps) {
     if (item.owned >= item.maxInventory) {
       toast({
         title: 'Inventory Full',
-        description: 'You can\'t carry more of this item.',
-        variant: 'destructive'
+        description: "You can't carry more of this item.",
+        variant: 'destructive',
       });
       return;
     }
@@ -105,7 +119,6 @@ export function QuizStore({ onClose }: QuizStoreProps) {
 
   const confirmPurchase = () => {
     if (!selectedItem) return;
-
     setPurchaseAnimating(true);
 
     setTimeout(() => {
@@ -113,52 +126,21 @@ export function QuizStore({ onClose }: QuizStoreProps) {
 
       if (result.success) {
         toast({
-          title: 'Purchase Successful! 🎉',
-          description: `You bought ${selectedItem.name} for ${selectedItem.cost} XP!`,
+          title: 'Purchase Successful',
+          description: `Bought ${selectedItem.name} for ${selectedItem.cost} XP.`,
         });
-        loadStoreData();
       } else {
         toast({
           title: 'Purchase Failed',
           description: result.message || 'Something went wrong.',
-          variant: 'destructive'
+          variant: 'destructive',
         });
       }
 
       setPurchaseAnimating(false);
       setPurchaseConfirmOpen(false);
       setSelectedItem(null);
-    }, 500);
-  };
-
-  const getCategoryColor = (category: StoreItemCategory) => {
-    switch (category) {
-      case 'basic': return 'bg-slate-500';
-      case 'premium': return 'bg-amber-500';
-      case 'legendary': return 'bg-purple-500';
-      case 'booster': return 'bg-blue-500';
-      default: return 'bg-slate-500';
-    }
-  };
-
-  const getCategoryIcon = (category: StoreItemCategory) => {
-    switch (category) {
-      case 'basic': return <Package className="w-4 h-4" />;
-      case 'premium': return <Star className="w-4 h-4" />;
-      case 'legendary': return <Crown className="w-4 h-4" />;
-      case 'booster': return <Zap className="w-4 h-4" />;
-      default: return <Package className="w-4 h-4" />;
-    }
-  };
-
-  const getTypeIcon = (type: StoreItem['type']) => {
-    switch (type) {
-      case 'powerup': return <Zap className="w-4 h-4 text-yellow-500" />;
-      case 'booster': return <TrendingUp className="w-4 h-4 text-blue-500" />;
-      case 'protection': return <Shield className="w-4 h-4 text-[var(--accent)]" />;
-      case 'cosmetic': return <Sparkles className="w-4 h-4 text-pink-500" />;
-      default: return <Package className="w-4 h-4" />;
-    }
+    }, 250);
   };
 
   const getRequirementText = (item: StoreItemWithStatus) => {
@@ -170,213 +152,330 @@ export function QuizStore({ onClose }: QuizStoreProps) {
     return null;
   };
 
-  const itemsByCategory = {
-    basic: storeItems.filter(i => i.category === 'basic'),
-    premium: storeItems.filter(i => i.category === 'premium'),
-    legendary: storeItems.filter(i => i.category === 'legendary'),
-    booster: storeItems.filter(i => i.category === 'booster'),
+  const getEffectSummary = (item: StoreItem): string | null => {
+    if (!item.effect) return null;
+    switch (item.effect.type) {
+      case 'multiplier':
+        return `2x points for ${item.effect.duration} questions`;
+      case 'addTime':
+        return `+${item.effect.value}s to timer`;
+      case 'removeWrong':
+        return `Removes ${item.effect.value} wrong answers`;
+      case 'freezeTime':
+        return `Pauses timer for ${item.effect.value}s`;
+      case 'streakProtection':
+        return 'Protects your streak';
+      case 'autoCorrect':
+        return `Auto-corrects ${item.effect.value} questions`;
+      case 'xpMultiplier':
+        return `+${Math.round((item.effect.value - 1) * 100)}% XP earned`;
+      default:
+        return item.effect.duration && item.type === 'booster'
+          ? `Lasts ${Math.round(item.effect.duration / 60)} min`
+          : null;
+    }
   };
 
   return (
-    <div className="min-h-screen pb-4 bg-transparent relative z-10" style={{ background: "transparent" }}>
+    <div
+      className="min-h-screen pb-[calc(var(--player-inset,0px)+24px)] bg-transparent relative z-10"
+      style={{ background: 'transparent' }}
+    >
       {/* Header */}
       <div
-        className="sticky top-0 z-50 sticky-glass-header safe-top"
+        className="sticky top-0 z-40 sticky-glass-header safe-top border-b"
+        style={{ borderColor: 'var(--border)' }}
       >
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl">
-                <ShoppingBag className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">Power-Up Store</h1>
-                <p className="text-sm text-muted-foreground">Spend XP to buy awesome power-ups!</p>
+        <div className="max-w-lg mx-auto px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Back to Quiz Lobby"
+                onClick={onClose}
+                className="w-9 h-9 rounded-full border shrink-0"
+                style={{
+                  backgroundColor: 'var(--surface-2)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-[var(--text-primary)] leading-tight">
+                  Power-Up Store
+                </h1>
+                <p className="text-xs text-[var(--text-secondary)] leading-tight">
+                  Spend XP on quiz power-ups
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* XP Display */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 rounded-full">
-                <Coins className="w-5 h-5 text-amber-500" />
-                <span className="font-bold text-amber-700 dark:text-amber-300">
-                  {stats?.xp?.toLocaleString() || 0} XP
-                </span>
-              </div>
-
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-5 h-5" />
-              </Button>
+            {/* Live Single-Source XP Chip */}
+            <div
+              data-testid="store-xp-balance"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border shrink-0"
+              style={{
+                backgroundColor: 'var(--surface-2)',
+                borderColor: 'var(--accent)',
+                color: 'var(--accent-text)',
+              }}
+            >
+              <Coins className="w-4 h-4 shrink-0" />
+              <span className="text-xs font-bold whitespace-nowrap">
+                {xp.toLocaleString()} XP
+              </span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {/* Level Progress */}
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
-          <CardContent className="p-4">
+      <div className="max-w-lg mx-auto px-3 py-4 space-y-4">
+        {/* Level Progress Card */}
+        <Card
+          className="border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--border)',
+          }}
+        >
+          <CardContent className="p-3.5">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Crown className="w-5 h-5 text-primary" />
-                <span className="font-bold">Level {stats?.level || 1}</span>
+                <Crown className="w-4 h-4 text-[var(--accent-text)]" />
+                <span className="font-bold text-sm text-[var(--text-primary)]">
+                  Level {level}
+                </span>
               </div>
-              <span className="text-sm text-muted-foreground">
-                {quizManager.getLevelProgress().remaining} XP to next level
+              <span className="text-xs text-[var(--text-secondary)]">
+                {levelProgress.remaining} XP to next level
               </span>
             </div>
-            <Progress value={quizManager.getLevelProgress().progress} className="h-2" />
+            <Progress value={levelProgress.progress} className="h-2" />
           </CardContent>
         </Card>
 
-        {/* Category Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StoreItemCategory)}>
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="basic" className="flex items-center gap-2">
-              <Package className="w-4 h-4" />
-              <span className="hidden sm:inline">Basic</span>
+        {/* 3 Labeled Store Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StoreTabKey)}>
+          <TabsList
+            className="grid grid-cols-3 w-full h-10 p-1 border"
+            style={{
+              backgroundColor: 'var(--surface)',
+              borderColor: 'var(--border)',
+            }}
+          >
+            <TabsTrigger
+              value="basic"
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[var(--accent)] data-[state=active]:text-[var(--on-accent)]"
+            >
+              <Package className="w-3.5 h-3.5 shrink-0" />
+              <span>Basic</span>
             </TabsTrigger>
-            <TabsTrigger value="premium" className="flex items-center gap-2">
-              <Star className="w-4 h-4" />
-              <span className="hidden sm:inline">Premium</span>
+            <TabsTrigger
+              value="boosters"
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[var(--accent)] data-[state=active]:text-[var(--on-accent)]"
+            >
+              <Zap className="w-3.5 h-3.5 shrink-0" />
+              <span>Boosters</span>
             </TabsTrigger>
-            <TabsTrigger value="legendary" className="flex items-center gap-2">
-              <Crown className="w-4 h-4" />
-              <span className="hidden sm:inline">Legendary</span>
-            </TabsTrigger>
-            <TabsTrigger value="booster" className="flex items-center gap-2">
-              <Zap className="w-4 h-4" />
-              <span className="hidden sm:inline">Boosters</span>
+            <TabsTrigger
+              value="premium"
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[var(--accent)] data-[state=active]:text-[var(--on-accent)]"
+            >
+              <Crown className="w-3.5 h-3.5 shrink-0" />
+              <span>Premium</span>
             </TabsTrigger>
           </TabsList>
 
-          {(['basic', 'premium', 'legendary', 'booster'] as StoreItemCategory[]).map((category) => (
-            <TabsContent key={category} value={category}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {(['basic', 'boosters', 'premium'] as StoreTabKey[]).map((tabKey) => (
+            <TabsContent key={tabKey} value={tabKey} className="mt-3">
+              <div className="grid grid-cols-1 gap-3">
                 <AnimatePresence mode="popLayout">
-                  {itemsByCategory[category].map((item) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      whileHover={{ scale: item.unlocked && item.canAfford ? 1.02 : 1 }}
-                    >
-                      <Card className={`overflow-hidden transition-all ${
-                        !item.unlocked ? 'opacity-60' : ''
-                      } ${item.owned >= item.maxInventory ? 'ring-2 ring-[var(--success)]/50' : ''}`}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-4">
-                            {/* Icon */}
-                            <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-                              getCategoryColor(category)
-                            } text-white`}>
-                              {item.icon}
-                            </div>
+                  {itemsByTab[tabKey].map((item) => {
+                    const effectText = getEffectSummary(item);
+                    const deficit = Math.max(0, item.cost - xp);
 
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold truncate">{item.name}</h3>
-                                {getTypeIcon(item.type)}
-                              </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2">
-                                {item.description}
-                              </p>
-
-                              {/* Requirements */}
-                              {!item.unlocked && getRequirementText(item) && (
-                                <div className="flex items-center gap-1 mt-2 text-xs text-orange-500">
-                                  <Lock className="w-3 h-3" />
-                                  <span>{getRequirementText(item)}</span>
-                                </div>
-                              )}
-
-                              {/* Inventory */}
-                              <div className="flex items-center gap-2 mt-2">
-                                <Badge variant="secondary" className="text-xs">
-                                  <Package className="w-3 h-3 mr-1" />
-                                  {item.owned}/{item.maxInventory}
-                                </Badge>
-                              </div>
-                            </div>
-
-                            {/* Price & Action */}
-                            <div className="flex flex-col items-end gap-2">
-                              <div className={`flex items-center gap-1 font-bold ${
-                                item.canAfford ? 'text-amber-600' : 'text-red-500'
-                              }`}>
-                                <Coins className="w-4 h-4" />
-                                {item.cost}
-                              </div>
-
-                              <Button
-                                size="sm"
-                                onClick={() => handlePurchase(item)}
-                                disabled={!item.unlocked || !item.canAfford || item.owned >= item.maxInventory}
-                                variant={item.owned >= item.maxInventory ? 'outline' : 'default'}
+                    return (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Card
+                          className={`overflow-hidden border transition-all ${
+                            !item.unlocked ? 'opacity-70' : ''
+                          }`}
+                          style={{
+                            backgroundColor: 'var(--surface)',
+                            borderColor:
+                              item.owned >= item.maxInventory
+                                ? 'var(--success)'
+                                : 'var(--border)',
+                          }}
+                        >
+                          <CardContent className="p-3.5">
+                            <div className="flex items-start gap-3">
+                              {/* Lucide Item Icon */}
+                              <div
+                                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border"
+                                style={{
+                                  backgroundColor: 'var(--accent-soft)',
+                                  borderColor: 'var(--border)',
+                                  color: 'var(--accent-text)',
+                                }}
                               >
-                                {item.owned >= item.maxInventory ? (
-                                  <>
-                                    <Check className="w-4 h-4 mr-1" />
-                                    Max
-                                  </>
-                                ) : !item.unlocked ? (
-                                  <>
-                                    <Lock className="w-4 h-4 mr-1" />
-                                    Lock
-                                  </>
-                                ) : (
-                                  'Buy'
-                                )}
-                              </Button>
-                            </div>
-                          </div>
+                                <QuizLucideIcon id={item.id} className="w-5 h-5" />
+                              </div>
 
-                          {/* Effect Details */}
-                          {item.effect && (
-                            <div className="mt-3 pt-3 border-t">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Info className="w-3 h-3" />
-                                <span>
-                                  {item.effect.type === 'multiplier' && `2x points for ${item.effect.duration} questions`}
-                                  {item.effect.type === 'addTime' && `+${item.effect.value}s to timer`}
-                                  {item.effect.type === 'removeWrong' && `Removes ${item.effect.value} wrong answers`}
-                                  {item.effect.type === 'freezeTime' && `Pauses timer for ${item.effect.value}s`}
-                                  {item.effect.type === 'streakProtection' && 'Protects your streak'}
-                                  {item.effect.type === 'autoCorrect' && `Auto-corrects ${item.effect.value} questions`}
-                                  {item.effect.type === 'xpMultiplier' && `+${Math.round((item.effect.value - 1) * 100)}% XP earned`}
-                                  {item.effect.duration && item.type === 'booster' && ` • Lasts ${Math.round(item.effect.duration / 60)} min`}
-                                </span>
+                              {/* Title + Description (2-line safe wrap, zero truncate) */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                    <h3 className="text-sm font-semibold leading-snug text-[var(--text-primary)]">
+                                      {item.name}
+                                    </h3>
+                                    {item.category === 'legendary' && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[10px] px-1.5 py-0 border"
+                                        style={{
+                                          backgroundColor: 'var(--accent-soft)',
+                                          borderColor: 'var(--border)',
+                                          color: 'var(--accent-text)',
+                                        }}
+                                      >
+                                        Legendary
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  <div
+                                    className="flex items-center gap-1 text-xs font-bold shrink-0"
+                                    style={{
+                                      color: item.canAfford
+                                        ? 'var(--accent-text)'
+                                        : 'var(--danger)',
+                                    }}
+                                  >
+                                    <Coins className="w-3.5 h-3.5 shrink-0" />
+                                    <span>{item.cost} XP</span>
+                                  </div>
+                                </div>
+
+                                <p className="text-xs text-[var(--text-secondary)] mt-1 leading-snug">
+                                  {item.description}
+                                </p>
+
+                                {!item.unlocked && getRequirementText(item) && (
+                                  <div className="flex items-center gap-1 mt-1.5 text-xs text-[var(--danger)]">
+                                    <Lock className="w-3 h-3 shrink-0" />
+                                    <span>{getRequirementText(item)}</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between gap-2 mt-2.5">
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs border"
+                                    style={{
+                                      backgroundColor: 'var(--surface-2)',
+                                      borderColor: 'var(--border)',
+                                      color: 'var(--text-primary)',
+                                    }}
+                                  >
+                                    <Package className="w-3 h-3 mr-1" />
+                                    Owned: {item.owned}/{item.maxInventory}
+                                  </Badge>
+
+                                  <Button
+                                    size="sm"
+                                    data-testid={`buy-${item.id}`}
+                                    onClick={() => handlePurchase(item)}
+                                    disabled={
+                                      !item.unlocked ||
+                                      !item.canAfford ||
+                                      item.owned >= item.maxInventory
+                                    }
+                                    className="h-8 px-3 text-xs font-semibold shrink-0"
+                                    style={
+                                      item.unlocked &&
+                                      item.canAfford &&
+                                      item.owned < item.maxInventory
+                                        ? {
+                                            backgroundColor: 'var(--accent)',
+                                            color: 'var(--on-accent)',
+                                          }
+                                        : {
+                                            backgroundColor: 'var(--surface-2)',
+                                            color: 'var(--text-secondary)',
+                                            borderColor: 'var(--border)',
+                                          }
+                                    }
+                                  >
+                                    {item.owned >= item.maxInventory ? (
+                                      <>
+                                        <Check className="w-3.5 h-3.5 mr-1" />
+                                        Max
+                                      </>
+                                    ) : !item.unlocked ? (
+                                      <>
+                                        <Lock className="w-3.5 h-3.5 mr-1" />
+                                        Locked
+                                      </>
+                                    ) : !item.canAfford ? (
+                                      <span>Need {deficit} XP more</span>
+                                    ) : (
+                                      <span>Buy</span>
+                                    )}
+                                  </Button>
+                                </div>
                               </div>
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
+
+                            {effectText && (
+                              <div
+                                className="mt-2.5 pt-2 border-t flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]"
+                                style={{ borderColor: 'var(--border)' }}
+                              >
+                                <Sparkles className="w-3 h-3 text-[var(--accent-text)] shrink-0" />
+                                <span>{effectText}</span>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
                 </AnimatePresence>
               </div>
             </TabsContent>
           ))}
         </Tabs>
 
-        {/* Quick Stats */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Info className="w-4 h-4" />
+        {/* Compact Store Tips Footer */}
+        <Card
+          className="border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--border)',
+          }}
+        >
+          <CardHeader className="pb-1.5 pt-3 px-3.5">
+            <CardTitle className="text-xs font-semibold flex items-center gap-1.5 text-[var(--text-primary)]">
+              <Info className="w-3.5 h-3.5 text-[var(--accent-text)]" />
               Store Tips
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Earn XP by answering quiz questions correctly</li>
-              <li>• Build streaks for bonus XP rewards</li>
-              <li>• Premium power-ups unlock at higher levels</li>
-              <li>• Boosters give temporary effects for multiple quizzes</li>
-              <li>• Check back daily for free rewards!</li>
+          <CardContent className="pt-0 pb-3 px-3.5">
+            <ul className="text-xs text-[var(--text-secondary)] space-y-1">
+              <li>• Earn XP by answering quiz questions and building combos</li>
+              <li>• Higher levels unlock Premium &amp; Legendary power-ups</li>
+              <li>• Check Daily Rewards and Mystery Boxes for free bonuses</li>
             </ul>
           </CardContent>
         </Card>
@@ -384,49 +483,71 @@ export function QuizStore({ onClose }: QuizStoreProps) {
 
       {/* Purchase Confirmation Dialog */}
       <Dialog open={purchaseConfirmOpen} onOpenChange={setPurchaseConfirmOpen}>
-        <DialogContent>
+        <DialogContent
+          className="max-w-[330px] rounded-2xl border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--border)',
+            color: 'var(--text-primary)',
+          }}
+        >
           <DialogHeader>
-            <DialogTitle>Confirm Purchase</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to buy this item?
+            <DialogTitle className="text-base">Confirm Purchase</DialogTitle>
+            <DialogDescription className="text-xs text-[var(--text-secondary)]">
+              Add this item to your shared quiz inventory?
             </DialogDescription>
           </DialogHeader>
 
           {selectedItem && (
-            <div className="flex items-center gap-4 py-4">
-              <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-3xl ${
-                getCategoryColor(selectedItem.category)
-              } text-white`}>
-                {selectedItem.icon}
+            <div className="flex items-center gap-3 py-2">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center border shrink-0"
+                style={{
+                  backgroundColor: 'var(--accent-soft)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                <QuizLucideIcon id={selectedItem.id} className="w-6 h-6" />
               </div>
-              <div>
-                <h3 className="font-semibold text-lg">{selectedItem.name}</h3>
-                <p className="text-sm text-muted-foreground">{selectedItem.description}</p>
-                <div className="flex items-center gap-1 mt-1 font-bold text-amber-600">
-                  <Coins className="w-4 h-4" />
-                  {selectedItem.cost} XP
+              <div className="min-w-0">
+                <h3 className="font-semibold text-sm text-[var(--text-primary)] leading-snug">
+                  {selectedItem.name}
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-snug">
+                  {selectedItem.description}
+                </p>
+                <div className="flex items-center gap-1 mt-1 text-xs font-bold text-[var(--accent-text)]">
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>{selectedItem.cost} XP</span>
                 </div>
               </div>
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPurchaseConfirmOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPurchaseConfirmOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={confirmPurchase} disabled={purchaseAnimating}>
+            <Button
+              size="sm"
+              data-testid="confirm-purchase-btn"
+              onClick={confirmPurchase}
+              disabled={purchaseAnimating}
+              style={{
+                backgroundColor: 'var(--accent)',
+                color: 'var(--on-accent)',
+              }}
+            >
               {purchaseAnimating ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"
-                  />
-                  Processing...
-                </>
+                'Processing...'
               ) : (
                 <>
-                  <ShoppingBag className="w-4 h-4 mr-2" />
+                  <ShoppingBag className="w-3.5 h-3.5 mr-1.5" />
                   Confirm Purchase
                 </>
               )}

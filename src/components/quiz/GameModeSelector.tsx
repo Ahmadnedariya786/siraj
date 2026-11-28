@@ -5,21 +5,19 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { quizStore } from '@/lib/quiz-store';
-import { quizManager } from '@/lib/quiz-manager';
+import { useQuizEconomy } from '@/lib/quiz-economy';
 import { QuizSession, DailyChallenge } from '@/data/quiz-store-data';
 import {
-  Clock,
   Flame,
   Calendar,
   Target,
   Trophy,
   Zap,
   TrendingUp,
-  Star,
   ChevronRight,
   Lock,
   Sparkles,
@@ -31,7 +29,7 @@ import {
 export type GameMode = 'classic' | 'timeAttack' | 'survival' | 'daily' | 'category';
 
 interface GameModeSelectorProps {
-  onSelectMode: (mode: GameMode, config?: any) => void;
+  onSelectMode: (mode: GameMode, config?: { difficulty?: string }) => void;
   onBack: () => void;
 }
 
@@ -49,7 +47,7 @@ interface ModeConfig {
 }
 
 export function GameModeSelector({ onSelectMode, onBack }: GameModeSelectorProps) {
-  const [userLevel, setUserLevel] = useState(1);
+  const { level: userLevel } = useQuizEconomy();
   const [dailyChallenge, setDailyChallenge] = useState<DailyChallenge | null>(null);
   const [bestScores, setBestScores] = useState<Record<GameMode, number>>({
     classic: 0,
@@ -60,8 +58,6 @@ export function GameModeSelector({ onSelectMode, onBack }: GameModeSelectorProps
   });
 
   useEffect(() => {
-    const stats = quizManager.getStats();
-    setUserLevel(stats.level);
     setDailyChallenge(quizStore.getDailyChallenge());
 
     // Load best scores from history
@@ -174,7 +170,10 @@ export function GameModeSelector({ onSelectMode, onBack }: GameModeSelectorProps
   const isUnlocked = (mode: ModeConfig) => userLevel >= mode.unlockLevel;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
+    <div
+      className="min-h-screen pb-[calc(var(--player-inset,0px)+24px)] bg-transparent p-4"
+      style={{ background: 'transparent' }}
+    >
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
