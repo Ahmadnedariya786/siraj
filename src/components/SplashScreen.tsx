@@ -151,11 +151,11 @@ export function SplashScreen({ animationsEnabled, showGreeting, onComplete }: Sp
 
         const failsafeTimer = setTimeout(() => {
             beginFadeAndDismiss();
-        }, Math.max(200, SPLASH_HARD_CAP_MS - 220));
+        }, Math.max(200, SPLASH_HARD_CAP_MS - 260));
 
         const hardDeadlineTimer = setTimeout(() => {
             triggerComplete();
-        }, Math.max(300, SPLASH_HARD_CAP_MS - 40));
+        }, Math.max(300, SPLASH_HARD_CAP_MS - 80));
 
         if (!hasPrePaintSplash && !shouldAnimate) {
             const fastTimer = setTimeout(() => {

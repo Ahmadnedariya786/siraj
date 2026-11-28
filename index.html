@@ -161,8 +161,8 @@
         }
         window.__NOOR_DISMISS_SPLASH = dismissInitialSplash;
 
-        // Hard cap 900ms unconditional failsafe: smoothly fades splash and releases pointer/scroll locks
-        setTimeout(dismissInitialSplash, 900);
+        // Hard cap 800ms unconditional failsafe: smoothly fades splash and releases pointer/scroll locks
+        setTimeout(dismissInitialSplash, 800);
         window.addEventListener('noor:boot-p0-complete', function () {
           dismissInitialSplash();
         }, { once: true });

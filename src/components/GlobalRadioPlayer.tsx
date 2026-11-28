@@ -74,6 +74,19 @@ export function GlobalRadioPlayer() {
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 2;
   const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const mirrorTriedForRef = useRef<string | null>(null);
+  const fallbackTriedForRef = useRef<string | null>(null);
+
+  const getMirrorStreamUrl = (url: string): string | null => {
+    const cleanUrl = (url || '').split('?')[0];
+    if (cleanUrl.includes('https://backup.qurango.net/radio/')) {
+      return cleanUrl.replace('https://backup.qurango.net/radio/', 'https://qurango.net/radio/');
+    }
+    if (cleanUrl.includes('https://qurango.net/radio/')) {
+      return cleanUrl.replace('https://qurango.net/radio/', 'https://backup.qurango.net/radio/');
+    }
+    return null;
+  };
 
   // Fallback stream when an audio stream hangs or is unreachable
   const FALLBACK_STREAM = {
@@ -237,7 +250,7 @@ export function GlobalRadioPlayer() {
           String(globalRadio.currentStation.id),
           globalRadio.currentStation.name,
           additionalTime
-        ).catch(err => console.error('Failed to record listening time:', err));
+        ).catch(err => console.warn('[GlobalRadioPlayer] Failed to record listening time:', err instanceof Error ? err.message : String(err)));
       }
     };
 
@@ -258,47 +271,69 @@ export function GlobalRadioPlayer() {
         return;
       }
 
-      // Ignore error if it's not the currently expected station (happens on fast switching)
+      // Ignore error if it's not the currently expected station (or its active mirror)
       const currentRequestedUrl = globalRadio.currentStation?.url?.replace("http://", "https://") || "";
-      if (currentRequestedUrl && !audioElem.src.includes(currentRequestedUrl)) {
+      const expectedMirrorUrl = currentRequestedUrl ? (getMirrorStreamUrl(currentRequestedUrl) || "") : "";
+      const matchesExpectedStation =
+        !currentRequestedUrl ||
+        audioElem.src.includes(currentRequestedUrl) ||
+        (expectedMirrorUrl.length > 0 && audioElem.src.includes(expectedMirrorUrl));
+      if (!matchesExpectedStation) {
         return;
       }
 
       isTransitioning.current = false;
-      console.error('Global radio error:', audioElem.error);
+      console.warn('[GlobalRadioPlayer] Audio stream warning:', {
+        code: audioElem.error?.code ?? null,
+        src: audioElem.currentSrc || audioElem.src,
+      });
 
-      // Handle Automatic Retry with format fallback
-      if (retryCount < MAX_RETRIES && audioElem.error?.code !== MediaError.MEDIA_ERR_ABORTED) {
-        console.log(`Retrying playback... Attempt ${retryCount + 1}/${MAX_RETRIES}`);
-        setRetryCount(prev => prev + 1);
-
-        // Brief delay before retrying
-        setTimeout(() => {
-          if (globalRadio.isPlaying && globalRadio.currentStation) {
-            const currentUrl = audioElem.src.split('?')[0];
-            
-            // Try different formats on retry
-            let retryUrl = currentUrl;
-            if (retryCount === 0) {
-              // First retry: try adding format extension
-              if (!currentUrl.includes('.mp3') && !currentUrl.includes('.aac') && !currentUrl.includes('.m3u8')) {
-                retryUrl = `${currentUrl}.mp3`;
-              }
-            } else if (retryCount === 1) {
-              // Second retry: try with cache buster
-              retryUrl = `${currentUrl}?cb=${Date.now()}`;
+      const isAborted = audioElem.error?.code === MediaError.MEDIA_ERR_ABORTED;
+      if (!isAborted) {
+        // Step 1: Try alternate mirror host once before consuming generic retries (e.g. backup.qurango.net <-> qurango.net)
+        const mirrorUrl = getMirrorStreamUrl(audioElem.src);
+        if (mirrorUrl && mirrorTriedForRef.current !== (currentRequestedUrl || audioElem.src)) {
+          mirrorTriedForRef.current = currentRequestedUrl || audioElem.src;
+          setRetryCount(prev => prev + 1);
+          console.warn('[GlobalRadioPlayer] Failing over to mirror host:', mirrorUrl);
+          audioElem.src = mirrorUrl;
+          audioElem.load();
+          audioElem.play().catch(playErr => {
+            if (playErr?.name !== 'AbortError') {
+              console.warn('[GlobalRadioPlayer] Mirror playback retry deferred:', playErr?.message || playErr?.name || 'unknown');
             }
-            
-            audioElem.src = retryUrl;
-            audioElem.load();
-            audioElem.play().catch(e => {
-              if (e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
-                console.warn('Retry play failed:', e);
+          });
+          return;
+        }
+
+        // Step 2: Handle automatic format/cache-buster retry
+        if (retryCount < MAX_RETRIES) {
+          console.warn(`[GlobalRadioPlayer] Retrying playback (${retryCount + 1}/${MAX_RETRIES})...`);
+          setRetryCount(prev => prev + 1);
+
+          setTimeout(() => {
+            if (globalRadio.isPlaying && globalRadio.currentStation) {
+              const currentUrl = audioElem.src.split('?')[0];
+              let retryUrl = currentUrl;
+              if (retryCount === 0) {
+                if (!currentUrl.includes('.mp3') && !currentUrl.includes('.aac') && !currentUrl.includes('.m3u8')) {
+                  retryUrl = `${currentUrl}.mp3`;
+                }
+              } else if (retryCount === 1) {
+                retryUrl = `${currentUrl}?cb=${Date.now()}`;
               }
-            });
-          }
-        }, 1500);
-        return;
+
+              audioElem.src = retryUrl;
+              audioElem.load();
+              audioElem.play().catch(playErr => {
+                if (playErr?.name !== 'AbortError' && playErr?.name !== 'NotSupportedError') {
+                  console.warn('[GlobalRadioPlayer] Retry play warning:', playErr?.message || playErr?.name || 'unknown');
+                }
+              });
+            }
+          }, 1200);
+          return;
+        }
       }
 
       if (watchdogTimerRef.current) {
@@ -306,9 +341,15 @@ export function GlobalRadioPlayer() {
         watchdogTimerRef.current = null;
       }
 
-      // If retries exhausted and not already on fallback stream, switch seamlessly to fallback
-      if (globalRadio.currentStation && globalRadio.currentStation.url !== FALLBACK_STREAM.url) {
-        console.warn("Retries exhausted, falling back to stable radio stream.");
+      // Step 3: If retries exhausted and not already on fallback stream, switch once to fallback stream
+      if (
+        !isAborted &&
+        globalRadio.currentStation &&
+        globalRadio.currentStation.url !== FALLBACK_STREAM.url &&
+        fallbackTriedForRef.current !== (currentRequestedUrl || audioElem.src)
+      ) {
+        fallbackTriedForRef.current = currentRequestedUrl || audioElem.src;
+        console.warn('[GlobalRadioPlayer] Retries exhausted, switching to stable fallback stream.');
         setRetryCount(0);
         globalRadio.playRadio(FALLBACK_STREAM);
         toast({
@@ -318,34 +359,15 @@ export function GlobalRadioPlayer() {
         return;
       }
 
+      // Step 4: Clean stop (zero infinite spinner) + friendly user message
       globalRadio.updateRadioState({ isPlaying: false });
       setIsLoading(false);
       setRetryCount(0);
 
-      let errorMessage = "Failed to play radio station.";
-      if (audioElem.error) {
-        switch (audioElem.error.code) {
-          case MediaError.MEDIA_ERR_ABORTED:
-            errorMessage = "Playback was aborted.";
-            break;
-          case MediaError.MEDIA_ERR_NETWORK:
-            errorMessage = "Network error. Please check your internet connection.";
-            break;
-          case MediaError.MEDIA_ERR_DECODE:
-            errorMessage = "Audio format not supported. Trying alternative format...";
-            break;
-          case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-            errorMessage = "Radio stream not available or format not supported.";
-            break;
-        }
-      }
-
-      // Only show toast if it's not an abort error and we were trying to play
-      if (audioElem.error?.code !== MediaError.MEDIA_ERR_ABORTED) {
+      if (!isAborted) {
         toast({
-          title: "Radio Error",
-          description: errorMessage,
-          variant: "destructive"
+          title: "Radio Unavailable",
+          description: "Radio station temporarily unavailable — please try another station",
         });
       }
     };
@@ -395,14 +417,17 @@ export function GlobalRadioPlayer() {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
     debounceTimerRef.current = setTimeout(async () => {
-      // Check if we need to change the source
-      // We check if the current station URL matches what we expect
-      const currentStationUrl = globalRadio.currentStation?.url;
-      const isDifferentStation = !audio.src.includes(secureUrl) && !hlsRef.current;
+      // Check if we need to change the source (also recognize active mirror URL for same station)
+      const mirrorCandidate = getMirrorStreamUrl(secureUrl);
+      const isMatchingSource =
+        audio.src.includes(secureUrl) ||
+        (mirrorCandidate !== null && audio.src.includes(mirrorCandidate));
+      const isDifferentStation = !isMatchingSource && !hlsRef.current;
       const isSwitchingToHls = secureUrl.toLowerCase().includes(".m3u8") && !hlsRef.current;
       const isSwitchingFromHls = !secureUrl.toLowerCase().includes(".m3u8") && hlsRef.current;
 
       if (isDifferentStation || isSwitchingToHls || isSwitchingFromHls) {
+        mirrorTriedForRef.current = null;
         if (isTransitioning.current) {
           // Retry later if transitioning
           debounceTimerRef.current = setTimeout(() => {
@@ -434,7 +459,7 @@ export function GlobalRadioPlayer() {
                   playPromiseRef.current = promise;
                   await promise;
                 } catch (e: any) {
-                  if (e.name !== 'AbortError') console.error('HLS play error:', e);
+                  if (e.name !== 'AbortError') console.warn('[GlobalRadioPlayer] HLS play warning:', e?.message || String(e));
                 }
               }
             });
@@ -477,13 +502,13 @@ export function GlobalRadioPlayer() {
                       console.log('Format not supported, trying original URL');
                       audio.src = secureUrl;
                       audio.load();
-                      audio.play().catch(playError => {
+                    audio.play().catch(playError => {
                         if (playError.name !== 'AbortError' && playError.name !== 'NotSupportedError') {
-                          console.error('Playback failed:', playError);
+                          console.warn('[GlobalRadioPlayer] Playback warning:', playError?.message || String(playError));
                         }
                       });
                     } else {
-                      console.error('Playback failed:', e);
+                      console.warn('[GlobalRadioPlayer] Playback warning:', e?.message || String(e));
                     }
                   }
                 });
@@ -492,7 +517,7 @@ export function GlobalRadioPlayer() {
           }
         } catch (e: any) {
           if (e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
-            console.error('Station change play error:', e);
+            console.warn('[GlobalRadioPlayer] Station change play warning:', e?.message || String(e));
           }
         } finally {
           isTransitioning.current = false;
@@ -526,7 +551,7 @@ export function GlobalRadioPlayer() {
           if (promise !== undefined) {
             promise.catch(e => {
               if (e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
-                console.error('Sync play failed:', e);
+                console.warn('[GlobalRadioPlayer] Sync play warning:', e?.message || String(e));
               }
             }).finally(() => {
               isTransitioning.current = false;
@@ -544,7 +569,7 @@ export function GlobalRadioPlayer() {
       } catch (error: any) {
         isTransitioning.current = false;
         if (error.name !== 'AbortError' && error.name !== 'NotSupportedError') {
-          console.error('Remote sync error:', error);
+          console.warn('[GlobalRadioPlayer] Remote sync warning:', error?.message || String(error));
         }
       }
     }, 200);
@@ -577,7 +602,7 @@ export function GlobalRadioPlayer() {
         if (promise !== undefined) {
           promise.catch(e => {
             if (e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
-              console.error('Manual play failed:', e);
+              console.warn('[GlobalRadioPlayer] Manual play warning:', e?.message || String(e));
               setIsLoading(false);
             }
           }).finally(() => {
@@ -591,11 +616,10 @@ export function GlobalRadioPlayer() {
     } catch (error: any) {
       isTransitioning.current = false;
       if (error.name !== 'AbortError' && error.name !== 'NotSupportedError') {
-        console.error('Manual play/pause error:', error);
+        console.warn('[GlobalRadioPlayer] Manual play/pause warning:', error?.message || String(error));
         toast({
-          title: "Playback Error",
-          description: "Failed to toggle radio. Please try again.",
-          variant: "destructive"
+          title: "Radio Unavailable",
+          description: "Radio station temporarily unavailable — please try another station",
         });
       }
     } finally {
@@ -621,7 +645,7 @@ export function GlobalRadioPlayer() {
           String(globalRadio.currentStation.id),
           globalRadio.currentStation.name,
           additionalTime
-        ).catch(err => console.error('Failed to record listening time:', err));
+        ).catch(err => console.warn('[GlobalRadioPlayer] Failed to record listening time:', err instanceof Error ? err.message : String(err)));
       }
     }
 
@@ -639,6 +663,7 @@ export function GlobalRadioPlayer() {
       {/* Hidden Audio Element - ALWAYS rendered */}
       <audio
         ref={audioRef}
+        data-managed-audio="true"
         preload="auto"
         playsInline
         crossOrigin="anonymous"

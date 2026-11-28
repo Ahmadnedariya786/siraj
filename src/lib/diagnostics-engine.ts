@@ -788,7 +788,15 @@ export function initDiagnosticsEngine(): void {
               }
             }
 
-            // 3. Image-specific graceful fallback and preloader checks
+            // 3. Managed player audio/video streams handle their own mirror failover and retry state
+            if (
+              (tagName === 'audio' || tagName === 'video') &&
+              (target.dataset?.managedAudio === 'true' || target.getAttribute('data-managed-audio') === 'true')
+            ) {
+              return;
+            }
+
+            // 4. Image-specific graceful fallback and preloader checks
             if (tagName === 'img') {
               const img = target as HTMLImageElement;
 
@@ -1601,13 +1609,25 @@ export async function runDeepSystemHealthScan(): Promise<DeepHealthScanReport> {
         console.debug('[Diagnostics] Live native alarm status fallback skipped:', statusErr);
       }
     }
+    let osNotificationsBlocked = false;
+    try {
+      const { localNotifications } = await import('@/lib/local-notifications');
+      const prefEnabled = localNotifications.arePrayerNotificationsEnabled();
+      const permGranted = Capacitor.isNativePlatform()
+        ? await localNotifications.areNotificationsEnabled()
+        : true;
+      osNotificationsBlocked = !prefEnabled || !permGranted;
+    } catch (notifCheckErr) {
+      console.debug('[Diagnostics] Notification permission check skipped:', notifCheckErr);
+    }
     const longTaskCount = trace.longTasksFirst5s.length;
     const ttiOk = trace.ttiMs !== null && trace.ttiMs <= TARGET_COLD_TTI_MS;
     const splashOk = trace.splashDismissMs === null || trace.splashDismissMs <= SPLASH_HARD_CAP_MS;
-    const alarmOk = trace.alarmArmedAtMs !== null && trace.alarmArmedAtMs <= 5000;
+    const alarmOk = osNotificationsBlocked || (trace.alarmArmedAtMs !== null && trace.alarmArmedAtMs <= 5000);
     const bootPass = ttiOk && longTaskCount === 0 && splashOk && alarmOk;
-    const alarmSummary =
-      trace.alarmArmedAtMs !== null
+    const alarmSummary = osNotificationsBlocked
+      ? 'Alarms: OS notifications blocked (tap to enable)'
+      : trace.alarmArmedAtMs !== null
         ? `Alarms: ${trace.alarmArmedCount} @ ${trace.alarmArmedAtMs}ms`
         : 'Alarms: pending';
     const phaseTimeline = [

@@ -5,7 +5,7 @@
  *  - P0 (sync): theme attr, last-state home cache hydration, route shell, event handlers -> Interactive (TTI)
  *  - P1 (idle-chunked <=30ms): prayer recompute if stale, native alarm batch reschedule, widget sync
  *  - P2 (lazy-on-visit): translation cache hydration, nasheed/quiz metadata, audio index
- *  - P3 (network-idle): OTA update check, bullion rates prefetch, nearby mosques prefetch
+ *  - P3 (network-idle): OTA update check, bullion rates prefetch
  */
 
 function recordBootBreadcrumb(type: string, message: string): void {
@@ -374,7 +374,14 @@ export function markSplashDismissed(): void {
 }
 
 export function recordAlarmArmed(count: number): void {
-  currentTrace.alarmArmedAtMs = elapsedSinceBootMs();
+  // Latch boot-time alarm readiness once non-zero alarms are armed (or on first boot report)
+  // so subsequent route changes and reschedules never overwrite the initial boot timing.
+  if (
+    currentTrace.alarmArmedAtMs === null ||
+    (currentTrace.alarmArmedCount === 0 && count > 0 && elapsedSinceBootMs() <= 10000)
+  ) {
+    currentTrace.alarmArmedAtMs = elapsedSinceBootMs();
+  }
   currentTrace.alarmArmedCount = Math.max(currentTrace.alarmArmedCount, count);
   persistCurrentTrace();
   recordBootBreadcrumb('BOOT_ALARM', `Alarms armed (${count}) at ${currentTrace.alarmArmedAtMs}ms`);

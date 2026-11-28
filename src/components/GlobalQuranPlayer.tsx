@@ -292,7 +292,7 @@ export function GlobalQuranPlayer() {
     if (!isExpanded) {
         return (
             <>
-                <audio ref={audioRef} />
+                <audio ref={audioRef} data-managed-audio="true" />
                 <div ref={miniPlayerRef} className="fixed bottom-24 left-0 right-0 z-[100] px-4">
                     <Card className="w-full max-w-lg mx-auto bg-card border-border shadow-2xl rounded-full p-2 pr-4 flex items-center justify-between transition-transform duration-300 hover:scale-[1.02] animate-in slide-in-from-bottom border relative overflow-hidden">
                         {/* Progress bar in mini player */}
@@ -366,7 +366,7 @@ export function GlobalQuranPlayer() {
     // Expanded Player (Popup Modal)
     return (
         <>
-            <audio ref={audioRef} />
+            <audio ref={audioRef} data-managed-audio="true" />
             <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center animate-in fade-in duration-200 p-4" onClick={() => setIsExpanded(false)}>
                 <div
                     className="w-full max-w-md rounded-[24px] border border-[var(--border)] p-6 space-y-6 shadow-2xl transition-all"

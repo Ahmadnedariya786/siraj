@@ -51,9 +51,7 @@ import { Separator } from "@/components/ui/separator";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { useI18n } from "@/hooks/useI18n";
 import { PageTransition } from "@/components/PageTransition";
-import { motion, AnimatePresence } from "framer-motion";
 import { AppBar } from "@/components/AppBar";
-import { useSettings } from "@/contexts/SettingsContext";
 import { fetchSurahTafsir, TAFSIR_EDITIONS, type TafsirEdition } from "@/lib/tafsir";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -131,7 +129,6 @@ const Tafsir = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   useBodyScrollLock(isSettingsOpen);
   const [loadingFromOffline, setLoadingFromOffline] = useState(false);
-  const { animationEnabled } = useSettings();
 
   const [isAuthorDropdownOpen, setIsAuthorDropdownOpen] = useState(false);
   const [tafsirLangFilter, setTafsirLangFilter] = useState<TafsirLangFilter>('All');
@@ -752,7 +749,7 @@ const Tafsir = () => {
                         <button
                           key={surah.number}
                           onClick={() => handleSurahSelect(surah)}
-                          className="cv-auto group relative flex items-center p-3.5 sm:p-4 rounded-2xl border transition-all text-left active:scale-[0.99]"
+                          className="group relative flex items-center p-3.5 sm:p-4 rounded-2xl border transition-all text-left active:scale-[0.99]"
                           style={{
                             background: 'var(--surface)',
                             borderColor: 'var(--border)',
@@ -1208,17 +1205,7 @@ const Tafsir = () => {
                     </>
                   );
 
-                  return animationEnabled ? (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="group relative"
-                    >
-                      {cardContent}
-                    </motion.div>
-                  ) : (
+                  return (
                     <div key={idx} className="group relative">{cardContent}</div>
                   );
                 })}

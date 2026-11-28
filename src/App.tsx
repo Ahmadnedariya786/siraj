@@ -755,25 +755,13 @@ function AppShell() {
         },
       ]);
 
-      // P3 — Network-idle prefetch (OTA update check + greeting warm-up + bullion + nearby mosques, strictly >= 2200ms)
+      // P3 — Network-idle prefetch (OTA update check + greeting warm-up + bullion rates, strictly >= 2200ms)
       scheduleP3NetworkIdle([
         {
           name: 'p3-bullion-rates-prefetch',
           run: async () => {
             const { fetchLiveMetalRates } = await import('@/lib/zakat-market-api');
             await fetchLiveMetalRates();
-          },
-        },
-        {
-          name: 'p3-nearby-mosques-prefetch',
-          run: async () => {
-            const savedLocation = localStorage.getItem(LOCATION_STORAGE_KEY);
-            if (!savedLocation) return;
-            const parsed = JSON.parse(savedLocation);
-            if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
-              const { fetchNearbyMosques } = await import('@/lib/mosque-service');
-              await fetchNearbyMosques(parsed.latitude, parsed.longitude);
-            }
           },
         },
       ], P3_NETWORK_IDLE_DELAY_MS);

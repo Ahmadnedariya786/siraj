@@ -14,9 +14,9 @@ export function Toaster() {
             onClick={() => dismiss(id)}
             className="cursor-pointer"
           >
-            <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
-              {description && <ToastDescription>{description}</ToastDescription>}
+            <div className="grid gap-1 min-w-0 flex-1 break-words">
+              {title && <ToastTitle className="break-words">{title}</ToastTitle>}
+              {description && <ToastDescription className="break-words">{description}</ToastDescription>}
             </div>
             {action}
             <ToastClose />
