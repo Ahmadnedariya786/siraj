@@ -92,11 +92,16 @@ public class MainActivity extends BridgeActivity {
     private volatile long otaDownloadedBytes = 0L;
     private volatile long otaTotalBytes = 0L;
     private volatile int otaPercent = 0;
+    private volatile long otaSpeedBps = 0L;
     private volatile double otaSpeedMBps = 0.0;
+    private volatile int otaActiveStreams = 0;
+    private volatile int otaEtaSeconds = -1;
+    private volatile String otaActiveMirror = "";
     private volatile String otaError = "";
     private volatile File otaReadyApkFile = null;
 
     private Thread activeStreamThread = null;
+    private volatile ApkParallelDownloader activeParallelDownloader = null;
     private volatile HttpURLConnection activeStreamConn = null;
     private volatile long activeDownloadManagerId = -1L;
     private Thread activeDmPollingThread = null;
@@ -258,6 +263,11 @@ public class MainActivity extends BridgeActivity {
                     @android.webkit.JavascriptInterface
                     public void startUpdateDownload(String apkUrl, long expectedBytes) {
                         MainActivity.this.startUpdateDownload(apkUrl, expectedBytes);
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    public void startUpdateDownloadWithMirrors(String urlsJson, long expectedBytes, String commitSha, String expectedSha256) {
+                        MainActivity.this.startUpdateDownloadWithMirrors(urlsJson, expectedBytes, commitSha, expectedSha256);
                     }
 
                     @android.webkit.JavascriptInterface
@@ -1343,38 +1353,72 @@ public class MainActivity extends BridgeActivity {
             json.put("downloadedBytes", otaDownloadedBytes);
             json.put("totalBytes", otaTotalBytes);
             json.put("percent", otaPercent);
-            json.put("speedMBps", Math.round(otaSpeedMBps * 10.0) / 10.0);
+            json.put("speedBps", otaSpeedBps);
+            json.put("speedMBps", Math.round(otaSpeedMBps * 1000.0) / 1000.0);
+            json.put("activeStreams", otaActiveStreams);
+            json.put("etaSeconds", otaEtaSeconds);
+            json.put("activeMirror", otaActiveMirror != null ? otaActiveMirror : "");
             json.put("error", otaError != null ? otaError : "");
             return json.toString();
         } catch (Throwable t) {
-            return "{\"state\":\"error\",\"engine\":\"none\",\"downloadedBytes\":0,\"totalBytes\":0,\"percent\":0,\"speedMBps\":0.0,\"error\":\"E_BRIDGE\"}";
+            return "{\"state\":\"error\",\"engine\":\"none\",\"downloadedBytes\":0,\"totalBytes\":0,\"percent\":0,\"speedBps\":0,\"speedMBps\":0.0,\"error\":\"E_BRIDGE\"}";
         }
     }
 
     /**
-     * Start Dual-Engine APK download (Engine A: Direct Stream, Engine B: DownloadManager failover)
+     * Start Multi-Mirror 6-Stream Parallel Range APK download (Engine A) with DownloadManager failover (Engine B)
      */
     public void startUpdateDownload(String apkUrl, long expectedBytes) {
+        org.json.JSONArray arr = new org.json.JSONArray();
+        if (apkUrl != null && !apkUrl.trim().isEmpty()) {
+            arr.put(apkUrl.trim());
+        }
+        startUpdateDownloadWithMirrors(arr.toString(), expectedBytes, "", "");
+    }
+
+    public void startUpdateDownloadWithMirrors(String urlsJson, long expectedBytes, String commitSha, String expectedSha256) {
         if ("connecting".equals(otaState) || "downloading".equals(otaState) || "verifying".equals(otaState)) {
             Log.w(TAG, "startUpdateDownload called while download is already in progress");
             return;
         }
 
-        final String targetApkUrl = (apkUrl != null && !apkUrl.trim().isEmpty())
-                ? apkUrl.trim()
-                : "https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk";
+        final List<String> mirrorList = new ArrayList<>();
+        try {
+            if (urlsJson != null && urlsJson.trim().startsWith("[")) {
+                org.json.JSONArray arr = new org.json.JSONArray(urlsJson);
+                for (int i = 0; i < arr.length(); i++) {
+                    String u = arr.optString(i, "").trim();
+                    if (!u.isEmpty() && !mirrorList.contains(u)) {
+                        mirrorList.add(u);
+                    }
+                }
+            } else if (urlsJson != null && !urlsJson.trim().isEmpty()) {
+                mirrorList.add(urlsJson.trim());
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed to parse mirror list JSON, using fallback URL", t);
+        }
+
+        final String fallbackUrl = "https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk";
+        if (!mirrorList.contains(fallbackUrl)) {
+            mirrorList.add(fallbackUrl);
+        }
+        final String primaryMirror = mirrorList.get(0);
 
         isDownloadingApk = true;
         isUserCancelled = false;
         otaState = "connecting";
         otaEngine = "stream";
-        otaDownloadedBytes = 0L;
         otaPercent = 0;
+        otaSpeedBps = 0L;
         otaSpeedMBps = 0.0;
+        otaActiveStreams = 0;
+        otaEtaSeconds = -1;
+        otaActiveMirror = primaryMirror;
         otaError = "";
         otaReadyApkFile = null;
-        // Honest total size: expectedBytes from caller if > 15MB, else 0
         otaTotalBytes = (expectedBytes > 15_000_000L) ? expectedBytes : 0L;
+        otaDownloadedBytes = 0L;
         dispatchDownloadProgress();
 
         File storageDir = getExternalFilesDir(null);
@@ -1384,14 +1428,81 @@ public class MainActivity extends BridgeActivity {
         if (!storageDir.exists()) {
             storageDir.mkdirs();
         }
-        final File targetApk = new File(storageDir, "siraj-update.apk");
-        if (targetApk.exists()) {
-            try { targetApk.delete(); } catch (Throwable ignored) {}
-        }
+        final File targetStorageDir = storageDir;
 
-        activeStreamThread = new Thread(() -> {
-            runStreamEngine(targetApkUrl, expectedBytes, targetApk);
-        }, "siraj-ota-stream");
+        final ApkParallelDownloader downloader = new ApkParallelDownloader(
+                targetStorageDir,
+                mirrorList,
+                expectedBytes,
+                commitSha,
+                expectedSha256,
+                new ApkParallelDownloader.Listener() {
+                    @Override
+                    public void onProgress(String state, long downloadedBytes, long totalBytes, int percent,
+                                           long speedBps, double speedMBps, int activeStreams, int etaSeconds, String activeMirror) {
+                        if (isUserCancelled) return;
+                        otaState = state;
+                        otaEngine = "stream";
+                        otaDownloadedBytes = downloadedBytes;
+                        if (totalBytes > 0) otaTotalBytes = totalBytes;
+                        otaPercent = percent;
+                        otaSpeedBps = speedBps;
+                        otaSpeedMBps = speedMBps;
+                        otaActiveStreams = activeStreams;
+                        otaEtaSeconds = etaSeconds;
+                        otaActiveMirror = activeMirror != null ? activeMirror : primaryMirror;
+                        dispatchDownloadProgress();
+                    }
+
+                    @Override
+                    public void onCompleted(File apkFile, long totalBytes) {
+                        if (isUserCancelled) return;
+                        isDownloadingApk = false;
+                        otaDownloadedBytes = totalBytes;
+                        otaTotalBytes = totalBytes;
+                        otaPercent = 100;
+                        otaActiveStreams = 0;
+                        otaEtaSeconds = 0;
+                        dispatchDownloadProgress();
+                        verifyAndInstall(apkFile, totalBytes);
+                    }
+
+                    @Override
+                    public void onPaused(long downloadedBytes, long totalBytes, int percent) {
+                        isDownloadingApk = false;
+                        otaDownloadedBytes = downloadedBytes;
+                        if (totalBytes > 0) otaTotalBytes = totalBytes;
+                        otaPercent = percent;
+                        otaSpeedBps = 0L;
+                        otaSpeedMBps = 0.0;
+                        otaActiveStreams = 0;
+                        otaState = "cancelled";
+                        dispatchDownloadProgress();
+                    }
+
+                    @Override
+                    public void onError(String errorCode, long downloadedBytes, long totalBytes, boolean shouldFallbackToSystemDm) {
+                        if (isUserCancelled) return;
+                        otaDownloadedBytes = downloadedBytes;
+                        if (totalBytes > 0) otaTotalBytes = totalBytes;
+                        otaSpeedBps = 0L;
+                        otaSpeedMBps = 0.0;
+                        otaActiveStreams = 0;
+                        if (shouldFallbackToSystemDm) {
+                            File dmPlaceholder = new File(targetStorageDir, "siraj-update.apk");
+                            triggerFailoverToEngineB(primaryMirror, expectedBytes, dmPlaceholder, errorCode);
+                        } else {
+                            isDownloadingApk = false;
+                            otaState = "error";
+                            otaError = errorCode;
+                            dispatchDownloadProgress();
+                        }
+                    }
+                }
+        );
+
+        activeParallelDownloader = downloader;
+        activeStreamThread = new Thread(downloader::run, "siraj-ota-parallel");
         activeStreamThread.start();
     }
 
@@ -1400,187 +1511,6 @@ public class MainActivity extends BridgeActivity {
      */
     public void downloadAndInstallApk(String apkUrl) {
         startUpdateDownload(apkUrl, 0L);
-    }
-
-    /**
-     * Engine A: Direct single-stream downloader with 6-second first-byte watchdog
-     */
-    private void runStreamEngine(String apkUrl, long expectedBytes, File targetApk) {
-        long connectStartTime = System.currentTimeMillis();
-        String currentUrl = apkUrl;
-        HttpURLConnection conn = null;
-        InputStream in = null;
-        FileOutputStream out = null;
-        int redirects = 0;
-        boolean connected = false;
-
-        try {
-            // Follow up to 8 HTTP 301/302/303/307/308 redirects manually
-            while (redirects < 8 && !isUserCancelled) {
-                if (System.currentTimeMillis() - connectStartTime > 6000) {
-                    Log.w(TAG, "Engine A: Redirect / connection negotiation exceeded 6s, failing over to Engine B");
-                    triggerFailoverToEngineB(apkUrl, expectedBytes, targetApk, "E_CONNECT_TIMEOUT");
-                    return;
-                }
-
-                URL u = new URL(currentUrl);
-                conn = (HttpURLConnection) u.openConnection();
-                activeStreamConn = conn;
-                conn.setInstanceFollowRedirects(false);
-                conn.setConnectTimeout(6000);
-                conn.setReadTimeout(8000);
-                // Send ONLY standard browser User-Agent and Accept headers; NO Range or Authorization
-                conn.setRequestProperty("User-Agent", CHROME_USER_AGENT);
-                conn.setRequestProperty("Accept", "*/*");
-
-                int code = conn.getResponseCode();
-                if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
-                    String location = conn.getHeaderField("Location");
-                    conn.disconnect();
-                    activeStreamConn = null;
-                    if (location != null && !location.isEmpty()) {
-                        currentUrl = new URL(new URL(currentUrl), location).toString();
-                        redirects++;
-                        continue;
-                    }
-                }
-
-                if (code >= 400) {
-                    Log.w(TAG, "Engine A: HTTP code " + code + ", failing over to Engine B");
-                    conn.disconnect();
-                    activeStreamConn = null;
-                    triggerFailoverToEngineB(apkUrl, expectedBytes, targetApk, "E_HTTP_" + code);
-                    return;
-                }
-
-                connected = true;
-                break;
-            }
-
-            if (isUserCancelled) return;
-            if (!connected || conn == null) {
-                triggerFailoverToEngineB(apkUrl, expectedBytes, targetApk, "E_CONNECT_FAIL");
-                return;
-            }
-
-            // Honest total size: Content-Length if > 0, else expectedBytes if > 15MB, else 0
-            long contentLength = -1L;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                contentLength = conn.getContentLengthLong();
-            } else {
-                contentLength = conn.getContentLength();
-            }
-
-            if (contentLength > 0) {
-                otaTotalBytes = contentLength;
-            } else if (expectedBytes > 15_000_000L) {
-                otaTotalBytes = expectedBytes;
-            } else {
-                otaTotalBytes = 0L;
-            }
-
-            in = new BufferedInputStream(conn.getInputStream(), 131072);
-            out = new FileOutputStream(targetApk, false);
-            byte[] buffer = new byte[131072]; // 128 KB buffer
-
-            otaState = "downloading";
-            dispatchDownloadProgress();
-
-            long streamStartTime = System.currentTimeMillis();
-            long lastByteTime = System.currentTimeMillis();
-            long lastDispatchTime = System.currentTimeMillis();
-            long lastDispatchBytes = 0L;
-            long downloaded = 0L;
-            boolean gotFirst64KB = false;
-            int read;
-
-            while (!isUserCancelled && (read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-                downloaded += read;
-                otaDownloadedBytes = downloaded;
-                long now = System.currentTimeMillis();
-                lastByteTime = now;
-
-                if (!gotFirst64KB && downloaded >= 65536) {
-                    gotFirst64KB = true;
-                }
-
-                // Update downloadedBytes, percent, speed every 150ms
-                if (now - lastDispatchTime >= 150) {
-                    long timeDelta = now - lastDispatchTime;
-                    long bytesDelta = downloaded - lastDispatchBytes;
-                    otaSpeedMBps = (timeDelta > 0)
-                            ? ((double) bytesDelta / (1024.0 * 1024.0)) / ((double) timeDelta / 1000.0)
-                            : 0.0;
-                    if (otaTotalBytes > 0) {
-                        otaPercent = Math.min(99, (int) ((downloaded * 100) / otaTotalBytes));
-                    } else {
-                        otaPercent = 0;
-                    }
-                    lastDispatchTime = now;
-                    lastDispatchBytes = downloaded;
-                    dispatchDownloadProgress();
-                }
-
-                // 6-second first 64 KB watchdog
-                if (!gotFirst64KB && (now - streamStartTime > 6000)) {
-                    Log.w(TAG, "Engine A: No first 64KB within 6s, failing over to Engine B");
-                    try { out.close(); } catch (Throwable ignored) {}
-                    try { in.close(); } catch (Throwable ignored) {}
-                    conn.disconnect();
-                    activeStreamConn = null;
-                    triggerFailoverToEngineB(apkUrl, expectedBytes, targetApk, "E_FIRST_BYTE_TIMEOUT");
-                    return;
-                }
-
-                // 8-second mid-stream stall watchdog
-                if (gotFirst64KB && (now - lastByteTime > 8000)) {
-                    Log.w(TAG, "Engine A: Mid-stream stall > 8s without bytes, failing over to Engine B");
-                    try { out.close(); } catch (Throwable ignored) {}
-                    try { in.close(); } catch (Throwable ignored) {}
-                    conn.disconnect();
-                    activeStreamConn = null;
-                    triggerFailoverToEngineB(apkUrl, expectedBytes, targetApk, "E_STREAM_STALL");
-                    return;
-                }
-            }
-
-            out.flush();
-
-            if (isUserCancelled) return;
-
-            if (downloaded >= 15_000_000L) {
-                otaDownloadedBytes = downloaded;
-                if (otaTotalBytes <= 0) otaTotalBytes = downloaded;
-                otaPercent = 100;
-                dispatchDownloadProgress();
-                verifyAndInstall(targetApk, otaTotalBytes);
-            } else {
-                Log.w(TAG, "Engine A: Stream completed with < 15MB (" + downloaded + " bytes), failing over to Engine B");
-                try { out.close(); } catch (Throwable ignored) {}
-                try { in.close(); } catch (Throwable ignored) {}
-                conn.disconnect();
-                activeStreamConn = null;
-                triggerFailoverToEngineB(apkUrl, expectedBytes, targetApk, "E_STREAM_INCOMPLETE");
-            }
-
-        } catch (Throwable t) {
-            if (!isUserCancelled) {
-                Log.w(TAG, "Engine A stream exception: " + t.getMessage() + ", failing over to Engine B", t);
-                triggerFailoverToEngineB(apkUrl, expectedBytes, targetApk, "E_STREAM_" + t.getClass().getSimpleName());
-            }
-        } finally {
-            if (out != null) {
-                try { out.close(); } catch (Throwable ignored) {}
-            }
-            if (in != null) {
-                try { in.close(); } catch (Throwable ignored) {}
-            }
-            if (conn != null) {
-                try { conn.disconnect(); } catch (Throwable ignored) {}
-                activeStreamConn = null;
-            }
-        }
     }
 
     /**
@@ -1852,16 +1782,29 @@ public class MainActivity extends BridgeActivity {
             launchPackageInstallerIntent(otaReadyApkFile);
             return;
         }
+        File storageDir = getExternalFilesDir(null) != null ? getExternalFilesDir(null) : getCacheDir();
+        if (storageDir != null && storageDir.exists()) {
+            File[] candidates = storageDir.listFiles();
+            if (candidates != null) {
+                File newestApk = null;
+                for (File f : candidates) {
+                    if (f.isFile() && f.getName().startsWith("siraj-update") && f.getName().endsWith(".apk") && f.length() > 15_000_000L) {
+                        if (newestApk == null || f.lastModified() > newestApk.lastModified()) {
+                            newestApk = f;
+                        }
+                    }
+                }
+                if (newestApk != null) {
+                    otaReadyApkFile = newestApk;
+                    launchPackageInstallerIntent(newestApk);
+                    return;
+                }
+            }
+        }
         File dmFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "siraj-update.apk");
         if (dmFile.exists() && dmFile.length() > 15_000_000L) {
             otaReadyApkFile = dmFile;
             launchPackageInstallerIntent(dmFile);
-            return;
-        }
-        File streamFile = new File(getExternalFilesDir(null) != null ? getExternalFilesDir(null) : getCacheDir(), "siraj-update.apk");
-        if (streamFile.exists() && streamFile.length() > 15_000_000L) {
-            otaReadyApkFile = streamFile;
-            launchPackageInstallerIntent(streamFile);
             return;
         }
         otaState = "error";
@@ -1877,15 +1820,23 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Real user cancel ONLY - stops active engine, deletes partial files, sets otaState = "cancelled"
+     * Real user pause/cancel - halts active streams cleanly while KEEPING .part + .meta.json for byte-level resume!
      */
     public void cancelApkDownload() {
-        Log.i(TAG, "cancelApkDownload: real user cancel initiated");
+        Log.i(TAG, "cancelApkDownload: pausing active transfer while keeping resume metadata");
         isUserCancelled = true;
         isDownloadingApk = false;
         otaState = "cancelled";
-        otaPercent = 0;
+        otaSpeedBps = 0L;
         otaSpeedMBps = 0.0;
+        otaActiveStreams = 0;
+
+        if (activeParallelDownloader != null) {
+            try {
+                activeParallelDownloader.cancel();
+            } catch (Throwable ignored) {}
+            activeParallelDownloader = null;
+        }
         dispatchDownloadProgress();
 
         if (activeStreamConn != null) {
@@ -1918,13 +1869,6 @@ public class MainActivity extends BridgeActivity {
             } catch (Throwable ignored) {}
             activeDmPollingThread = null;
         }
-
-        try {
-            File dmFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "siraj-update.apk");
-            if (dmFile.exists()) dmFile.delete();
-            File streamFile = new File(getExternalFilesDir(null) != null ? getExternalFilesDir(null) : getCacheDir(), "siraj-update.apk");
-            if (streamFile.exists()) streamFile.delete();
-        } catch (Throwable ignored) {}
     }
 
     /**
@@ -1963,7 +1907,11 @@ public class MainActivity extends BridgeActivity {
                     detail.put("totalMB", Math.round(totMB * 10.0) / 10.0);
                     detail.put("downloadedBytes", otaDownloadedBytes);
                     detail.put("totalBytes", otaTotalBytes);
-                    detail.put("speedMBps", Math.round(otaSpeedMBps * 10.0) / 10.0);
+                    detail.put("speedBps", otaSpeedBps);
+                    detail.put("speedMBps", Math.round(otaSpeedMBps * 1000.0) / 1000.0);
+                    detail.put("activeStreams", otaActiveStreams);
+                    detail.put("etaSeconds", otaEtaSeconds);
+                    detail.put("activeMirror", otaActiveMirror != null ? otaActiveMirror : "");
                     detail.put("state", otaState);
                     detail.put("engine", otaEngine);
                     detail.put("error", otaError != null ? otaError : "");

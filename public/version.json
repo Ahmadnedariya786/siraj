@@ -1,7 +1,10 @@
 {
   "version": "3.0.0",
-  "commit": "d556da7d7a4df9dd31489b1218e300ef4243c0d8",
-  "shortCommit": "d556da7",
-  "builtAt": "2026-11-28T07:57:58.089Z",
-  "apkUrl": "https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk"
+  "commit": "48a6a6fde07b547167d75dc31a2ab4840f603b93",
+  "shortCommit": "48a6a6f",
+  "builtAt": "2026-11-28T09:23:04.093Z",
+  "apkUrl": "https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk",
+  "downloadMirrors": [
+    "https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk"
+  ]
 }

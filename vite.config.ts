@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => ({
     'import.meta.env.VITE_BUILD_COMMIT': JSON.stringify(BUILD_COMMIT),
   },
   build: {
+    sourcemap: false,
     minify: 'terser',
     chunkSizeWarningLimit: 600,
     target: 'es2015',

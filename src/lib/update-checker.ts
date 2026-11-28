@@ -77,6 +77,65 @@ export function resolveDirectApkUrl(apkUrl?: string | null): string {
 }
 
 /**
+ * Build an ordered deduplicated mirror list with the fastest mirror first
+ * and GitHub Releases always preserved as final failover.
+ */
+export function buildDownloadMirrors(
+  primaryUrl?: string | null,
+  extraMirrors?: Array<string | null | undefined> | null
+): string[] {
+  const ordered: string[] = [];
+  const pushValid = (candidate?: string | null) => {
+    if (!candidate || typeof candidate !== 'string') return;
+    const trimmed = candidate.trim();
+    if (!trimmed || trimmed.includes('/releases/tag/')) return;
+    if (!/^https?:\/\//i.test(trimmed)) return;
+    if (!ordered.includes(trimmed)) {
+      ordered.push(trimmed);
+    }
+  };
+
+  if (Array.isArray(extraMirrors)) {
+    for (const m of extraMirrors) pushValid(m);
+  }
+  pushValid(primaryUrl);
+  pushValid(DIRECT_APK_FALLBACK_URL);
+  return ordered;
+}
+
+/**
+ * Extract optional multi-mirror URLs and SHA-256 metadata embedded in release notes.
+ */
+export function extractMirrorsFromBody(body?: string | null): {
+  downloadMirrors?: string[];
+  sha256?: string;
+} {
+  if (!body || typeof body !== 'string') return {};
+  let downloadMirrors: string[] | undefined;
+  let sha256: string | undefined;
+
+  const mirrorsMatch = body.match(/<!--\s*DOWNLOAD_MIRRORS:\s*(\[[\s\S]*?\])\s*-->/i);
+  if (mirrorsMatch?.[1]) {
+    try {
+      const parsed = JSON.parse(mirrorsMatch[1]);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u.trim()));
+        if (cleaned.length > 0) downloadMirrors = cleaned;
+      }
+    } catch {
+      // Ignore malformed mirror metadata comment
+    }
+  }
+
+  const shaMatch = body.match(/<!--\s*APK_SHA256:\s*([0-9a-f]{64})\s*-->/i);
+  if (shaMatch?.[1]) {
+    sha256 = shaMatch[1].toLowerCase();
+  }
+
+  return { downloadMirrors, sha256 };
+}
+
+/**
  * Safely copy text to clipboard using navigator.clipboard with textarea fallback.
  */
 async function copyLinkToClipboard(url: string): Promise<boolean> {
@@ -134,6 +193,8 @@ export interface NightlyReleaseInfo {
   latestAssetUploadedAt?: string; // Upload timestamp of the latest .apk asset
   commitSha?: string;  // Extracted commit SHA
   apkUrl: string;
+  downloadMirrors?: string[];
+  sha256?: string;
   htmlUrl: string;
   body?: string;
   sizeBytes?: number;
@@ -151,6 +212,8 @@ export interface UpdateCheckResult {
   remoteCommit?: string;
   latestApkUploadedAt?: string;
   downloadUrl?: string;
+  downloadMirrors?: string[];
+  sha256?: string;
   expectedBytes?: number;
   release: NightlyReleaseInfo | null;
   lastChecked: number;
@@ -173,6 +236,7 @@ declare global {
       closeApp?: () => void;
       downloadAndInstallApk?: (apkUrl: string, expectedBytes?: number) => void;
       startUpdateDownload?: (apkUrl: string, expectedBytes?: number) => void;
+      startUpdateDownloadWithMirrors?: (urlsJson: string, expectedBytes?: number, commitSha?: string, sha256?: string) => void;
       cancelApkDownload?: () => void;
       installDownloadedApk?: () => void;
       installReadyApk?: () => void;
@@ -442,14 +506,36 @@ function writeCache(release: NightlyReleaseInfo | null): void {
  * Uses Dual-Engine downloader with instant handoff, 250ms polling, and DownloadManager failover.
  * Falls back to true external browser Intent (not stuck Chrome Custom Tab), or web window.open.
  */
-export async function downloadAndInstallUpdate(apkUrl?: string, expectedBytes?: number): Promise<boolean> {
-  const directApkUrl = resolveDirectApkUrl(apkUrl);
+export interface DownloadUpdateOptions {
+  downloadMirrors?: string[];
+  commitSha?: string;
+  sha256?: string;
+}
+
+export async function downloadAndInstallUpdate(
+  apkUrl?: string,
+  expectedBytes?: number,
+  options?: DownloadUpdateOptions
+): Promise<boolean> {
+  const mirrors = buildDownloadMirrors(apkUrl, options?.downloadMirrors);
+  const directApkUrl = mirrors[0] || resolveDirectApkUrl(apkUrl);
 
   try {
-    // 1. Native Android Downloader via AndroidBridge (Bypasses Chrome Custom Tab completely)
-    if (typeof window !== 'undefined' && (window.AndroidBridge?.startUpdateDownload || window.AndroidBridge?.downloadAndInstallApk)) {
-      console.log('[UpdateChecker] Using native AndroidBridge dual-engine updater:', directApkUrl, 'expectedBytes:', expectedBytes);
-      return startOtaDownload(directApkUrl, expectedBytes || 0);
+    // 1. Native Android Downloader via AndroidBridge (6-stream Range engine + mirror failover)
+    if (
+      typeof window !== 'undefined' &&
+      (window.AndroidBridge?.startUpdateDownloadWithMirrors ||
+        window.AndroidBridge?.startUpdateDownload ||
+        window.AndroidBridge?.downloadAndInstallApk)
+    ) {
+      console.log('[UpdateChecker] Using native AndroidBridge multi-stream updater:', directApkUrl, 'mirrors:', mirrors.length, 'expectedBytes:', expectedBytes);
+      return startOtaDownload({
+        apkUrl: directApkUrl,
+        downloadMirrors: mirrors,
+        expectedBytes: expectedBytes || 0,
+        commitSha: options?.commitSha,
+        sha256: options?.sha256,
+      });
     }
 
     // 2. Android external browser intent fallback (avoids Chrome Custom Tab hang)
@@ -509,27 +595,43 @@ export function cancelApkDownload(): void {
 }
 
 /**
+ * Format raw transfer bytes/sec cleanly:
+ * - < 1 MB/s -> KB/s (e.g. 42_000 -> "42 KB/s", NEVER "0.1 MB/s")
+ * - >= 1 MB/s -> MB/s (e.g. 1_850_000 -> "1.8 MB/s")
+ */
+export function formatSpeedLabel(bytesPerSec?: number): string {
+  if (!bytesPerSec || !Number.isFinite(bytesPerSec) || bytesPerSec <= 0) return '';
+  if (bytesPerSec >= 1_000_000) {
+    return `${(bytesPerSec / 1_048_576).toFixed(1)} MB/s`;
+  }
+  const kbps = Math.max(1, Math.round(bytesPerSec / 1000));
+  return `${kbps} KB/s`;
+}
+
+/**
  * Format live transfer speed nicely into MB/s or KB/s
  */
-export function formatDownloadSpeed(speedMBps?: number): string {
-  if (!speedMBps || speedMBps <= 0) return '';
-  if (speedMBps >= 1.0) {
-    return ` • ${speedMBps.toFixed(1)} MB/s`;
-  }
-  const kbps = Math.round(speedMBps * 1024);
-  return ` • ${kbps} KB/s`;
+export function formatDownloadSpeed(speedMBps?: number, speedBps?: number): string {
+  const effectiveBps =
+    typeof speedBps === 'number' && speedBps > 0
+      ? speedBps
+      : typeof speedMBps === 'number' && speedMBps > 0
+        ? speedMBps * 1024 * 1024
+        : 0;
+  const label = formatSpeedLabel(effectiveBps);
+  return label ? ` • ${label}` : '';
 }
 
 /**
  * Fallback to external browser without Chrome Custom Tab.
  * FIRST aborts any active in-app background download so 100% network bandwidth is freed,
- * and appends cache-busting query to guarantee a clean unthrottled connection.
+ * and opens the fastest configured mirror (R2 edge if present, else GitHub Release URL).
  */
-export function openExternalBrowserFallback(url?: string): void {
+export function openExternalBrowserFallback(url?: string, downloadMirrors?: string[]): void {
   // 1. Immediately abort active native in-app download sockets to free bandwidth
   cancelApkDownload();
 
-  const directUrl = resolveDirectApkUrl(url);
+  const directUrl = buildDownloadMirrors(url, downloadMirrors)[0] || resolveDirectApkUrl(url);
   // 2. Append cache-busting timestamp so Chrome starts a fresh unthrottled connection
   const separator = directUrl.includes('?') ? '&' : '?';
   const cacheBustedUrl = `${directUrl}${separator}t=${Date.now()}`;
@@ -642,13 +744,19 @@ async function fetchFromGitHubReleasesApi(signal: AbortSignal, isManualCheck = f
       }
     }
 
+    const bodyMeta = extractMirrorsFromBody(data.body);
+    const resolvedPrimaryApk = resolveDirectApkUrl(apkUrl);
+    const downloadMirrors = buildDownloadMirrors(resolvedPrimaryApk, bodyMeta.downloadMirrors);
+
     return {
       tagName: data.tag_name || 'nightly',
       releaseName: data.name || 'Nightly Build',
       publishedAt: latestApkUploadedAt || publishedAt || new Date().toISOString(),
       latestAssetUploadedAt: latestApkUploadedAt || undefined,
       commitSha: remoteCommit,
-      apkUrl: resolveDirectApkUrl(apkUrl),
+      apkUrl: downloadMirrors[0] || resolvedPrimaryApk,
+      downloadMirrors,
+      sha256: bodyMeta.sha256,
       htmlUrl: data.html_url || `https://github.com/${GITHUB_REPO}/releases/tag/nightly`,
       body: data.body,
       sizeBytes,
@@ -656,8 +764,6 @@ async function fetchFromGitHubReleasesApi(signal: AbortSignal, isManualCheck = f
     };
   } catch (err: unknown) {
     if ((err as { name?: string })?.name === 'AbortError') throw err;
-    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
     if (!isManualCheck) {
       console.debug('[UpdateChecker] GitHub Releases API offline/unreachable (background check):', err);
     } else {
@@ -712,8 +818,6 @@ async function fetchCommitFromAtomFeed(signal: AbortSignal, isManualCheck = fals
       }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'AbortError') throw err;
-      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-      const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
       if (!isManualCheck) {
         console.debug(`[UpdateChecker] Atom feed offline/unreachable for ${url}:`, err);
       } else {
@@ -753,7 +857,11 @@ async function fetchCommitFromVersionManifest(signal: AbortSignal, isManualCheck
       if (rawCommit && typeof rawCommit === 'string' && rawCommit.trim().length >= 7) {
         const commitSha = rawCommit.trim().toLowerCase();
         const builtAt = data.builtAt || new Date().toISOString();
-        const apkUrl = resolveDirectApkUrl(data.apkUrl || DIRECT_APK_FALLBACK_URL);
+        const downloadMirrors = buildDownloadMirrors(
+          data.apkUrl || DIRECT_APK_FALLBACK_URL,
+          Array.isArray(data.downloadMirrors) ? data.downloadMirrors : undefined
+        );
+        const apkUrl = downloadMirrors[0] || resolveDirectApkUrl(data.apkUrl || DIRECT_APK_FALLBACK_URL);
         console.log('[UpdateChecker] Fallback B (Version manifest) resolved latest commit:', commitSha, 'builtAt:', builtAt);
 
         return {
@@ -763,14 +871,14 @@ async function fetchCommitFromVersionManifest(signal: AbortSignal, isManualCheck
           latestAssetUploadedAt: builtAt,
           commitSha,
           apkUrl,
+          downloadMirrors,
+          sha256: typeof data.sha256 === 'string' ? data.sha256 : undefined,
           htmlUrl: `https://github.com/${GITHUB_REPO}/releases/tag/nightly`,
           body: `Auto-synchronized via version manifest (Commit: ${(data.shortCommit || data.commit || '').slice(0, 7)})`,
         };
       }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'AbortError') throw err;
-      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-      const isNetworkErr = err instanceof TypeError || (err as Error)?.message?.includes('fetch') || (err as Error)?.message?.includes('Network');
       if (!isManualCheck) {
         console.debug(`[UpdateChecker] Version manifest offline/unreachable for ${url}:`, err);
       } else {
@@ -913,6 +1021,8 @@ export async function checkNightlyUpdate(force = false): Promise<UpdateCheckResu
       remoteCommit: releaseInfo.commitSha,
       latestApkUploadedAt: releaseInfo.latestAssetUploadedAt || releaseInfo.publishedAt,
       downloadUrl: releaseInfo.apkUrl,
+      downloadMirrors: releaseInfo.downloadMirrors,
+      sha256: releaseInfo.sha256,
       expectedBytes: releaseInfo.expectedBytes || releaseInfo.sizeBytes,
       release: releaseInfo,
       lastChecked: Date.now(),

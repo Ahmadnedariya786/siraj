@@ -74,11 +74,18 @@ function compressJsonDir(dir) {
   let before = 0;
   let after = 0;
   for (const file of files) {
-    const raw = statSync(file).size;
+    const rawBuf = readFileSync(file);
+    const raw = rawBuf.length;
     before += raw;
     try {
-      const compressed = gzipSync(readFileSync(file), { level: 9 });
-      writeFileSync(file + '.gz', compressed);
+      let payload = rawBuf;
+      try {
+        payload = Buffer.from(JSON.stringify(JSON.parse(rawBuf.toString('utf8'))), 'utf8');
+      } catch {
+        // Non-standard JSON fallback: compress raw buffer directly
+      }
+      const compressed = gzipSync(payload, { level: 9 });
+      writeFileSync(file + '.jgz', compressed);
       unlinkSync(file);
       after += compressed.length;
     } catch (err) {
@@ -95,7 +102,9 @@ function compressJsonDir(dir) {
 }
 
 const deleteTargets = [
-  { path: path.join(distDir, 'data', 'tafsir'),           label: 'dist/data/tafsir (online-only fallback available)' },
+  { path: path.join(distDir, 'data', 'tafsir'), label: 'dist/data/tafsir (online-only fallback available)' },
+  { path: path.join(distDir, 'data', 'hadith-collections', 'hadiths.json'), label: 'dist/data/hadith-collections/hadiths.json (unused orphan 15.2MB dump)' },
+  { path: path.join(distDir, 'data', 'hadith-collections', 'hadiths.json.gz'), label: 'dist/data/hadith-collections/hadiths.json.gz (unused orphan gzip)' },
 ];
 
 const compressTargets = [

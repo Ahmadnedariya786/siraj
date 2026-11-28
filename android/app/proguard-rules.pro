@@ -42,7 +42,23 @@
 
 # Keep new Kotlin widget classes
 -keep class com.siraj.app.widgets.** { *; }
+-keep class com.siraj.app.ApkParallelDownloader** { *; }
 
 # Keep WorkManager (prevents minification issues with workers)
 -keep class androidx.work.** { *; }
 -keep interface androidx.work.** { *; }
+
+# Keep JavascriptInterface methods and WebView bridge intact under R8
+-keepattributes JavascriptInterface
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keepclassmembers class com.siraj.app.MainActivity$* { *; }
+
+# Keep Coroutines & JSON cleanly
+-keep class kotlinx.coroutines.** { *; }
+-dontwarn kotlinx.coroutines.**
+-keep class org.json.** { *; }
+
+# F-Droid build excludes Google Play Services (fdroid.gradle); suppress missing optional GMS refs in Capacitor Geolocation
+-dontwarn com.google.android.gms.**

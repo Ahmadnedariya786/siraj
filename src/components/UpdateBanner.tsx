@@ -12,6 +12,7 @@ import {
   isBannerDismissed,
   dismissBanner,
   formatReleaseTag,
+  formatDownloadSpeed,
   type UpdateCheckResult,
   type OtaStatus,
 } from '@/lib/update-checker';
@@ -159,7 +160,15 @@ export const UpdateBanner: React.FC = () => {
       return;
     }
 
-    downloadAndInstallUpdate(updateInfo.release?.apkUrl, updateInfo.expectedBytes || updateInfo.release?.expectedBytes);
+    downloadAndInstallUpdate(
+      updateInfo.release?.apkUrl,
+      updateInfo.expectedBytes || updateInfo.release?.expectedBytes,
+      {
+        downloadMirrors: updateInfo.downloadMirrors || updateInfo.release?.downloadMirrors,
+        commitSha: updateInfo.release?.commitSha || updateInfo.remoteCommit,
+        sha256: updateInfo.sha256 || updateInfo.release?.sha256,
+      }
+    );
   };
 
   const handleDismiss = (e: React.MouseEvent) => {
@@ -175,7 +184,10 @@ export const UpdateBanner: React.FC = () => {
   const handleBrowserFallback = (e: React.MouseEvent) => {
     e.stopPropagation();
     cancelOtaDownload();
-    openExternalBrowserFallback(updateInfo.release?.apkUrl);
+    openExternalBrowserFallback(
+      updateInfo.release?.apkUrl,
+      updateInfo.downloadMirrors || updateInfo.release?.downloadMirrors
+    );
   };
 
   const state = otaStatus.state;
@@ -197,15 +209,17 @@ export const UpdateBanner: React.FC = () => {
 
   if (isConnecting) {
     titleText = 'Connecting...';
-    subtitleText = 'Starting download...';
+    subtitleText = otaStatus.downloadedBytes > 0
+      ? `Resuming from ${otaStatus.downloadedMB} MB...`
+      : 'Starting 6-stream download...';
   } else if (isDownloading) {
+    const speedPart = formatDownloadSpeed(otaStatus.speedMBps, otaStatus.speedBps);
+    const streamsTag = (otaStatus.activeStreams || 0) > 1 ? ` (${otaStatus.activeStreams}×)` : '';
     if (otaStatus.totalBytes > 0) {
-      titleText = `Downloading • ${otaStatus.percent}%`;
-      const speedPart = otaStatus.speedMBps > 0 ? ` • ${otaStatus.speedMBps.toFixed(1)} MB/s` : '';
+      titleText = `Downloading • ${otaStatus.percent}%${streamsTag}`;
       subtitleText = `${otaStatus.downloadedMB} / ${otaStatus.totalMB} MB${speedPart}`;
     } else {
-      titleText = 'Downloading...';
-      const speedPart = otaStatus.speedMBps > 0 ? ` • ${otaStatus.speedMBps.toFixed(1)} MB/s` : '';
+      titleText = `Downloading...${streamsTag}`;
       subtitleText = `${otaStatus.downloadedMB} MB${speedPart}`;
     }
   } else if (isVerifying) {
@@ -219,10 +233,14 @@ export const UpdateBanner: React.FC = () => {
     subtitleText = 'Tap to install if closed';
   } else if (isCancelled) {
     titleText = 'Download paused';
-    subtitleText = 'Tap Retry to resume';
+    subtitleText = otaStatus.downloadedBytes > 0
+      ? `Paused at ${otaStatus.downloadedMB} MB • Tap Retry to resume`
+      : 'Tap Retry to resume';
   } else if (isError) {
     titleText = 'Download failed';
-    subtitleText = 'Retry or use Browser';
+    subtitleText = otaStatus.downloadedBytes > 0
+      ? `Saved ${otaStatus.downloadedMB} MB • Tap Retry to resume`
+      : 'Retry or use Browser';
   }
 
   return (

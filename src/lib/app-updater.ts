@@ -39,11 +39,23 @@ export interface OtaStatus {
   downloadedBytes: number;
   totalBytes: number;
   percent: number;
+  speedBps?: number;
   speedMBps: number;
+  activeStreams?: number;
+  etaSeconds?: number;
+  activeMirror?: string;
   error: string;
   downloadedMB: number;
   totalMB: number;
   message?: string;
+}
+
+export interface StartOtaDownloadOptions {
+  apkUrl: string;
+  downloadMirrors?: string[];
+  expectedBytes?: number;
+  commitSha?: string;
+  sha256?: string;
 }
 
 export const OTA_LOG_STORAGE_KEY = 'noor_ota_log_v1';
@@ -214,7 +226,11 @@ export function pollNativeOtaStatus(): OtaStatus | null {
       downloadedBytes,
       totalBytes,
       percent: Number(data.percent || 0),
+      speedBps: Number(data.speedBps || 0),
       speedMBps: Number(data.speedMBps || 0),
+      activeStreams: Number(data.activeStreams || 0),
+      etaSeconds: typeof data.etaSeconds === 'number' ? data.etaSeconds : -1,
+      activeMirror: data.activeMirror || undefined,
       error: data.error || '',
       downloadedMB,
       totalMB,
@@ -335,24 +351,48 @@ function startOtaPolling(): void {
 }
 
 /**
- * Instantly triggers native OTA download without any blocking JS fetch
+ * Instantly triggers native OTA download without any blocking JS fetch.
+ * Supports single URL or multi-mirror array + commitSha/sha256 for 6-stream parallel Range resume.
  */
-export function startOtaDownload(apkUrl: string, expectedBytes = 0): boolean {
+export function startOtaDownload(
+  apkUrlOrOpts: string | StartOtaDownloadOptions,
+  expectedBytesArg = 0
+): boolean {
   if (typeof window === 'undefined') {
     return false;
   }
+
+  const opts: StartOtaDownloadOptions =
+    typeof apkUrlOrOpts === 'string'
+      ? { apkUrl: apkUrlOrOpts, expectedBytes: expectedBytesArg }
+      : apkUrlOrOpts;
+
+  const apkUrl = opts.apkUrl;
+  const expectedBytes = opts.expectedBytes || 0;
+  const mirrors = Array.isArray(opts.downloadMirrors) && opts.downloadMirrors.length > 0
+    ? opts.downloadMirrors
+    : [apkUrl];
+  const commitSha = opts.commitSha || '';
+  const sha256 = opts.sha256 || '';
 
   hasLoggedFirstByte = false;
   lastLoggedStreamMB = 0;
 
   logOtaEvent('connect', 'connecting', {
     bytes: expectedBytes,
-    message: `Initiating download: ${apkUrl.slice(-30)}`,
+    message: `Initiating 6-stream download (${mirrors.length} mirror(s)): ${apkUrl.slice(-30)}`,
   });
 
   const bridge = window.AndroidBridge;
 
-  if (bridge?.startUpdateDownload) {
+  if (bridge?.startUpdateDownloadWithMirrors) {
+    bridge.startUpdateDownloadWithMirrors(
+      JSON.stringify(mirrors),
+      expectedBytes,
+      commitSha,
+      sha256
+    );
+  } else if (bridge?.startUpdateDownload) {
     bridge.startUpdateDownload(apkUrl, expectedBytes);
   } else if (bridge?.downloadAndInstallApk) {
     bridge.downloadAndInstallApk(apkUrl);
@@ -368,6 +408,7 @@ export function startOtaDownload(apkUrl: string, expectedBytes = 0): boolean {
       downloadedBytes: 0,
       totalBytes: expectedBytes,
       percent: 0,
+      speedBps: 0,
       speedMBps: 0,
       error: 'E_BRIDGE',
       downloadedMB: 0,
@@ -377,17 +418,26 @@ export function startOtaDownload(apkUrl: string, expectedBytes = 0): boolean {
     return false;
   }
 
+  // Keep existing downloaded progress if resuming from a paused state; otherwise reset cleanly
+  const resumedBytes = currentOtaStatus.state === 'cancelled' ? currentOtaStatus.downloadedBytes : 0;
+  const resumedPercent = currentOtaStatus.state === 'cancelled' ? currentOtaStatus.percent : 0;
+  const resumedMB = currentOtaStatus.state === 'cancelled' ? currentOtaStatus.downloadedMB : 0;
+
   // Set initial connecting state immediately so UI updates on frame 1
   broadcastStatus({
     state: 'connecting',
     engine: 'stream',
-    downloadedBytes: 0,
-    totalBytes: expectedBytes,
-    percent: 0,
+    downloadedBytes: resumedBytes,
+    totalBytes: expectedBytes || currentOtaStatus.totalBytes,
+    percent: resumedPercent,
+    speedBps: 0,
     speedMBps: 0,
     error: '',
-    downloadedMB: 0,
-    totalMB: expectedBytes > 0 ? Math.round((expectedBytes / (1024 * 1024)) * 10) / 10 : 0,
+    downloadedMB: resumedMB,
+    totalMB:
+      (expectedBytes || currentOtaStatus.totalBytes) > 0
+        ? Math.round(((expectedBytes || currentOtaStatus.totalBytes) / (1024 * 1024)) * 10) / 10
+        : 0,
   });
 
   // Start polling
@@ -396,7 +446,7 @@ export function startOtaDownload(apkUrl: string, expectedBytes = 0): boolean {
 }
 
 /**
- * Real user cancellation only
+ * Real user pause/cancel - preserves partial progress on disk and in status for byte-level resume
  */
 export function cancelOtaDownload(): void {
   stopOtaPolling();
@@ -407,19 +457,22 @@ export function cancelOtaDownload(): void {
   }
 
   logOtaEvent('stream', 'cancelled', {
-    message: 'User tapped cancel/pause',
+    bytes: currentOtaStatus.downloadedBytes,
+    message: `Download paused at ${currentOtaStatus.downloadedMB} MB`,
   });
 
   broadcastStatus({
     state: 'cancelled',
     engine: currentOtaStatus.engine,
-    downloadedBytes: 0,
-    totalBytes: 0,
-    percent: 0,
+    downloadedBytes: currentOtaStatus.downloadedBytes,
+    totalBytes: currentOtaStatus.totalBytes,
+    percent: currentOtaStatus.percent,
+    speedBps: 0,
     speedMBps: 0,
+    activeStreams: 0,
     error: '',
-    downloadedMB: 0,
-    totalMB: 0,
+    downloadedMB: currentOtaStatus.downloadedMB,
+    totalMB: currentOtaStatus.totalMB,
     message: 'Download paused',
   });
 }
@@ -462,7 +515,11 @@ if (typeof window !== 'undefined') {
         downloadedBytes,
         totalBytes,
         percent: Number(d.percent || 0),
+        speedBps: Number(d.speedBps || 0),
         speedMBps: Number(d.speedMBps || 0),
+        activeStreams: Number(d.activeStreams || 0),
+        etaSeconds: typeof d.etaSeconds === 'number' ? d.etaSeconds : -1,
+        activeMirror: d.activeMirror || undefined,
         error: d.error || (d as { message?: string }).message || '',
         downloadedMB,
         totalMB,

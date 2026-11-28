@@ -68,10 +68,12 @@ import { sanitizeHadithBookNumber, sanitizeHadithBookTitle } from "@/lib/hadith-
  */
 async function fetchPublicJson<T>(url: string): Promise<T | null> {
   if (isGzipSupported()) {
-    try {
-      return await loadGzippedJson<T>(`${url}.gz`);
-    } catch {
-      // No .gz variant (web deployment, legacy build) — fall through to plain JSON silently.
+    for (const candidate of [`${url}.jgz`, `${url}.gz`]) {
+      try {
+        return await loadGzippedJson<T>(candidate);
+      } catch {
+        // Not bundled with this compressed suffix; try next candidate
+      }
     }
   }
   try {

@@ -2852,11 +2852,13 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                         style={{ fontVariantNumeric: 'tabular-nums' }}
                       >
                         {otaStatus.state === 'connecting'
-                          ? 'Starting download...'
+                          ? (otaStatus.downloadedBytes > 0
+                              ? `Resuming from ${otaStatus.downloadedMB} MB...`
+                              : 'Starting 6-stream download...')
                           : otaStatus.state === 'downloading'
                           ? (otaStatus.totalBytes > 0
-                              ? `${otaStatus.downloadedMB} / ${otaStatus.totalMB} MB${otaStatus.speedMBps > 0 ? ` • ${otaStatus.speedMBps.toFixed(1)} MB/s` : ''}`
-                              : `${otaStatus.downloadedMB} MB${otaStatus.speedMBps > 0 ? ` • ${otaStatus.speedMBps.toFixed(1)} MB/s` : ''}`)
+                              ? `${otaStatus.downloadedMB} / ${otaStatus.totalMB} MB${formatDownloadSpeed(otaStatus.speedMBps, otaStatus.speedBps)}`
+                              : `${otaStatus.downloadedMB} MB${formatDownloadSpeed(otaStatus.speedMBps, otaStatus.speedBps)}`)
                           : otaStatus.state === 'verifying'
                           ? 'Checking file integrity'
                           : otaStatus.state === 'permission_required'
@@ -2864,9 +2866,13 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                           : otaStatus.state === 'installing'
                           ? 'Tap to install if closed'
                           : otaStatus.state === 'cancelled'
-                          ? 'Tap Retry to resume'
+                          ? (otaStatus.downloadedBytes > 0
+                              ? `Paused at ${otaStatus.downloadedMB} MB • Tap Retry to resume`
+                              : 'Tap Retry to resume')
                           : otaStatus.state === 'error'
-                          ? 'Retry or use Browser'
+                          ? (otaStatus.downloadedBytes > 0
+                              ? `Saved ${otaStatus.downloadedMB} MB • Tap Retry to resume`
+                              : 'Retry or use Browser')
                           : formatReleaseTag(
                               updateResult.release.tagName,
                               updateResult.release.commitSha
@@ -2927,7 +2933,15 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                         size="sm"
                         variant="outline"
                         className="rounded-xl font-semibold text-xs h-8 px-3 shrink-0 w-full sm:w-auto"
-                        onClick={() => downloadAndInstallUpdate(updateResult.release?.apkUrl, updateResult.expectedBytes || updateResult.release?.expectedBytes)}
+                        onClick={() => downloadAndInstallUpdate(
+                          updateResult.release?.apkUrl,
+                          updateResult.expectedBytes || updateResult.release?.expectedBytes,
+                          {
+                            downloadMirrors: updateResult.downloadMirrors || updateResult.release?.downloadMirrors,
+                            commitSha: updateResult.release?.commitSha || updateResult.remoteCommit,
+                            sha256: updateResult.sha256 || updateResult.release?.sha256,
+                          }
+                        )}
                       >
                         <RefreshCw className="w-3.5 h-3.5 mr-1" />
                         Retry
@@ -2940,7 +2954,15 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                           background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)',
                           color: 'var(--on-accent)',
                         }}
-                        onClick={() => downloadAndInstallUpdate(updateResult.release?.apkUrl, updateResult.expectedBytes || updateResult.release?.expectedBytes)}
+                        onClick={() => downloadAndInstallUpdate(
+                          updateResult.release?.apkUrl,
+                          updateResult.expectedBytes || updateResult.release?.expectedBytes,
+                          {
+                            downloadMirrors: updateResult.downloadMirrors || updateResult.release?.downloadMirrors,
+                            commitSha: updateResult.release?.commitSha || updateResult.remoteCommit,
+                            sha256: updateResult.sha256 || updateResult.release?.sha256,
+                          }
+                        )}
                       >
                         <Download className="w-3.5 h-3.5 mr-1" />
                         Download update
@@ -2970,7 +2992,10 @@ function getNextUpcomingPrayerInfo(): { name: string; time: string } {
                         type="button"
                         onClick={() => {
                           cancelOtaDownload();
-                          openExternalBrowserFallback(updateResult.release?.apkUrl);
+                          openExternalBrowserFallback(
+                            updateResult.release?.apkUrl,
+                            updateResult.downloadMirrors || updateResult.release?.downloadMirrors
+                          );
                         }}
                         className="inline-flex items-center gap-1 text-[var(--accent-text)] hover:underline font-medium"
                       >

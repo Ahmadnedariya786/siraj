@@ -17,6 +17,12 @@ jobs:
   build-nightly:
     name: Build & Publish Nightly APK
     runs-on: ubuntu-latest
+    env:
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
 
     steps:
       - name: Checkout repository
@@ -137,17 +143,6 @@ jobs:
           }
           EOF
 
-          # Create version.json manifest asset for unlimited rate-limit fallback
-          cat <<EOF > version.json
-          {
-            "version": "3.0.0",
-            "commit": "${{ github.sha }}",
-            "shortCommit": "$(echo ${{ github.sha }} | cut -c1-7)",
-            "builtAt": "$BUILD_TIME",
-            "apkUrl": "https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk"
-          }
-          EOF
-
           # Locate generated release APK (finds either app-release.apk or app-foss-release.apk)
           APK_FILE=$(find android/app/build/outputs/apk -type f -name "*release.apk" | head -n 1)
           if [ -z "$APK_FILE" ]; then
@@ -163,10 +158,71 @@ jobs:
 
           sha256sum siraj-nightly.apk > siraj-nightly.apk.sha256
           sha256sum Siraj-v3.0.0.apk > Siraj-v3.0.0.apk.sha256
+          APK_SHA256=$(awk '{print $1}' siraj-nightly.apk.sha256)
+          echo "sha256=$APK_SHA256" >> $GITHUB_OUTPUT
 
           FILE_SIZE=$(ls -lh siraj-nightly.apk | awk '{print $5}')
           echo "size=$FILE_SIZE" >> $GITHUB_OUTPUT
-          echo "Prepared siraj-nightly.apk and Siraj-v3.0.0.apk ($FILE_SIZE)"
+          echo "Prepared siraj-nightly.apk and Siraj-v3.0.0.apk ($FILE_SIZE, sha256=${APK_SHA256})"
+
+      - name: Upload APK to Cloudflare R2 India-Edge Mirror (Optional)
+        id: r2_upload
+        if: env.R2_ENDPOINT != '' && env.R2_BUCKET != ''
+        run: |
+          if [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_PUBLIC_URL" ]; then
+            echo "⚠️ R2_ENDPOINT/R2_BUCKET set but missing R2 credentials or R2_PUBLIC_URL; falling back to GitHub Releases only."
+            exit 0
+          fi
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          export AWS_DEFAULT_REGION="auto"
+          aws s3 cp siraj-nightly.apk "s3://${R2_BUCKET}/siraj-nightly.apk" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type "application/vnd.android.package-archive" \
+            --cache-control "public, max-age=300"
+          R2_BASE="${R2_PUBLIC_URL%/}"
+          echo "r2_url=${R2_BASE}/siraj-nightly.apk" >> $GITHUB_OUTPUT
+          echo "✅ Uploaded siraj-nightly.apk to Cloudflare R2 mirror: ${R2_BASE}/siraj-nightly.apk"
+
+      - name: Finalize Multi-Mirror Version Manifest
+        id: mirrors
+        run: |
+          GITHUB_APK_URL="https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk"
+          R2_URL="${{ steps.r2_upload.outputs.r2_url }}"
+          APK_SHA256="${{ steps.prep.outputs.sha256 }}"
+          BUILD_TIME="${{ steps.prep.outputs.timestamp }}"
+
+          if [ -n "$R2_URL" ]; then
+            MIRRORS_JSON="[\"${R2_URL}\", \"${GITHUB_APK_URL}\"]"
+            PRIMARY_URL="${R2_URL}"
+          else
+            MIRRORS_JSON="[\"${GITHUB_APK_URL}\"]"
+            PRIMARY_URL="${GITHUB_APK_URL}"
+          fi
+          echo "mirrors_json=${MIRRORS_JSON}" >> $GITHUB_OUTPUT
+          echo "primary_url=${PRIMARY_URL}" >> $GITHUB_OUTPUT
+
+          cat <<EOF > version.json
+          {
+            "version": "3.0.0",
+            "commit": "${{ github.sha }}",
+            "shortCommit": "${{ steps.prep.outputs.sha_short }}",
+            "builtAt": "${BUILD_TIME}",
+            "apkUrl": "${PRIMARY_URL}",
+            "downloadMirrors": ${MIRRORS_JSON},
+            "sha256": "${APK_SHA256}"
+          }
+          EOF
+
+          if [ -n "$R2_URL" ] && [ -n "$R2_ENDPOINT" ] && [ -n "$R2_BUCKET" ]; then
+            export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+            export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+            export AWS_DEFAULT_REGION="auto"
+            aws s3 cp version.json "s3://${R2_BUCKET}/version.json" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --content-type "application/json" \
+              --cache-control "no-cache" || true
+          fi
 
       - name: Publish Official GitHub Release
         env:
@@ -174,6 +230,9 @@ jobs:
         run: |
           cat <<'EOF' > release-notes.md
           ### 🌙 Siraj v3.0.0 — Official Latest Release
+
+          <!-- DOWNLOAD_MIRRORS: ${{ steps.mirrors.outputs.mirrors_json }} -->
+          <!-- APK_SHA256: ${{ steps.prep.outputs.sha256 }} -->
 
           **Siraj** is a privacy-first Islamic companion for Android & Web with 100% offline fallback and zero data tracking.
 

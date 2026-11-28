@@ -68,12 +68,18 @@ function syncVersion() {
 
         // Always sync public/version.json for rate-limit-proof updater fallback
         const commit = getGitCommit();
+        const githubApkUrl = 'https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk';
+        const r2PublicUrl = (process.env.R2_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+        const downloadMirrors = r2PublicUrl
+            ? [`${r2PublicUrl}/siraj-nightly.apk`, githubApkUrl]
+            : [githubApkUrl];
         const versionData = {
             version,
             commit,
             shortCommit: commit.length >= 7 ? commit.slice(0, 7) : commit,
             builtAt: new Date().toISOString(),
-            apkUrl: 'https://github.com/Ahmadnedariya786/siraj/releases/download/nightly/siraj-nightly.apk',
+            apkUrl: downloadMirrors[0],
+            downloadMirrors,
         };
         fs.mkdirSync(path.join(rootDir, 'public'), { recursive: true });
         fs.writeFileSync(versionJsonPath, JSON.stringify(versionData, null, 2));

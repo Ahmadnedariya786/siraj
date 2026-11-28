@@ -5,6 +5,10 @@ android {
     namespace = "com.siraj.app"
     compileSdk = rootProject.ext.compileSdkVersion
 
+    androidResources {
+        noCompress 'jgz'
+    }
+
     buildFeatures {
         buildConfig = true
     }
@@ -42,7 +46,10 @@ android {
                 'META-INF/license*',
                 'META-INF/notice*',
                 'META-INF/DEPENDENCIES',
-                'META-INF/*.version'
+                'META-INF/*.version',
+                'META-INF/*.kotlin_module',
+                'DebugProbesKt.bin',
+                'kotlin/**'
             ]
         }
     }
@@ -69,8 +76,8 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -174,25 +181,49 @@ task stripCompressedAssets {
     doLast {
         if (!assetsPublicDir.exists()) return
         def deleted = 0
+
+        // Ensure online-fallback tafsir & unused orphaned root hadiths.json are never bundled in APK
+        def tafsirDir = new File(assetsPublicDir, "data/tafsir")
+        if (tafsirDir.exists()) {
+            tafsirDir.deleteDir()
+        }
+        def orphanHadiths = new File(assetsPublicDir, "data/hadith-collections/hadiths.json")
+        if (orphanHadiths.exists() && orphanHadiths.delete()) deleted++
+        def orphanHadithsGz = new File(assetsPublicDir, "data/hadith-collections/hadiths.json.gz")
+        if (orphanHadithsGz.exists() && orphanHadithsGz.delete()) deleted++
+
+        // Gzip any remaining plain *.json in data/hadith-collections to *.json.jgz (AAPT2 leaves .jgz packed at level 9)
+        def hadithDir = new File(assetsPublicDir, "data/hadith-collections")
+        if (hadithDir.exists()) {
+            hadithDir.eachFileRecurse { f ->
+                if (f.isFile() && f.name.endsWith('.json')) {
+                    def jgzOut = new File(f.absolutePath + ".jgz")
+                    if (!jgzOut.exists()) {
+                        def fis = new FileInputStream(f)
+                        def fos = new FileOutputStream(jgzOut)
+                        def gzos = new java.util.zip.GZIPOutputStream(fos)
+                        byte[] buf = new byte[65536]
+                        int n
+                        while ((n = fis.read(buf)) > 0) {
+                            gzos.write(buf, 0, n)
+                        }
+                        gzos.finish()
+                        gzos.close()
+                        fis.close()
+                    }
+                    if (f.delete()) deleted++
+                }
+            }
+        }
+
         assetsPublicDir.eachFileRecurse { f ->
             if (f.isFile() && (f.name.endsWith('.gz') || f.name.endsWith('.br'))) {
-                // Keep the gzip archives we intentionally ship for offline hadith
-                // loading (dist/data/hadith-collections/**/*.json.gz), but delete
-                // their plain .json twins — AAPT2 treats foo.json + foo.json.gz
-                // as duplicate resources.
-                if (f.name.endsWith('.json.gz') && f.path.contains('hadith-collections')) {
-                    def twin = new File(f.path.replaceAll(/\.gz$/, ''))
-                    if (twin.exists() && twin.delete()) {
-                        deleted++
-                    }
-                    return
-                }
                 f.delete()
                 deleted++
             }
         }
         if (deleted > 0) {
-            println "Stripped ${deleted} compressed (.gz/.br) duplicate assets from android/assets/public"
+            println "Stripped ${deleted} duplicate/uncompressed assets from android/assets/public"
         }
     }
 }
