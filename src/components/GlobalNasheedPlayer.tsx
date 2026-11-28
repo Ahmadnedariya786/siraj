@@ -8,6 +8,7 @@ import { useGlobalNasheed, setGlobalNasheedAudioRef } from "@/lib/global-nasheed
 import { nasheedCache } from "@/lib/nasheed-cache";
 import { useGlobalRadio, getGlobalAudioRef } from "@/lib/global-radio";
 import { useGlobalQuran } from "@/lib/global-quran";
+import { usePlayerInsetRef } from "@/lib/player-inset";
 import { Equalizer } from "./Equalizer";
 
 const formatTime = (time: number): string => {
@@ -393,6 +394,9 @@ export function GlobalNasheedPlayer() {
         };
     }, [currentTrack]);
 
+    const isMiniPlayerVisible = Boolean(currentTrack) && !isLiveRoute && !isExpanded;
+    const miniPlayerRef = usePlayerInsetRef('nasheed', isMiniPlayerVisible);
+
     if (!currentTrack || isLiveRoute) return <audio ref={audioRef} preload="none" />;
 
     const togglePlayback = () => {
@@ -416,7 +420,7 @@ export function GlobalNasheedPlayer() {
         return (
             <>
                 <audio ref={audioRef} preload="auto" playsInline />
-                <div className="fixed bottom-24 left-0 right-0 z-[100] px-4">
+                <div ref={miniPlayerRef} className="fixed bottom-24 left-0 right-0 z-[100] px-4">
                     {/* Solid themed mini player card */}
                     <div
                         className="w-full max-w-lg mx-auto shadow-2xl rounded-2xl overflow-hidden border border-[var(--border)]"

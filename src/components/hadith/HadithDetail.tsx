@@ -514,7 +514,10 @@ export function HadithDetail() {
         </Card>
 
         {/* Bottom Previous / Next Navigation */}
-        <div className="flex gap-2 pb-8">
+        <div
+          className="flex gap-2 pb-8"
+          style={{ marginBottom: 'var(--player-inset, 0px)' }}
+        >
           <Button
             variant="outline"
             size="sm"

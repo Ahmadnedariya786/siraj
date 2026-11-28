@@ -1,20 +1,79 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { AppBar } from "@/components/AppBar";
-import { PageTransition } from "@/components/PageTransition";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Heart, BookOpen, Quote, Play, Copy, Check, Trash2, Search, Filter } from "lucide-react";
+import { ArrowLeft, Heart, BookOpen, Quote, Play, Copy, Check, Trash2, Search, Filter } from "lucide-react";
 import { useGlobalQuran } from "@/lib/global-quran";
 import { useToast } from "@/hooks/use-toast";
 import { remedyGamification, type FavoriteRemedy } from "@/lib/remedy-gamification";
 import { moods, type Mood } from "@/data/mood-data";
-import { useLanguage } from "@/contexts/LanguageContext-new";
+import { useContentLanguage } from "@/lib/content-translator";
+import { goBackOrFallback } from "@/lib/navigation";
+
+const FAVORITES_I18N: Record<"en" | "ur" | "gu", {
+  title: string;
+  noFavs: string;
+  noFavsDesc: string;
+  browse: string;
+  searchPlaceholder: string;
+  all: string;
+  playSurah: string;
+  copy: string;
+  copied: string;
+  remove: string;
+  noResults: string;
+  noResultsDesc: string;
+}> = {
+  en: {
+    title: "Favorite Remedies",
+    noFavs: "No favorites yet",
+    noFavsDesc: "Start saving your favorite Islamic remedies to build your personal collection.",
+    browse: "Browse Remedies",
+    searchPlaceholder: "Search favorites...",
+    all: "All",
+    playSurah: "Play Surah",
+    copy: "Copy",
+    copied: "Copied",
+    remove: "Remove",
+    noResults: "No results found",
+    noResultsDesc: "Try adjusting your search or filter criteria.",
+  },
+  ur: {
+    title: "پسندیدہ علاجات",
+    noFavs: "ابھی کوئی پسندیدہ علاج نہیں",
+    noFavsDesc: "اپنا ذاتی مجموعہ بنانے کے لیے پسندیدہ علاجات محفوظ کریں۔",
+    browse: "علاجات دیکھیں",
+    searchPlaceholder: "پسندیدہ میں تلاش کریں...",
+    all: "سب",
+    playSurah: "سورۃ سنیں",
+    copy: "کاپی",
+    copied: "کاپی ہو گیا",
+    remove: "ہٹائیں",
+    noResults: "کوئی نتیجہ نہیں ملا",
+    noResultsDesc: "اپنی تلاش یا فلٹر تبدیل کر کے دیکھیں۔",
+  },
+  gu: {
+    title: "પસંદીદા ઉપાયો",
+    noFavs: "હજુ કોઈ પસંદીદા નથી",
+    noFavsDesc: "તમારો સંગ્રહ બનાવવા માટે તમારા મનપસંદ ઉપાયો સાચવવાનું શરૂ કરો.",
+    browse: "ઉપાયો જુઓ",
+    searchPlaceholder: "પસંદીદા શોધો...",
+    all: "બધા",
+    playSurah: "સૂરા ચલાવો",
+    copy: "કૉપિ",
+    copied: "કૉપિ થયું",
+    remove: "દૂર કરો",
+    noResults: "કોઈ પરિણામ મળ્યું નથી",
+    noResultsDesc: "તમારી શોધ અથવા ફિલ્ટર બદલીને પ્રયાસ કરો.",
+  },
+};
 
 export default function RemedyFavorites() {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { contentLang, isRtl } = useContentLanguage();
+  const langKey: "en" | "ur" | "gu" =
+    contentLang === "ur" || contentLang === "gu" ? contentLang : "en";
+  const isUrdu = langKey === "ur";
+  const strings = FAVORITES_I18N[langKey];
+
   const [favorites, setFavorites] = useState<FavoriteRemedy[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
@@ -26,25 +85,26 @@ export default function RemedyFavorites() {
     setFavorites(remedyGamification.getFavorites());
   }, []);
 
-  const filteredFavorites = favorites.filter(favorite => {
-    const matchesSearch = favorite.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         favorite.reference.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredFavorites = favorites.filter((favorite) => {
+    const q = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      favorite.content.toLowerCase().includes(q) ||
+      favorite.reference.toLowerCase().includes(q);
     const matchesFilter = filterType === "all" || favorite.type === filterType;
     return matchesSearch && matchesFilter;
   });
 
-  const getMoodInfo = (moodId: string): Mood | undefined => {
-    return moods.find(m => m.id === moodId);
-  };
+  const getMoodInfo = (moodId: string): Mood | undefined =>
+    moods.find((m) => m.id === moodId);
 
   const handlePlaySurah = (favorite: FavoriteRemedy) => {
-    // Extract surah number from reference if available
     const surahMatch = favorite.reference.match(/Surah (\d+)/);
     if (surahMatch && reciter) {
-      const surahNumber = parseInt(surahMatch[1]);
+      const surahNumber = parseInt(surahMatch[1], 10);
       playSurah(surahNumber, favorite.reference, reciter);
       toast({
-        title: "Playing Surah",
+        title: strings.playSurah,
         description: `Now playing ${favorite.reference}.`,
       });
     } else if (!reciter) {
@@ -58,7 +118,6 @@ export default function RemedyFavorites() {
 
   const handleCopy = async (favorite: FavoriteRemedy) => {
     const text = `${favorite.arabic ? `${favorite.arabic}\n\n` : ""}${favorite.content}\n${favorite.reference}`;
-    
     try {
       await navigator.clipboard.writeText(text);
       setCopied(favorite.id);
@@ -81,175 +140,248 @@ export default function RemedyFavorites() {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'surah': return <BookOpen className="h-3 w-3" />;
-      case 'ayah': return <Quote className="h-3 w-3" />;
-      case 'dua': return <Heart className="h-3 w-3" />;
-      case 'hadith': return <Search className="h-3 w-3" />;
-      case 'dhikr': return <Filter className="h-3 w-3" />;
-      default: return <Quote className="h-3 w-3" />;
+      case "surah":
+        return <BookOpen className="h-3 w-3" />;
+      case "ayah":
+        return <Quote className="h-3 w-3" />;
+      case "dua":
+        return <Heart className="h-3 w-3" />;
+      case "hadith":
+        return <Search className="h-3 w-3" />;
+      case "dhikr":
+        return <Filter className="h-3 w-3" />;
+      default:
+        return <Quote className="h-3 w-3" />;
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'surah': return 'bg-blue-500';
-      case 'ayah': return 'bg-[var(--accent)]';
-      case 'dua': return 'bg-purple-500';
-      case 'hadith': return 'bg-orange-500';
-      case 'dhikr': return 'bg-teal-500';
-      default: return 'bg-gray-500';
-    }
-  };
+  const uniqueTypes = Array.from(new Set(favorites.map((f) => f.type)));
 
-  const uniqueTypes = Array.from(new Set(favorites.map(f => f.type)));
+  const scopedStyles = (
+    <style>{`
+      .siraj-fav-card {
+        background: var(--surface);
+        background: color-mix(in srgb, var(--surface) 86%, transparent);
+        border: 1px solid var(--border);
+      }
+      .siraj-fav-chip {
+        background: var(--surface-2);
+        background: color-mix(in srgb, var(--surface-2) 86%, transparent);
+        border: 1px solid var(--border);
+      }
+      .siraj-fav-type-chip {
+        background: var(--surface-2);
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        border: 1px solid var(--border);
+        color: var(--accent-text);
+      }
+    `}</style>
+  );
+
+  const headerEl = (
+    <header
+      className="sticky top-0 z-30 w-full border-b border-[var(--border)]"
+      style={{
+        paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
+        background: "var(--bg-base)",
+      }}
+    >
+      <div className="max-w-lg mx-auto w-full px-4 pb-3 flex items-center gap-2.5 min-w-0">
+        <button
+          type="button"
+          onClick={() => goBackOrFallback(navigate, "/islamic-remedies")}
+          aria-label="Back"
+          className="siraj-fav-chip w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-primary)] shrink-0 active:scale-95 transition-transform"
+        >
+          <ArrowLeft className={`w-4 h-4 ${isRtl ? "rotate-180" : ""}`} />
+        </button>
+        <h1 className={`flex-1 min-w-0 text-base font-bold text-[var(--text-primary)] truncate ${isUrdu ? "font-urdu" : "font-serif italic"}`}>
+          {strings.title}
+        </h1>
+      </div>
+    </header>
+  );
 
   if (favorites.length === 0) {
     return (
-      <PageTransition>
-        <div className="min-h-screen bg-background pb-32">
-          <AppBar title={t("favoriteRemedies") || "Favorite Remedies"} showBack={true} />
-          
-          <div className="px-5 pt-4">
-            <Card className="border-dashed border-border/60 bg-background/60 p-8 text-center">
-              <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No favorites yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Start saving your favorite Islamic remedies to build your personal collection.
-              </p>
-              <Button onClick={() => navigate('/islamic-remedies', { replace: true })}>
-                Browse Remedies
-              </Button>
-            </Card>
+      <div
+        className={`w-full max-w-full min-h-screen overflow-x-hidden bg-transparent relative z-10 ${isUrdu ? "font-urdu" : ""}`}
+        dir={isRtl ? "rtl" : "ltr"}
+      >
+        {scopedStyles}
+        {headerEl}
+        <div
+          className="max-w-lg mx-auto px-4 pt-5"
+          style={{ paddingBottom: "calc(28px + env(safe-area-inset-bottom, 0px) + var(--player-inset, 0px))" }}
+        >
+          <div className="siraj-fav-card rounded-2xl p-7 text-center space-y-3">
+            <Heart className="h-10 w-10 mx-auto text-[var(--accent)]" />
+            <h3 className="text-base font-bold text-[var(--text-primary)]">{strings.noFavs}</h3>
+            <p className="text-xs text-[var(--text-secondary)]">{strings.noFavsDesc}</p>
+            <button
+              type="button"
+              onClick={() => navigate("/islamic-remedies", { replace: true })}
+              className="inline-flex items-center justify-center rounded-full px-5 py-2.5 text-xs font-bold active:scale-95 transition-transform"
+              style={{ backgroundColor: "var(--accent)", color: "var(--on-accent)" }}
+            >
+              {strings.browse}
+            </button>
           </div>
         </div>
-      </PageTransition>
+      </div>
     );
   }
 
   return (
-    <PageTransition>
-      <div className="min-h-screen bg-transparent pb-4 relative z-10">
-        <AppBar title={t("favoriteRemedies") || "Favorite Remedies"} showBack={true} />
-        
-        <div className="px-5 pt-4 space-y-4">
-          {/* Search and Filter */}
-          <Card className="p-4">
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search favorites..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-border/60 rounded-lg bg-background/70 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  size="sm"
-                  variant={filterType === "all" ? "default" : "outline"}
-                  onClick={() => setFilterType("all")}
-                  className="rounded-full"
-                >
-                  All ({favorites.length})
-                </Button>
-                {uniqueTypes.map(type => (
-                  <Button
-                    key={type}
-                    size="sm"
-                    variant={filterType === type ? "default" : "outline"}
-                    onClick={() => setFilterType(type)}
-                    className="rounded-full capitalize"
-                  >
-                    {type} ({favorites.filter(f => f.type === type).length})
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </Card>
+    <div
+      className={`w-full max-w-full min-h-screen overflow-x-hidden bg-transparent relative z-10 ${isUrdu ? "font-urdu" : ""}`}
+      dir={isRtl ? "rtl" : "ltr"}
+    >
+      {scopedStyles}
+      {headerEl}
 
-          {/* Favorites List */}
-          <div className="space-y-3">
-            {filteredFavorites.map((favorite) => {
-              const moodInfo = getMoodInfo(favorite.moodId);
-              const Icon = moodInfo?.icon;
-              
-              return (
-                <Card key={favorite.id} className="border-border/60 bg-background/80 p-4">
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        {Icon && moodInfo && (
-                          <div className={`rounded-lg bg-gradient-to-br p-2 ${moodInfo.gradient}`}>
-                            <Icon className={`h-4 w-4 ${moodInfo.color}`} />
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">
-                            {moodInfo?.label} Remedy
-                          </p>
-                          <p className="text-xs text-muted-foreground">{favorite.reference}</p>
-                          <p className="text-xs text-primary">
-                            Added {new Date(favorite.addedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wider text-white ${getTypeColor(favorite.type)}`}>
-                          {getTypeIcon(favorite.type)}
-                          <span className="ml-1">{favorite.type}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    {favorite.arabic && (
-                      <p className="rounded-xl bg-muted/40 p-3 text-right font-arabic text-xl leading-[1.9] text-foreground" dir="rtl">
-                        {favorite.arabic}
-                      </p>
-                    )}
-
-                    <p className="rounded-xl border border-border/40 bg-card/70 p-3 text-sm leading-relaxed text-foreground/90">
-                      {favorite.content}
-                    </p>
-
-                    {/* Actions */}
-                    <div className="flex flex-wrap gap-2">
-                      {favorite.type === "surah" && (
-                        <Button size="sm" className="rounded-full" onClick={() => handlePlaySurah(favorite)}>
-                          <Play className="me-2 h-4 w-4" />
-                          Play Surah
-                        </Button>
-                      )}
-                      <Button size="sm" variant="secondary" className="rounded-full" onClick={() => handleCopy(favorite)}>
-                        {copied === favorite.id ? <Check className="me-2 h-4 w-4" /> : <Copy className="me-2 h-4 w-4" />}
-                        {copied === favorite.id ? "Copied" : "Copy"}
-                      </Button>
-                      <Button size="sm" variant="outline" className="rounded-full text-red-500" onClick={() => handleRemove(favorite.id)}>
-                        <Trash2 className="me-2 h-4 w-4" />
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+      <div
+        className="w-full max-w-lg mx-auto px-4 pt-4 space-y-4 overflow-x-hidden box-border"
+        style={{ paddingBottom: "calc(28px + env(safe-area-inset-bottom, 0px) + var(--player-inset, 0px))" }}
+      >
+        {/* Search & Filter */}
+        <div className="siraj-fav-card rounded-2xl p-3.5 space-y-3">
+          <div className="relative w-full min-w-0">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-secondary)] pointer-events-none" />
+            <input
+              type="text"
+              placeholder={strings.searchPlaceholder}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full min-w-0 ps-9 pe-4 py-2 rounded-xl text-sm focus:outline-none"
+              style={{
+                backgroundColor: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            />
           </div>
 
-          {filteredFavorites.length === 0 && searchTerm && (
-            <Card className="border-dashed border-border/60 bg-background/60 p-8 text-center">
-              <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No results found</h3>
-              <p className="text-sm text-muted-foreground">
-                Try adjusting your search or filter criteria.
-              </p>
-            </Card>
-          )}
+          <div className="w-full max-w-full overflow-x-auto no-scrollbar">
+            <div className="flex flex-nowrap items-center gap-2 w-max">
+              <button
+                type="button"
+                onClick={() => setFilterType("all")}
+                className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors"
+                style={{
+                  backgroundColor: filterType === "all" ? "var(--accent)" : "var(--surface-2)",
+                  color: filterType === "all" ? "var(--accent-fg, var(--on-accent))" : "var(--text-secondary)",
+                  borderColor: filterType === "all" ? "var(--accent)" : "var(--border)",
+                }}
+              >
+                {strings.all} ({favorites.length})
+              </button>
+              {uniqueTypes.map((type) => {
+                const active = filterType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFilterType(type)}
+                    className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border capitalize transition-colors"
+                    style={{
+                      backgroundColor: active ? "var(--accent)" : "var(--surface-2)",
+                      color: active ? "var(--accent-fg, var(--on-accent))" : "var(--text-secondary)",
+                      borderColor: active ? "var(--accent)" : "var(--border)",
+                    }}
+                  >
+                    {type} ({favorites.filter((f) => f.type === type).length})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
+
+        {/* Favorites List */}
+        <div className="space-y-3">
+          {filteredFavorites.map((favorite) => {
+            const moodInfo = getMoodInfo(favorite.moodId);
+            const Icon = moodInfo?.icon;
+            return (
+              <div key={favorite.id} className="siraj-fav-card rounded-2xl p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    {Icon ? (
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-[var(--border)]"
+                        style={{ backgroundColor: "var(--accent-soft)" }}
+                      >
+                        <Icon className="h-4 w-4 text-[var(--accent)]" />
+                      </div>
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-[var(--text-primary)] truncate">
+                        {moodInfo?.label || "Mood"} Remedy
+                      </p>
+                      <p className="text-xs text-[var(--text-secondary)] truncate" dir="ltr">
+                        {favorite.reference}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="siraj-fav-type-chip rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1 capitalize shrink-0">
+                    {getTypeIcon(favorite.type)}
+                    <span>{favorite.type}</span>
+                  </span>
+                </div>
+
+                {favorite.arabic ? (
+                  <p className="siraj-fav-chip rounded-xl p-3 text-right font-arabic text-xl leading-[1.9] text-[var(--text-primary)]" dir="rtl">
+                    {favorite.arabic}
+                  </p>
+                ) : null}
+
+                <p className="siraj-fav-chip rounded-xl p-3 text-sm leading-relaxed text-[var(--text-primary)]">
+                  {favorite.content}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {favorite.type === "surah" ? (
+                    <button
+                      type="button"
+                      onClick={() => handlePlaySurah(favorite)}
+                      className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold active:scale-95 transition-transform"
+                      style={{ backgroundColor: "var(--accent)", color: "var(--on-accent)" }}
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      <span>{strings.playSurah}</span>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(favorite)}
+                    className="siraj-fav-chip inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-[var(--text-primary)] active:scale-95 transition-transform"
+                  >
+                    {copied === favorite.id ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
+                    <span>{copied === favorite.id ? strings.copied : strings.copy}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(favorite.id)}
+                    className="siraj-fav-chip inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-[var(--danger)] ms-auto active:scale-95 transition-transform"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>{strings.remove}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {filteredFavorites.length === 0 && searchTerm ? (
+          <div className="siraj-fav-card rounded-2xl p-6 text-center space-y-2">
+            <Search className="h-9 w-9 mx-auto text-[var(--text-secondary)]" />
+            <h3 className="text-base font-semibold text-[var(--text-primary)]">{strings.noResults}</h3>
+            <p className="text-xs text-[var(--text-secondary)]">{strings.noResultsDesc}</p>
+          </div>
+        ) : null}
       </div>
-    </PageTransition>
+    </div>
   );
 }

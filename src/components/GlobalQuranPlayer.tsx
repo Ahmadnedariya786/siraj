@@ -12,6 +12,7 @@ import { useGlobalRadio } from "@/lib/global-radio"; // To pause radio
 import { useGlobalQuran, setGlobalQuranAudioRef, Reciter } from "@/lib/global-quran";
 import { downloadManager } from "@/lib/download-manager";
 import { quranService } from "@/lib/quran-service";
+import { usePlayerInsetRef } from "@/lib/player-inset";
 
 const formatTime = (time: number): string => {
     if (!time || isNaN(time)) return "0:00";
@@ -35,6 +36,7 @@ export function GlobalQuranPlayer() {
     const { isPlaying: isRadioPlaying, updateRadioState: updateRadioState } = useGlobalRadio();
 
     const [isExpanded, setIsExpanded] = useState(false);
+    const miniPlayerRef = usePlayerInsetRef('quran', Boolean(surahNumber) && !isLiveRoute && !isExpanded);
     const [isRepeating, setIsRepeating] = useState(false);
     const [isReciterPickerOpen, setIsReciterPickerOpen] = useState(false);
     const [reciterSearch, setReciterSearch] = useState("");
@@ -263,7 +265,7 @@ export function GlobalQuranPlayer() {
         return (
             <>
                 <audio ref={audioRef} />
-                <div className="fixed bottom-24 left-0 right-0 z-[100] px-4">
+                <div ref={miniPlayerRef} className="fixed bottom-24 left-0 right-0 z-[100] px-4">
                     <Card className="w-full max-w-lg mx-auto bg-card border-border shadow-2xl rounded-full p-2 pr-4 flex items-center justify-between transition-transform duration-300 hover:scale-[1.02] animate-in slide-in-from-bottom border relative overflow-hidden">
                         {/* Progress bar in mini player */}
                         <div className="absolute left-4 right-4 bottom-2 h-1 bg-[var(--surface-2)] rounded-full">

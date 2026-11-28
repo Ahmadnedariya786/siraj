@@ -849,7 +849,10 @@ const Duas = memo(function Duas() {
         )}
 
         {/* Duas List */}
-        <div className="w-full min-w-0 space-y-3.5 pb-20">
+        <div
+          className="w-full min-w-0 space-y-3.5"
+          style={{ paddingBottom: 'calc(80px + var(--player-inset, 0px))' }}
+        >
           {filteredDuas.length === 0 ? (
             <Card
               className="w-full p-8 text-center rounded-2xl border shadow-sm siraj-translucent-card"

@@ -10,6 +10,7 @@ import { useGlobalNasheed, getGlobalNasheedAudioRef } from "@/lib/global-nasheed
 import { getStationImage, getLocalizedStation } from "@/data/radio-stations-extra";
 import { useContentLanguage } from "@/lib/content-translator";
 import { recordListeningTime } from "@/lib/radio-stats";
+import { usePlayerInsetRef } from "@/lib/player-inset";
 import Hls from 'hls.js';
 
 // Helper to format seconds to MM:SS or HH:MM:SS
@@ -69,6 +70,7 @@ export function GlobalRadioPlayer() {
   const isLiveRoute = location.pathname.startsWith('/live');
   const [isLoading, setIsLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const miniPlayerRef = usePlayerInsetRef('radio', Boolean(globalRadio?.currentStation && isVisible && !isLiveRoute));
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 2;
   const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -662,6 +664,7 @@ export function GlobalRadioPlayer() {
 
         return (
           <div
+            ref={miniPlayerRef}
             className="fixed left-0 right-0 z-[100] px-4"
             style={{ bottom: 'calc(82px + env(safe-area-inset-bottom, 0px))' }}
           >

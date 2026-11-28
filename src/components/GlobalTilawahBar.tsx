@@ -13,6 +13,7 @@ import { getPageForSurahAndAyah } from '@/lib/interactive-mushaf';
 import { useLanguage } from '@/contexts/LanguageContext-new';
 import { useToast } from '@/hooks/use-toast';
 import { formatSajdahString, getSajdahI18n } from '@/lib/sajdah-i18n';
+import { usePlayerInsetRef } from '@/lib/player-inset';
 import {
   addPendingSajdah,
   formatAyahRef,
@@ -117,6 +118,8 @@ export const GlobalTilawahBar: React.FC = () => {
     currentSurah > 0 &&
     currentAyah > 0;
 
+  const tilawahDockRef = usePlayerInsetRef<HTMLElement>('tilawah', shouldShow);
+
   // Manage dynamic bottom dock spacing CSS variable
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -171,6 +174,7 @@ export const GlobalTilawahBar: React.FC = () => {
 
   return (
     <aside
+      ref={tilawahDockRef}
       role="region"
       aria-label="Quran Tilawah Mini Player"
       onTouchStart={handleTouchStart}

@@ -151,6 +151,7 @@
   :root {
     --safe-top: max(env(safe-area-inset-top, 0px), 34px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --player-inset: 0px;
 
     /* Token-Based Theme Engine - Oxford Gold (Default) */
     --bg-base: #080B14;
@@ -931,6 +932,14 @@
     padding-bottom: var(--safe-bottom);
   }
 
+  .pb-player-inset {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--player-inset, 0px));
+  }
+
+  .mb-player-inset {
+    margin-bottom: var(--player-inset, 0px);
+  }
+
   @supports (padding: max(0px)) {
     .pb-safe {
       padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
@@ -972,13 +981,15 @@
     will-change: opacity;
   }
 
-  /* Toast Viewport 360px Mobile Containment (Part 4) */
+  /* Toast Viewport 360px Mobile Containment (Centered below header) */
   [data-radix-toast-viewport],
   .toaster[data-sonner-toaster] {
-    left: 12px !important;
-    right: 12px !important;
+    left: 16px !important;
+    right: 16px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
     width: auto !important;
-    max-width: calc(100vw - 24px) !important;
+    max-width: min(328px, calc(100vw - 32px)) !important;
     box-sizing: border-box !important;
   }
 
