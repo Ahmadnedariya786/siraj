@@ -25,10 +25,55 @@ export interface UserAchievements {
   consecutiveDays: number;
 }
 
-const ACHIEVEMENTS_KEY = 'radio-achievements';
 const USER_ACHIEVEMENTS_KEY = 'user-radio-achievements';
 
-// Achievement definitions
+export type AchievementLang = 'en' | 'ur' | 'gu';
+
+export const ACHIEVEMENT_I18N: Record<AchievementLang, Record<string, { title: string; description: string }>> = {
+  en: {
+    first_listen: { title: 'First Listen', description: 'Listen to radio for the first time' },
+    hour_listen: { title: 'Dedicated Listener', description: 'Listen for 1 hour total' },
+    ten_hours: { title: 'Devoted Listener', description: 'Listen for 10 hours total' },
+    hundred_hours: { title: 'Quran Scholar', description: 'Listen for 100 hours total' },
+    five_sessions: { title: 'Getting Started', description: 'Complete 5 listening sessions' },
+    fifty_sessions: { title: 'Regular Listener', description: 'Complete 50 listening sessions' },
+    hundred_sessions: { title: 'Radio Enthusiast', description: 'Complete 100 listening sessions' },
+    three_day_streak: { title: 'Consistent Start', description: 'Listen for 3 consecutive days' },
+    seven_day_streak: { title: 'Week Warrior', description: 'Listen for 7 consecutive days' },
+    thirty_day_streak: { title: 'Month Master', description: 'Listen for 30 consecutive days' },
+    five_stations: { title: 'Explorer', description: 'Listen to 5 different stations' },
+    ten_stations: { title: 'World Traveler', description: 'Listen to 10 different stations' },
+  },
+  ur: {
+    first_listen: { title: 'پہلی سماعت', description: 'پہلی بار ریڈیو یا تلاوت سنیں' },
+    hour_listen: { title: 'پابند سامع', description: 'مجموعی طور پر 1 گھنٹہ سنیں' },
+    ten_hours: { title: 'مخلص سامع', description: 'مجموعی طور پر 10 گھنٹے سنیں' },
+    hundred_hours: { title: 'عالمِ قرآن', description: 'مجموعی طور پر 100 گھنٹے سنیں' },
+    five_sessions: { title: 'آغازِ سفر', description: '5 سماعت سیشن مکمل کریں' },
+    fifty_sessions: { title: 'باقاعدہ سامع', description: '50 سماعت سیشن مکمل کریں' },
+    hundred_sessions: { title: 'شوقین سامع', description: '100 سماعت سیشن مکمل کریں' },
+    three_day_streak: { title: 'مسلسل آغاز', description: 'لگاتار 3 دن سنیں' },
+    seven_day_streak: { title: 'ہفتہ وار تسلسل', description: 'لگاتار 7 دن سنیں' },
+    thirty_day_streak: { title: 'ماہانہ استقامت', description: 'لگاتار 30 دن سنیں' },
+    five_stations: { title: 'کھوجی', description: '5 مختلف اسٹیشنز سنیں' },
+    ten_stations: { title: 'عالمی مسافر', description: '10 مختلف اسٹیشنز سنیں' },
+  },
+  gu: {
+    first_listen: { title: 'પ્રથમ શ્રવણ', description: 'પ્રથમ વખત રેડિયો સાંભળો' },
+    hour_listen: { title: 'સમર્પિત શ્રોતા', description: 'કુલ 1 કલાક સુધી સાંભળો' },
+    ten_hours: { title: 'નિષ્ઠાવાન શ્રોતા', description: 'કુલ 10 કલાક સુધી સાંભળો' },
+    hundred_hours: { title: 'કુરાન વિદ્વાન', description: 'કુલ 100 કલાક સુધી સાંભળો' },
+    five_sessions: { title: 'શરૂઆત', description: '5 શ્રવણ સત્રો પૂર્ણ કરો' },
+    fifty_sessions: { title: 'નિયમિત શ્રોતા', description: '50 શ્રવણ સત્રો પૂર્ણ કરો' },
+    hundred_sessions: { title: 'રેડિયો ઉત્સાહી', description: '100 શ્રવણ સત્રો પૂર્ણ કરો' },
+    three_day_streak: { title: 'સતત શરૂઆત', description: 'સતત 3 દિવસ સુધી સાંભળો' },
+    seven_day_streak: { title: 'અઠવાડિયાનો યોદ્ધો', description: 'સતત 7 દિવસ સુધી સાંભળો' },
+    thirty_day_streak: { title: 'માસિક નિષ્ણાત', description: 'સતત 30 દિવસ સુધી સાંભળો' },
+    five_stations: { title: 'સંશોધક', description: '5 અલગ સ્ટેશનો સાંભળો' },
+    ten_stations: { title: 'વિશ્વ પ્રવાસી', description: '10 અલગ સ્ટેશનો સાંભળો' },
+  },
+};
+
 export const ACHIEVEMENTS: Achievement[] = [
   // Time-based achievements
   {
@@ -257,7 +302,6 @@ export async function updateStreak(): Promise<void> {
     userAchievements.lastListenDate = todayTimestamp;
     userAchievements.consecutiveDays = 1;
   } else {
-    const lastDate = new Date(userAchievements.lastListenDate);
     const diffDays = Math.floor((todayTimestamp - userAchievements.lastListenDate) / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {

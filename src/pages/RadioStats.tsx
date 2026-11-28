@@ -1,11 +1,24 @@
-import { useEffect, useState, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Clock, Radio, Trash2, Trophy, Flame, Target, TrendingUp, ArrowLeft, MonitorPlay } from 'lucide-react';
+import { ArrowLeft, Clock, Flame, MonitorPlay, Radio, Target, Trash2, TrendingUp, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { getSortedStationStats, getTotalListeningTime, resetRadioStats, formatDuration, type StationStats } from '@/lib/radio-stats';
-import { getAllAchievements, getCurrentStreak } from '@/lib/radio-achievements';
+import {
+  computeNormalizedMediaSummary,
+  formatDuration,
+  getSortedStationStats,
+  getTotalListeningTime,
+  resetRadioStats,
+  subscribeMediaStats,
+  type NormalizedStationStat,
+  type StationStats,
+} from '@/lib/radio-stats';
+import {
+  ACHIEVEMENT_I18N,
+  getAllAchievements,
+  getCurrentStreak,
+  type Achievement,
+} from '@/lib/radio-achievements';
 import { useContentLanguage } from '@/lib/content-translator';
 import { ContentLanguageBar } from '@/components/ContentLanguageBar';
 
@@ -30,6 +43,8 @@ const STATS_I18N = {
     resetTitle: 'Statistics Reset',
     resetDesc: 'All listening statistics have been cleared',
     sessions: 'session(s)',
+    loadError: 'Failed to load listening statistics',
+    resetError: 'Failed to reset statistics',
   },
   ur: {
     title: 'میڈیا کے اعداد و شمار',
@@ -51,6 +66,8 @@ const STATS_I18N = {
     resetTitle: 'اعداد و شمار صاف کر دیے گئے',
     resetDesc: 'تمام ریکارڈ کامیابی سے ری سیٹ ہو گیا ہے',
     sessions: 'سیشنز',
+    loadError: 'اعداد و شمار لوڈ کرنے میں ناکامی',
+    resetError: 'اعداد و شمار صاف کرنے میں ناکامی',
   },
   gu: {
     title: 'મીડિયા આંકડાશાસ્ત્ર',
@@ -72,72 +89,345 @@ const STATS_I18N = {
     resetTitle: 'આંકડા રીસેટ થયા',
     resetDesc: 'બધા આંકડા સફળતાપૂર્વક સાફ થઈ ગયા છે',
     sessions: 'સત્રો',
+    loadError: 'આંકડા લોડ કરવામાં નિષ્ફળ',
+    resetError: 'આંકડા રીસેટ કરવામાં નિષ્ફળ',
   },
 };
 
+const REFRESH_MINUTES_INTERVAL_MS = 30000;
+
 const getAchievementIcon = (id: string) => {
   switch (id) {
-    case 'first_listen': return <Radio className="w-5 h-5 text-primary" />;
-    case 'hour_listen': return <Clock className="w-5 h-5 text-amber-500" />;
-    case 'ten_hours': return <Target className="w-5 h-5 text-blue-500" />;
-    case 'streak_3':
-    case 'streak_7':
-    case 'streak_30': return <Flame className="w-5 h-5 text-orange-500" />;
-    case 'variety_5':
-    case 'variety_10': return <TrendingUp className="w-5 h-5 text-emerald-500" />;
-    default: return <Trophy className="w-5 h-5 text-primary" />;
+    case 'first_listen':
+      return <Radio className="w-4 h-4 text-[var(--accent)]" />;
+    case 'hour_listen':
+    case 'ten_hours':
+    case 'hundred_hours':
+      return <Clock className="w-4 h-4 text-[var(--accent)]" />;
+    case 'five_sessions':
+    case 'fifty_sessions':
+    case 'hundred_sessions':
+      return <Target className="w-4 h-4 text-[var(--accent)]" />;
+    case 'three_day_streak':
+    case 'seven_day_streak':
+    case 'thirty_day_streak':
+      return <Flame className="w-4 h-4 text-[var(--accent)]" />;
+    case 'five_stations':
+    case 'ten_stations':
+      return <TrendingUp className="w-4 h-4 text-[var(--accent)]" />;
+    default:
+      return <Trophy className="w-4 h-4 text-[var(--accent)]" />;
   }
 };
+
+interface KpiStatCardProps {
+  label: string;
+  value: string;
+  unit?: string;
+  icon: 'clock' | 'flame' | 'target' | 'trending';
+  isRtl: boolean;
+  isUrdu: boolean;
+}
+
+const KpiStatCard = memo(function KpiStatCard({
+  label,
+  value,
+  unit,
+  icon,
+  isRtl,
+  isUrdu,
+}: KpiStatCardProps) {
+  const iconEl =
+    icon === 'clock' ? (
+      <Clock className="w-4 h-4 text-[var(--accent)] shrink-0" />
+    ) : icon === 'flame' ? (
+      <Flame className="w-4 h-4 text-[var(--accent)] shrink-0" />
+    ) : icon === 'target' ? (
+      <Target className="w-4 h-4 text-[var(--accent)] shrink-0" />
+    ) : (
+      <TrendingUp className="w-4 h-4 text-[var(--accent)] shrink-0" />
+    );
+
+  return (
+    <div className="siraj-media-card rounded-2xl p-3.5 min-w-0">
+      <div className={`flex items-center gap-2 mb-1.5 ${isRtl ? 'text-right' : 'text-left'}`}>
+        {iconEl}
+        <p className={`text-xs font-medium text-[var(--muted)] leading-snug break-words ${isUrdu ? 'font-urdu' : ''}`}>
+          {label}
+        </p>
+      </div>
+      <p className={`text-xl font-black text-[var(--text)] leading-tight ${isRtl ? 'text-right' : 'text-left'}`}>
+        <span dir="ltr" className="tabular-nums">
+          {value}
+        </span>
+        {unit ? (
+          <span className={`text-sm font-bold text-[var(--muted)] ms-1 ${isUrdu ? 'font-urdu' : ''}`}>
+            {unit}
+          </span>
+        ) : null}
+      </p>
+    </div>
+  );
+});
+
+interface TopStationCardProps {
+  station: NormalizedStationStat;
+  label: string;
+  isRtl: boolean;
+  isUrdu: boolean;
+}
+
+const TopStationCard = memo(function TopStationCard({
+  station,
+  label,
+  isRtl,
+  isUrdu,
+}: TopStationCardProps) {
+  const isLive = station.stationId.startsWith('live_');
+  return (
+    <div className="siraj-media-card rounded-2xl p-4 min-w-0">
+      <div className={`flex items-center gap-3 ${isRtl ? 'text-right' : 'text-left'}`}>
+        <div className="siraj-media-chip w-10 h-10 rounded-full flex items-center justify-center shrink-0">
+          {isLive ? (
+            <MonitorPlay className="w-5 h-5 text-[var(--accent)]" />
+          ) : (
+            <Radio className="w-5 h-5 text-[var(--accent)]" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-xs font-medium text-[var(--muted)] ${isUrdu ? 'font-urdu' : ''}`}>
+            {label}
+          </p>
+          <p className="text-sm font-bold text-[var(--text)] break-words">
+            {station.stationName}
+          </p>
+        </div>
+        <div className={`shrink-0 ${isRtl ? 'text-left' : 'text-right'}`}>
+          <p className="text-sm font-bold text-[var(--text)]">
+            <span dir="ltr" className="tabular-nums">
+              {formatDuration(station.totalSeconds)}
+            </span>
+          </p>
+          <p className="text-xs font-semibold text-[var(--accent)]">
+            <span dir="ltr" className="tabular-nums">
+              {station.sharePct.toFixed(1)}%
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+interface AchievementTileProps {
+  achievement: Achievement;
+  title: string;
+  description: string;
+  isRtl: boolean;
+  isUrdu: boolean;
+}
+
+const AchievementTile = memo(function AchievementTile({
+  achievement,
+  title,
+  description,
+  isRtl,
+  isUrdu,
+}: AchievementTileProps) {
+  return (
+    <div
+      className={`rounded-2xl p-3 min-w-0 flex flex-col justify-between ${
+        achievement.unlocked ? 'siraj-media-card-unlocked' : 'siraj-media-card-locked'
+      }`}
+    >
+      <div className={isRtl ? 'text-right' : 'text-left'}>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="siraj-media-chip w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+            {getAchievementIcon(achievement.id)}
+          </div>
+          <p
+            className={`text-xs font-bold text-[var(--text)] leading-snug break-words whitespace-normal flex-1 min-w-0 ${
+              isUrdu ? 'font-urdu' : ''
+            }`}
+          >
+            {title}
+          </p>
+        </div>
+        <p
+          className={`text-[11px] text-[var(--muted)] leading-relaxed break-words whitespace-normal ${
+            isUrdu ? 'font-urdu' : ''
+          }`}
+        >
+          {description}
+        </p>
+      </div>
+      {achievement.unlocked ? (
+        <div className="mt-2.5 w-full h-1 rounded-full overflow-hidden bg-[var(--border)]">
+          <div className="h-full rounded-full w-full bg-[var(--accent)]" />
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
+interface BreakdownStationRowProps {
+  station: NormalizedStationStat;
+  sessionsLabel: string;
+  isRtl: boolean;
+  isUrdu: boolean;
+}
+
+const BreakdownStationRow = memo(function BreakdownStationRow({
+  station,
+  sessionsLabel,
+  isRtl,
+  isUrdu,
+}: BreakdownStationRowProps) {
+  const isLive = station.stationId.startsWith('live_');
+  const clampedPct = Math.max(0, Math.min(100, station.sharePct));
+  return (
+    <div className="siraj-media-card rounded-2xl p-3.5 min-w-0">
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className={`flex items-center gap-2.5 min-w-0 flex-1 ${isRtl ? 'text-right' : 'text-left'}`}>
+            <div className="siraj-media-chip w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+              {isLive ? (
+                <MonitorPlay className="w-4 h-4 text-[var(--accent)]" />
+              ) : (
+                <Radio className="w-4 h-4 text-[var(--accent)]" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-[var(--text)] break-words">{station.stationName}</p>
+              <p className={`text-xs text-[var(--muted)] ${isUrdu ? 'font-urdu' : ''}`}>
+                <span dir="ltr" className="tabular-nums">
+                  {station.sessionCount}
+                </span>{' '}
+                {sessionsLabel}
+              </p>
+            </div>
+          </div>
+          <div className={`shrink-0 ${isRtl ? 'text-left' : 'text-right'}`}>
+            <p className="text-sm font-bold text-[var(--text)]">
+              <span dir="ltr" className="tabular-nums">
+                {formatDuration(station.totalSeconds)}
+              </span>
+            </p>
+            <p className="text-xs font-semibold text-[var(--accent)]">
+              <span dir="ltr" className="tabular-nums">
+                {station.sharePct.toFixed(1)}%
+              </span>
+            </p>
+          </div>
+        </div>
+        <div className="h-1.5 rounded-full overflow-hidden bg-[var(--border)]">
+          <div
+            className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
+            style={{ width: `${clampedPct}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export default function RadioStats() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { contentLang, isRtl } = useContentLanguage();
-  const strings = STATS_I18N[contentLang] || STATS_I18N.en;
+  const langKey = contentLang === 'ur' || contentLang === 'gu' ? contentLang : 'en';
+  const isUrdu = langKey === 'ur';
+  const strings = STATS_I18N[langKey];
+  const achievementCopy = ACHIEVEMENT_I18N[langKey];
 
   const [stats, setStats] = useState<StationStats[]>([]);
-  const [totalTime, setTotalTime] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
-  const [achievements, setAchievements] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const mountedRef = useRef(true);
+  const lastTotalMinutesRef = useRef<number>(-1);
+
+  const loadStats = useCallback(
+    async (showSpinner = false) => {
+      if (showSpinner && mountedRef.current) {
+        setLoading(true);
+      }
+      try {
+        const [stations, currentStreak, allAchievements] = await Promise.all([
+          getSortedStationStats(),
+          getCurrentStreak(),
+          getAllAchievements(),
+        ]);
+        if (!mountedRef.current) return;
+        const sumSeconds = stations.reduce((sum, s) => sum + Math.max(0, s.totalSeconds), 0);
+        lastTotalMinutesRef.current = Math.floor(sumSeconds / 60);
+        setStats(stations);
+        setStreak(currentStreak);
+        setAchievements(allAchievements);
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+        if (mountedRef.current) {
+          toast({
+            title: 'Error',
+            description: strings.loadError,
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        if (showSpinner && mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [strings.loadError, toast]
+  );
+
   useEffect(() => {
-    loadStats();
-  }, []);
+    mountedRef.current = true;
+    void loadStats(true);
 
-  const loadStats = async () => {
-    setLoading(true);
-    try {
-      const [stations, total, currentStreak, allAchievements] = await Promise.all([
-        getSortedStationStats(),
-        getTotalListeningTime(),
-        getCurrentStreak(),
-        getAllAchievements(),
-      ]);
-      setStats(stations);
-      setTotalTime(total);
-      setStreak(currentStreak);
-      setAchievements(allAchievements);
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load listening statistics',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    const unsubscribe = subscribeMediaStats(() => {
+      void loadStats(false);
+    });
 
-  const handleReset = async () => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void loadStats(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Low-frequency 30s check only refreshes when totalMinutes actually changes
+    const minuteSyncId = window.setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const latestSeconds = await getTotalListeningTime();
+        const latestMinutes = Math.floor(Math.max(0, latestSeconds) / 60);
+        if (latestMinutes !== lastTotalMinutesRef.current) {
+          await loadStats(false);
+        }
+      } catch (error) {
+        console.error('Failed to refresh minute stats:', error);
+      }
+    }, REFRESH_MINUTES_INTERVAL_MS);
+
+    return () => {
+      mountedRef.current = false;
+      unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearInterval(minuteSyncId);
+    };
+  }, [loadStats]);
+
+  const handleReset = useCallback(async () => {
     if (!confirm(strings.confirmReset)) {
       return;
     }
 
     try {
       await resetRadioStats();
-      await loadStats();
+      await loadStats(false);
       toast({
         title: strings.resetTitle,
         description: strings.resetDesc,
@@ -146,223 +436,202 @@ export default function RadioStats() {
       console.error('Failed to reset stats:', error);
       toast({
         title: 'Error',
-        description: 'Failed to reset statistics',
+        description: strings.resetError,
         variant: 'destructive',
       });
     }
-  };
+  }, [loadStats, strings.confirmReset, strings.resetDesc, strings.resetError, strings.resetTitle, toast]);
+
+  const summary = useMemo(() => computeNormalizedMediaSummary(stats), [stats]);
+  const unlockedCount = useMemo(
+    () => achievements.filter((achievement) => achievement.unlocked).length,
+    [achievements]
+  );
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-transparent overflow-x-hidden flex items-center justify-center">
+        <div className="w-7 h-7 rounded-full border-2 border-[var(--border)] border-t-[var(--accent)] animate-spin" />
       </div>
     );
   }
 
-  const maxTime = stats.length > 0 ? stats[0].totalSeconds : 0;
-  const totalSessions = stats.reduce((sum, s) => sum + s.sessionCount, 0);
-  const avgSessionDuration = totalSessions > 0 ? Math.floor(totalTime / totalSessions) : 0;
-  const mostListened = stats.length > 0 ? stats[0] : null;
-  const unlockedCount = achievements.filter(a => a.unlocked).length;
-
   return (
-    <div className="min-h-screen bg-background safe-top">
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-28 space-y-5">
+    <div
+      className="min-h-screen bg-transparent overflow-x-hidden safe-top"
+      dir={isRtl ? 'rtl' : 'ltr'}
+    >
+      <style>{`
+        .siraj-media-card {
+          background: var(--surface);
+          background: color-mix(in srgb, var(--surface) 84%, transparent);
+          border: 1px solid var(--border);
+        }
+        .siraj-media-card-unlocked {
+          background: var(--surface);
+          background: color-mix(in srgb, var(--surface) 84%, transparent);
+          border: 1px solid var(--accent);
+        }
+        .siraj-media-card-locked {
+          background: var(--surface);
+          background: color-mix(in srgb, var(--surface) 64%, transparent);
+          border: 1px solid var(--border);
+          opacity: 0.72;
+        }
+        .siraj-media-chip {
+          background: var(--surface-2);
+          background: color-mix(in srgb, var(--surface-2) 86%, transparent);
+          border: 1px solid var(--border);
+        }
+      `}</style>
+
+      <div className="max-w-2xl mx-auto px-3.5 py-5 pb-28 space-y-4">
         {/* Page Header */}
-        <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
-          <Button variant="ghost" size="icon" onClick={() => navigate("/quran-radio")} className="rounded-full">
+        <div className={`flex items-center gap-2.5 ${isRtl ? 'text-right' : 'text-left'}`}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/quran-radio')}
+            className="rounded-full shrink-0"
+          >
             <ArrowLeft className={`w-5 h-5 ${isRtl ? 'rotate-180' : ''}`} />
           </Button>
-          <div className="flex-1">
-            <h1 className={`text-2xl font-black text-foreground tracking-tight ${contentLang === 'ur' ? 'font-urdu' : ''}`}>
+          <div className="flex-1 min-w-0">
+            <h1 className={`text-xl font-black text-[var(--text)] tracking-tight ${isUrdu ? 'font-urdu' : ''}`}>
               {strings.title}
             </h1>
-            <p className={`text-xs font-bold text-muted-foreground uppercase tracking-widest ${contentLang === 'ur' ? 'font-urdu text-[13px]' : ''}`}>
+            <p className={`text-[11px] font-bold text-[var(--muted)] uppercase tracking-wider ${isUrdu ? 'font-urdu text-xs normal-case tracking-normal' : ''}`}>
               {strings.subtitle}
             </p>
           </div>
-          {streak > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20">
-              <Flame className="w-4 h-4 text-orange-500" />
-              <span className={`text-sm font-bold text-orange-500 ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{streak} {strings.streak}</span>
+          {streak > 0 ? (
+            <div className="siraj-media-chip flex items-center gap-1.5 px-2.5 py-1 rounded-full shrink-0">
+              <Flame className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span className={`text-xs font-bold text-[var(--text)] ${isUrdu ? 'font-urdu' : ''}`}>
+                <span dir="ltr" className="tabular-nums">
+                  {streak}
+                </span>{' '}
+                {strings.streak}
+              </span>
             </div>
-          )}
+          ) : null}
         </div>
 
-        {/* 4-Language Selector Bar */}
+        {/* 3-Language Selector Bar (EN / UR / GU) */}
         <ContentLanguageBar fullWidth />
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Total Time */}
-          <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
-            <div className={`flex items-center gap-2 mb-2 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
-              <Clock className="w-4 h-4 text-purple-600" />
-              <p className={`text-xs font-medium text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{strings.totalTime}</p>
-            </div>
-            <p className={`text-2xl font-black text-foreground ${isRtl ? 'text-right' : ''}`}>{formatDuration(totalTime)}</p>
-          </Card>
-
-          {/* Streak */}
-          <Card className="p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
-            <div className={`flex items-center gap-2 mb-2 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
-              <Flame className="w-4 h-4 text-orange-600" />
-              <p className={`text-xs font-medium text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{strings.currentStreak}</p>
-            </div>
-            <p className={`text-2xl font-black text-foreground ${isRtl ? 'text-right' : ''}`}>{streak} {strings.days}</p>
-          </Card>
-
-          {/* Total Sessions */}
-          <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
-            <div className={`flex items-center gap-2 mb-2 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
-              <Target className="w-4 h-4 text-blue-600" />
-              <p className={`text-xs font-medium text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{strings.totalSessions}</p>
-            </div>
-            <p className={`text-2xl font-black text-foreground ${isRtl ? 'text-right' : ''}`}>{totalSessions}</p>
-          </Card>
-
-          {/* Avg Duration */}
-          <Card className="p-4 bg-[var(--surface-2)] border-[var(--border)]">
-            <div className={`flex items-center gap-2 mb-2 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
-              <TrendingUp className="w-4 h-4 text-[var(--accent)]" />
-              <p className={`text-xs font-medium text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{strings.avgSession}</p>
-            </div>
-            <p className={`text-2xl font-black text-foreground ${isRtl ? 'text-right' : ''}`}>{formatDuration(avgSessionDuration)}</p>
-          </Card>
+        {/* 4 Flat Luxury KPI Cards */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <KpiStatCard
+            label={strings.totalTime}
+            value={formatDuration(summary.totalSeconds)}
+            icon="clock"
+            isRtl={isRtl}
+            isUrdu={isUrdu}
+          />
+          <KpiStatCard
+            label={strings.currentStreak}
+            value={String(streak)}
+            unit={strings.days}
+            icon="flame"
+            isRtl={isRtl}
+            isUrdu={isUrdu}
+          />
+          <KpiStatCard
+            label={strings.totalSessions}
+            value={String(summary.totalSessions)}
+            icon="target"
+            isRtl={isRtl}
+            isUrdu={isUrdu}
+          />
+          <KpiStatCard
+            label={strings.avgSession}
+            value={formatDuration(summary.avgSessionSeconds)}
+            icon="trending"
+            isRtl={isRtl}
+            isUrdu={isUrdu}
+          />
         </div>
 
-        {/* Most Listened Station */}
-        {mostListened && (
-          <Card className="p-4">
-            <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                {mostListened.stationId.startsWith('live_') ? (
-                  <MonitorPlay className="w-5 h-5 text-primary" />
-                ) : (
-                  <Radio className="w-5 h-5 text-primary" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-xs font-medium text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{strings.topStation}</p>
-                <p className="text-sm font-bold text-foreground truncate">{mostListened.stationName}</p>
-              </div>
-              <div className={isRtl ? 'text-left' : 'text-right'}>
-                <p className="text-sm font-bold text-foreground">{formatDuration(mostListened.totalSeconds)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {((mostListened.totalSeconds / totalTime) * 100).toFixed(1)}%
-                </p>
-              </div>
-            </div>
-          </Card>
-        )}
+        {/* Top Station / Stream (derived from same totalSeconds denominator) */}
+        {summary.topStation ? (
+          <TopStationCard
+            station={summary.topStation}
+            label={strings.topStation}
+            isRtl={isRtl}
+            isUrdu={isUrdu}
+          />
+        ) : null}
 
-        {/* Achievements Section */}
+        {/* Achievements Section (2-column unclipped 360px grid) */}
         <div>
-          <div className={`flex items-center justify-between mb-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
-            <h2 className={`text-lg font-bold text-foreground flex items-center gap-2 ${contentLang === 'ur' ? 'font-urdu' : ''}`}>
-              <Trophy className="w-5 h-5 text-yellow-500" />
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <h2 className={`text-base font-bold text-[var(--text)] flex items-center gap-2 ${isUrdu ? 'font-urdu' : ''}`}>
+              <Trophy className="w-4 h-4 text-[var(--accent)] shrink-0" />
               {strings.achievements}
             </h2>
-            <span className={`text-xs font-medium text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>
-              {unlockedCount}/{achievements.length} {strings.unlocked}
+            <span className={`text-xs font-medium text-[var(--muted)] shrink-0 ${isUrdu ? 'font-urdu' : ''}`}>
+              <span dir="ltr" className="tabular-nums">
+                {unlockedCount}/{achievements.length}
+              </span>{' '}
+              {strings.unlocked}
             </span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {achievements.map((achievement) => (
-              <Card
-                key={achievement.id}
-                className={`p-3 text-center ${
-                  achievement.unlocked
-                    ? 'bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-yellow-500/20'
-                    : 'bg-muted/30 border-muted/50 opacity-60'
-                }`}
-              >
-                <div className="w-10 h-10 mx-auto mb-1.5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                  {getAchievementIcon(achievement.id)}
-                </div>
-                <p className="text-xs font-bold text-foreground leading-tight mb-0.5">
-                  {achievement.title}
-                </p>
-                <p className="text-xs text-muted-foreground leading-tight">
-                  {achievement.description}
-                </p>
-                {achievement.unlocked && (
-                  <div className="mt-1.5">
-                    <div className="w-full h-1 bg-yellow-500/30 rounded-full overflow-hidden">
-                      <div className="h-full bg-yellow-500 rounded-full w-full" />
-                    </div>
-                  </div>
-                )}
-              </Card>
-            ))}
+          <div className="grid grid-cols-2 gap-2.5">
+            {achievements.map((achievement) => {
+              const localized = achievementCopy[achievement.id];
+              return (
+                <AchievementTile
+                  key={achievement.id}
+                  achievement={achievement}
+                  title={localized ? localized.title : achievement.title}
+                  description={localized ? localized.description : achievement.description}
+                  isRtl={isRtl}
+                  isUrdu={isUrdu}
+                />
+              );
+            })}
           </div>
         </div>
 
-        {/* Station List */}
+        {/* Normalized 100.0% Media Breakdown */}
         <div>
-          <h2 className={`text-lg font-bold text-foreground mb-3 ${contentLang === 'ur' ? 'font-urdu text-right' : ''}`}>
+          <h2 className={`text-base font-bold text-[var(--text)] mb-2.5 ${isUrdu ? 'font-urdu text-right' : ''}`}>
             {strings.mediaBreakdown}
           </h2>
-          {stats.length === 0 ? (
-            <Card className="p-8 text-center">
-              <MonitorPlay className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-              <p className={`text-sm font-medium text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{strings.noData}</p>
-              <p className={`text-xs text-muted-foreground/50 mt-1 ${contentLang === 'ur' ? 'font-urdu' : ''}`}>{strings.noDataSub}</p>
-            </Card>
+          {summary.stations.length === 0 ? (
+            <div className="siraj-media-card rounded-2xl p-6 text-center">
+              <MonitorPlay className="w-10 h-10 mx-auto mb-3 text-[var(--muted)]" />
+              <p className={`text-sm font-medium text-[var(--text)] ${isUrdu ? 'font-urdu' : ''}`}>
+                {strings.noData}
+              </p>
+              <p className={`text-xs text-[var(--muted)] mt-1 ${isUrdu ? 'font-urdu' : ''}`}>
+                {strings.noDataSub}
+              </p>
+            </div>
           ) : (
-            <div className="space-y-3">
-            {stats.map((station, index) => {
-              const percentage = maxTime > 0 ? (station.totalSeconds / maxTime) * 100 : 0;
-              return (
-                <Card key={station.stationId} className="p-4">
-                  <div className="space-y-3">
-                    <div className={`flex items-center justify-between ${isRtl ? 'flex-row-reverse' : ''}`}>
-                      <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          {station.stationId.startsWith('live_') ? (
-                            <MonitorPlay className="w-4 h-4 text-primary" />
-                          ) : (
-                            <Radio className="w-4 h-4 text-primary" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-foreground">{station.stationName}</p>
-                          <p className={`text-xs text-muted-foreground ${contentLang === 'ur' ? 'font-urdu' : ''}`}>
-                            {station.sessionCount} {strings.sessions}
-                          </p>
-                        </div>
-                      </div>
-                      <div className={isRtl ? 'text-left' : 'text-right'}>
-                        <p className="text-sm font-bold text-foreground">{formatDuration(station.totalSeconds)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {percentage.toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
-                    {/* Progress Bar */}
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+            <div className="space-y-2.5">
+              {summary.stations.map((station) => (
+                <BreakdownStationRow
+                  key={station.stationId}
+                  station={station}
+                  sessionsLabel={strings.sessions}
+                  isRtl={isRtl}
+                  isUrdu={isUrdu}
+                />
+              ))}
             </div>
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-3">
+        {/* Reset Action */}
+        <div className="pt-1">
           <Button
             variant="destructive"
             onClick={handleReset}
-            className={`w-full rounded-2xl ${contentLang === 'ur' ? 'font-urdu' : ''}`}
+            className={`w-full rounded-2xl ${isUrdu ? 'font-urdu' : ''}`}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
+            <Trash2 className="w-4 h-4 me-2" />
             {strings.reset}
           </Button>
         </div>
