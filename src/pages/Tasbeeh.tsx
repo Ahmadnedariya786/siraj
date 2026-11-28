@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
-  RotateCcw, Sparkles, History, ChevronLeft, ChevronRight,
+  RotateCcw, History, ChevronLeft, ChevronRight, ChevronDown,
   Volume2, VolumeX, Smartphone, Lock, Unlock, Maximize2, Minimize2,
   Play, Pause, Moon, Link2, ArrowLeft, ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getTasbeehTotal, getTasbeehHistory, addTasbeehEntry } from "@/lib/storage";
+import { getTasbeehTotal, addTasbeehEntry } from "@/lib/storage";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
 import { AppBar } from "@/components/AppBar";
 import { useLanguage } from "@/contexts/LanguageContext-new";
 import { useSettings } from "@/contexts/SettingsContext";
 import { TASBEEH_I18N } from "@/lib/home-prayer-i18n";
+import { TasbeehZenOverlay } from "@/components/TasbeehZenOverlay";
+import { TasbeehDhikrSheet, type CustomDhikrConfig } from "@/components/TasbeehDhikrSheet";
 
 export interface ChainStep {
   id: number;
@@ -77,14 +78,16 @@ const NEXT_CHAIN_PREVIEWS = [
   "Set 1 • SubhanAllah",
 ];
 
+const CUSTOM_DHIKR_STORAGE_KEY = "siraj-custom-tasbeeh-dhikr";
+
 const DHIKR_OPTIONS = [
-  { value: "subhanallah", label: "سُبْحَانَ اللَّهِ", transliteration: "SubhanAllah", translation: "Glory be to Allah" },
-  { value: "alhamdulillah", label: "ٱلْحَمْدُ لِلَّٰهِ", transliteration: "Alhamdulillah", translation: "Praise be to Allah" },
-  { value: "allahuakbar", label: "اللَّٰهُ أَكْبَرُ", transliteration: "Allahu Akbar", translation: "Allah is the Greatest" },
-  { value: "lailahaillallah", label: "لَا إِلَٰهَ إِلَّا ٱللَّٰهُ", transliteration: "La ilaha illallah", translation: "None has the right to be worshipped but Allah" },
-  { value: "astagfirullah", label: "أَسْتَغْفِرُ ٱللَّٰهَ", transliteration: "Astagfirullah", translation: "I seek forgiveness from Allah" },
-  { value: "salawat", label: "اللَّهُمَّ صَلِّ عَلَىٰ مُحَمَّدٍ النَّبِيِّ الْأُمِّيِّ وَعَلَىٰ آلِهِ وَسَلِّمْ تَسْلِيمًا", transliteration: "ALLAHUMMA SALLI 'ALA MUHAMMADIN NABIYYIL UMMIYYI WA 'ALA ALIHI WA SALLIM TASLEEMA", translation: "O Allah, send blessings and peace upon Muhammad, the Unlettered Prophet, and upon his family" },
-  { value: "hawqala", label: "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ الْعَلِيِّ الْعَظِيمِ", transliteration: "LA HAWLA WA LA QUWWATA ILLA BILLAHIL 'ALIYYIL 'AZIM", translation: "There is no power nor strength except with Allah, the Most High, the Most Great" },
+  { value: "subhanallah", label: "سُبْحَانَ اللَّهِ", transliteration: "SubhanAllah", translation: "Glory be to Allah", target: 33 },
+  { value: "alhamdulillah", label: "ٱلْحَمْدُ لِلَّٰهِ", transliteration: "Alhamdulillah", translation: "Praise be to Allah", target: 33 },
+  { value: "allahuakbar", label: "اللَّٰهُ أَكْبَرُ", transliteration: "Allahu Akbar", translation: "Allah is the Greatest", target: 33 },
+  { value: "lailahaillallah", label: "لَا إِلَٰهَ إِلَّا ٱللَّٰهُ", transliteration: "La ilaha illallah", translation: "None has the right to be worshipped but Allah", target: 100 },
+  { value: "astagfirullah", label: "أَسْتَغْفِرُ ٱللَّٰهَ", transliteration: "Astagfirullah", translation: "I seek forgiveness from Allah", target: 100 },
+  { value: "salawat", label: "اللَّهُمَّ صَلِّ عَلَىٰ مُحَمَّدٍ النَّبِيِّ الْأُمِّيِّ وَعَلَىٰ آلِهِ وَسَلِّمْ تَسْلِيمًا", transliteration: "ALLAHUMMA SALLI 'ALA MUHAMMADIN NABIYYIL UMMIYYI WA 'ALA ALIHI WA SALLIM TASLEEMA", translation: "O Allah, send blessings and peace upon Muhammad, the Unlettered Prophet, and upon his family", target: 10 },
+  { value: "hawqala", label: "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ الْعَلِيِّ الْعَظِيمِ", transliteration: "LA HAWLA WA LA QUWWATA ILLA BILLAHIL 'ALIYYIL 'AZIM", translation: "There is no power nor strength except with Allah, the Most High, the Most Great", target: 33 },
 ];
 
 const GOAL_OPTIONS = [33, 99, 100, 1000, Infinity];
@@ -92,14 +95,30 @@ const GOAL_OPTIONS = [33, 99, 100, 1000, Infinity];
 type FeedbackMode = 'all' | 'vibrate' | 'silent';
 
 const Tasbeeh = () => {
-  const navigate = useNavigate();
   const { t, language, isRTL } = useLanguage();
   const { animationEnabled } = useSettings();
   const tasbeehPack = TASBEEH_I18N[language] || TASBEEH_I18N.en;
   const [count, setCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedDhikr, setSelectedDhikr] = useState(DHIKR_OPTIONS[0].value);
-  const [dailyHistory, setDailyHistory] = useState<{ date: string; count: number; label: string }[]>([]);
+  const [customDhikr, setCustomDhikr] = useState<CustomDhikrConfig | null>(() => {
+    try {
+      const raw = localStorage.getItem(CUSTOM_DHIKR_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as CustomDhikrConfig;
+      if (parsed && parsed.label && parsed.transliteration) {
+        return {
+          label: parsed.label,
+          transliteration: parsed.transliteration,
+          target: typeof parsed.target === "number" && parsed.target > 0 ? parsed.target : 33,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+  const [dhikrSheetOpen, setDhikrSheetOpen] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [targetGoal, setTargetGoal] = useState<number>(33);
   const [sessionSeconds, setSessionSeconds] = useState(0);
@@ -112,11 +131,9 @@ const Tasbeeh = () => {
   const [isChainMode, setIsChainMode] = useState(false);
   const [chainStepIndex, setChainStepIndex] = useState(0);
 
-  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const activeChainStep = SUNNAH_CHAIN_STEPS[chainStepIndex];
-  const nextChainStep = SUNNAH_CHAIN_STEPS[(chainStepIndex + 1) % SUNNAH_CHAIN_STEPS.length];
 
   const currentDhikr = useMemo(() => {
     if (isChainMode) {
@@ -127,20 +144,28 @@ const Tasbeeh = () => {
         translation: activeChainStep.translation,
       };
     }
+    if (selectedDhikr === "custom" && customDhikr) {
+      return {
+        value: "custom",
+        label: customDhikr.label,
+        transliteration: customDhikr.transliteration,
+        translation: "Custom Dhikr",
+      };
+    }
     return DHIKR_OPTIONS.find(d => d.value === selectedDhikr) || DHIKR_OPTIONS[0];
-  }, [isChainMode, activeChainStep, selectedDhikr]);
+  }, [isChainMode, activeChainStep, selectedDhikr, customDhikr]);
 
   const currentIndex = useMemo(() => {
+    if (selectedDhikr === "custom" && customDhikr) return DHIKR_OPTIONS.length;
     const idx = DHIKR_OPTIONS.findIndex(d => d.value === selectedDhikr);
     return idx >= 0 ? idx : 0;
-  }, [selectedDhikr]);
+  }, [selectedDhikr, customDhikr]);
 
   const label = currentDhikr.transliteration;
 
-  // Initialize total and history from storage
+  // Initialize total from storage
   useEffect(() => {
     setTotalCount(getTasbeehTotal());
-    setDailyHistory(getTasbeehHistory());
   }, []);
 
   // Session timer that ticks cleanly while page is open
@@ -161,7 +186,9 @@ const Tasbeeh = () => {
   // Audio click synthesizer (zero dependencies, 0 latency, 100% offline)
   const playAudioClick = useCallback(() => {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
@@ -217,7 +244,6 @@ const Tasbeeh = () => {
 
       addTasbeehEntry(activeLabel);
       setTotalCount(getTasbeehTotal());
-      setDailyHistory(getTasbeehHistory());
 
       if (isChainMode && newCount >= target) {
         triggerHapticFeedback('milestone');
@@ -279,6 +305,19 @@ const Tasbeeh = () => {
     }
   }, [isLocked, isAutoCounting]);
 
+  // Close reset dialog on Escape
+  useEffect(() => {
+    if (!showResetDialog) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowResetDialog(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [showResetDialog]);
+
   const confirmReset = () => {
     setCount(0);
     triggerHapticFeedback('reset');
@@ -289,6 +328,23 @@ const Tasbeeh = () => {
     if (isLocked) return;
     setIsAutoCounting(false);
     setSelectedDhikr(value);
+    if (value === "custom" && customDhikr) {
+      setTargetGoal(customDhikr.target);
+    }
+    setCount(0);
+    triggerHapticFeedback('select');
+  };
+
+  const handleSaveCustomDhikr = (config: CustomDhikrConfig) => {
+    setCustomDhikr(config);
+    try {
+      localStorage.setItem(CUSTOM_DHIKR_STORAGE_KEY, JSON.stringify(config));
+    } catch {
+      // Storage fallback
+    }
+    setIsAutoCounting(false);
+    setSelectedDhikr("custom");
+    setTargetGoal(config.target);
     setCount(0);
     triggerHapticFeedback('select');
   };
@@ -399,98 +455,6 @@ const Tasbeeh = () => {
       return { id: i, cx, cy, isLead };
     });
   }, [count]);
-
-  // Zen Mode overlay
-  if (zenMode) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex flex-col items-center justify-center select-none"
-        style={{
-          background: 'var(--bg-base)',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-          WebkitTouchCallout: 'none',
-          touchAction: 'manipulation',
-        }}
-        onClick={handleIncrement}
-      >
-        {/* 1-Tap Exit Zen Pill */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setZenMode(false);
-            triggerHapticFeedback('reset');
-          }}
-          className="absolute top-4 start-4 select-none active:scale-95 transition-transform cursor-pointer"
-          style={{
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
-            padding: '6px 14px',
-            borderRadius: '999px',
-            fontSize: '0.78rem',
-            fontWeight: 600,
-            zIndex: 50,
-          }}
-        >
-          {tasbeehPack.exitZen}
-        </button>
-
-        <div className="absolute top-16 left-0 right-0 text-center px-4 max-w-sm mx-auto pointer-events-none select-none">
-          <p
-            className="font-bold font-arabic mb-1.5"
-            dir="rtl"
-            style={{
-              color: 'var(--accent-text)',
-              fontSize: 'clamp(1.18rem, 4.5vw, 1.45rem)',
-              lineHeight: 1.45,
-              whiteSpace: 'normal',
-              textAlign: 'center',
-            }}
-          >
-            {currentDhikr.label}
-          </p>
-          <p
-            className="uppercase font-bold tracking-wider"
-            style={{
-              color: 'var(--text-secondary)',
-              fontSize: '0.72rem',
-              lineHeight: 1.35,
-              whiteSpace: 'normal',
-              textAlign: 'center',
-            }}
-          >
-            {currentDhikr.transliteration}
-          </p>
-        </div>
-
-        <span
-          className="text-[12rem] sm:text-[15rem] font-black leading-none select-none tabular-nums pointer-events-none"
-          style={{
-            color: 'var(--text-primary)',
-            textShadow: '0 0 24px var(--accent-glow)',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            WebkitTouchCallout: 'none',
-          }}
-        >
-          {count}
-        </span>
-
-        <div className="absolute bottom-28 pb-4 left-0 right-0 text-center pointer-events-none select-none">
-          <p className="text-xs font-bold uppercase tracking-[0.3em] mb-1" style={{ color: 'var(--text-secondary)' }}>
-            {tasbeehPack.goalProgress}
-          </p>
-          <p className="text-2xl font-bold italic" style={{ color: 'var(--accent-text)' }}>
-            <span dir="ltr" style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>
-              {targetGoal === Infinity ? '∞' : `${count % targetGoal} / ${targetGoal}`}
-            </span>
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <PageTransition>
@@ -709,62 +673,34 @@ const Tasbeeh = () => {
                   <ChevronLeft className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
                 </button>
 
-                {/* Center Pill (Dropdown Trigger): Dhikr X of Y • Change ⌄ */}
-                <Select
-                  value={selectedDhikr}
-                  onValueChange={(val) => {
-                    setIsAutoCounting(false);
-                    handleDhikrChange(val);
-                  }}
-                  onOpenChange={(open) => {
-                    if (open) setIsAutoCounting(false);
-                  }}
+                {/* Center Pill (Portaled Selector Sheet Trigger): Dhikr X of Y • Change */}
+                <button
+                  type="button"
+                  data-testid="tasbeeh-dhikr-trigger"
                   disabled={isLocked}
+                  onClick={() => {
+                    if (isLocked) return;
+                    setIsAutoCounting(false);
+                    setDhikrSheetOpen(true);
+                  }}
+                  className="h-auto w-auto inline-flex items-center justify-center gap-1.5 font-semibold rounded-full select-none cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    color: 'var(--accent-text)',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '999px',
+                    padding: '4px 12px',
+                  }}
                 >
-                  <SelectTrigger
-                    className="h-auto w-auto px-2.5 py-1 border shadow-none text-center justify-center gap-1 font-semibold rounded-full select-none"
-                    style={{
-                      fontSize: '0.68rem',
-                      fontWeight: 600,
-                      color: 'var(--accent-text)',
-                      background: 'var(--surface-2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '999px',
-                      padding: '3px 12px',
-                    }}
-                  >
-                    <span>{tasbeehPack.dhikrOfChange.replace('{current}', String(currentIndex + 1)).replace('{total}', String(DHIKR_OPTIONS.length))}</span>
-                  </SelectTrigger>
-                  <SelectContent
-                    className="max-h-[280px] overflow-y-auto w-[calc(100vw-36px)] max-w-sm"
-                    style={{
-                      background: 'var(--bg-elev)',
-                      borderColor: 'var(--border)',
-                      color: 'var(--text-primary)',
-                      padding: '8px 0',
-                      maxHeight: '280px',
-                      overflowY: 'auto',
-                    }}
-                  >
-                    {DHIKR_OPTIONS.map((dhikr) => (
-                      <SelectItem
-                        key={dhikr.value}
-                        value={dhikr.value}
-                        className="cursor-pointer"
-                        style={{ padding: '10px 12px', whiteSpace: 'normal' }}
-                      >
-                        <div className="flex flex-col text-start w-full min-w-0" style={{ whiteSpace: 'normal', lineHeight: 1.35, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                          <span className="font-arabic text-base" style={{ color: 'var(--accent-text)', lineHeight: 1.8, whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                            {dhikr.label}
-                          </span>
-                          <span className="text-xs" style={{ color: 'var(--text-secondary)', lineHeight: 1.35, whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                            {dhikr.transliteration}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <span>
+                    {tasbeehPack.dhikrOfChange
+                      .replace('{current}', String(Math.min(currentIndex + 1, DHIKR_OPTIONS.length + (customDhikr ? 1 : 0))))
+                      .replace('{total}', String(DHIKR_OPTIONS.length + (customDhikr ? 1 : 0)))}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                </button>
 
                 {/* Next Carousel Button */}
                 <button
@@ -1207,67 +1143,119 @@ const Tasbeeh = () => {
 
         </div>
 
-        {/* Tokenized Reset Confirmation Modal */}
-        <AnimatePresence>
-          {showResetDialog && (
-            <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-sm rounded-[24px] p-6 space-y-4 shadow-2xl"
-                style={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
-                  boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="p-2.5 rounded-xl border"
-                    style={{
-                      background: 'var(--accent-soft)',
-                      borderColor: 'var(--accent)',
-                      color: 'var(--accent-text)',
-                    }}
-                  >
-                    <RotateCcw className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{tasbeehPack.resetCounter}</h3>
-                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{tasbeehPack.resetConfirmText}</p>
-                  </div>
-                </div>
+        {/* Portaled Dhikr Selector Sheet */}
+        <TasbeehDhikrSheet
+          open={dhikrSheetOpen}
+          presets={DHIKR_OPTIONS}
+          selectedValue={selectedDhikr}
+          customDhikr={customDhikr}
+          language={language}
+          onSelectPreset={handleDhikrChange}
+          onSaveCustom={handleSaveCustomDhikr}
+          onClose={() => setDhikrSheetOpen(false)}
+        />
 
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1 rounded-xl h-11 transition-all"
+        {/* Portaled Immersive Centered Zen Mode */}
+        <TasbeehZenOverlay
+          open={zenMode}
+          count={count}
+          targetGoal={effectiveTargetGoal}
+          progress={progress}
+          setNumber={setNumber}
+          isChainMode={isChainMode}
+          chainStepIndex={chainStepIndex}
+          nextChainPreview={NEXT_CHAIN_PREVIEWS[chainStepIndex]}
+          dhikrArabic={currentDhikr.label}
+          dhikrTransliteration={currentDhikr.transliteration}
+          feedbackMode={feedbackMode}
+          language={language}
+          exitLabel={tasbeehPack.exitZen}
+          setLabel={tasbeehPack.set}
+          resetLabel={tasbeehPack.reset}
+          soundLabel={tasbeehPack.sound}
+          vibrateLabel={tasbeehPack.vibrate}
+          muteLabel={tasbeehPack.mute}
+          onIncrement={handleIncrement}
+          onExit={() => {
+            setZenMode(false);
+            triggerHapticFeedback('select');
+          }}
+          onReset={() => setShowResetDialog(true)}
+          onCycleFeedback={cycleFeedbackMode}
+        />
+
+        {/* Portaled Reset Confirmation Modal (sits above both normal mode & Zen mode) */}
+        {typeof document !== "undefined" && showResetDialog
+          ? createPortal(
+              <AnimatePresence>
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  data-state="open"
+                  style={{ position: "fixed", inset: 0, zIndex: 10000 }}
+                  className="bg-black/80 flex items-center justify-center p-4"
+                  onClick={() => setShowResetDialog(false)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full max-w-sm rounded-[24px] p-6 space-y-4 shadow-2xl"
                     style={{
-                      background: 'var(--surface-2)',
-                      borderColor: 'var(--border)',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
                       color: 'var(--text-primary)',
+                      boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
                     }}
-                    onClick={() => setShowResetDialog(false)}
                   >
-                    {tasbeehPack.cancel}
-                  </Button>
-                  <Button
-                    className="flex-1 rounded-xl h-11 font-bold shadow-md transition-all"
-                    style={{
-                      background: 'var(--accent)',
-                      color: 'var(--on-accent)',
-                    }}
-                    onClick={confirmReset}
-                  >
-                    {tasbeehPack.reset}
-                  </Button>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="p-2.5 rounded-xl border"
+                        style={{
+                          background: 'var(--accent-soft)',
+                          borderColor: 'var(--accent)',
+                          color: 'var(--accent-text)',
+                        }}
+                      >
+                        <RotateCcw className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{tasbeehPack.resetCounter}</h3>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{tasbeehPack.resetConfirmText}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-xl h-11 transition-all"
+                        style={{
+                          background: 'var(--surface-2)',
+                          borderColor: 'var(--border)',
+                          color: 'var(--text-primary)',
+                        }}
+                        onClick={() => setShowResetDialog(false)}
+                      >
+                        {tasbeehPack.cancel}
+                      </Button>
+                      <Button
+                        className="flex-1 rounded-xl h-11 font-bold shadow-md transition-all"
+                        style={{
+                          background: 'var(--accent)',
+                          color: 'var(--on-accent)',
+                        }}
+                        onClick={confirmReset}
+                      >
+                        {tasbeehPack.reset}
+                      </Button>
+                    </div>
+                  </motion.div>
                 </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+              </AnimatePresence>,
+              document.body
+            )
+          : null}
       </div>
     </PageTransition>
   );
